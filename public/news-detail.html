@@ -303,7 +303,9 @@
 
         function timeAgo(dateStr) {
             if (!dateStr) return '';
-            const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+            let diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+            if (diff < 0) diff += 19800; // correct IST stored as UTC (legacy PB SHABD articles)
+            if (diff < 0) return '';
             if (diff < 60)         return 'अभी-अभी';
             if (diff < 3600)       return Math.floor(diff / 60) + ' मिनट पहले';
             if (diff < 86400)      return Math.floor(diff / 3600) + ' घंटे पहले';

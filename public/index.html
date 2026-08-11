@@ -355,7 +355,9 @@
 
         function timeAgo(dateStr) {
             if (!dateStr) return '';
-            const diff = Math.max(0, Math.floor((Date.now() - new Date(dateStr)) / 1000));
+            let diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+            if (diff < 0) diff += 19800; // correct IST stored as UTC (legacy PB SHABD articles)
+            if (diff < 0) return '';
             if (diff < 60)     return 'अभी-अभी';
             if (diff < 3600)   return Math.floor(diff / 60) + ' मिनट पहले';
             if (diff < 86400)  return Math.floor(diff / 3600) + ' घंटे पहले';
@@ -411,7 +413,8 @@
         let currentPage = 0;
         let isLoading = false;
         let hasMore = true;
-        const itemsPerPage = 200; // load all at once; list section groups by category (max 10 each)
+        const itemsPerPage = 20;
+        let allNewsData = [];
         let tickerLoaded = false;
         var shownCatHeaders = new Set();
 
@@ -478,30 +481,30 @@
             }
 
             try {
-                // Use server-injected data on first load to avoid a round-trip fetch
-                let newsData;
                 let response;
-                const usePreloaded = reset && currentPage === 0 && currentCategory === 'all' && !writtenOnly
-                    && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0;
-                if (usePreloaded) {
-                    newsData = window.__INITIAL_NEWS__;
-                    window.__INITIAL_NEWS__ = null; // consume once
-                } else {
-                    const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory);
-                    response = await fetch(url, { credentials: 'same-origin' });
-                    newsData = response.ok ? await response.json() : [];
-                }
+                // Re-fetch only on reset (category change / initial load); reuse for scroll pages
+                if (reset || allNewsData.length === 0) {
+                    const usePreloaded = reset && currentCategory === 'all' && !writtenOnly
+                        && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0;
+                    if (usePreloaded) {
+                        allNewsData = window.__INITIAL_NEWS__;
+                        window.__INITIAL_NEWS__ = null;
+                    } else {
+                        const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory);
+                        response = await fetch(url, { credentials: 'same-origin' });
+                        allNewsData = response.ok ? await response.json() : [];
+                    }
 
-                // All view: category priority then newest-first within each; single category: newest-first
-                if (!writtenOnly && currentCategory === 'all') {
-                    var catOrder = { desh:1, crime:2, rajniti:3, bhopal:4, rajya:5, videsh:6, khel:7, vyapar:8, manoranjan:9, itihas:10 };
-                    newsData.sort(function(a, b) {
-                        var ca = catOrder[a.category] || 99, cb = catOrder[b.category] || 99;
-                        if (ca !== cb) return ca - cb;
-                        return new Date(b.date) - new Date(a.date);
-                    });
-                } else if (!writtenOnly) {
-                    newsData.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+                    if (!writtenOnly && currentCategory === 'all') {
+                        var catOrder = { desh:1, crime:2, rajniti:3, bhopal:4, rajya:5, videsh:6, khel:7, vyapar:8, manoranjan:9, itihas:10 };
+                        allNewsData.sort(function(a, b) {
+                            var ca = catOrder[a.category] || 99, cb = catOrder[b.category] || 99;
+                            if (ca !== cb) return ca - cb;
+                            return new Date(b.date) - new Date(a.date);
+                        });
+                    } else if (!writtenOnly) {
+                        allNewsData.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+                    }
                 }
 
                 if (reset) {
@@ -518,8 +521,8 @@
                 if (loadingIndicator) loadingIndicator.remove();
 
                 // Update ticker on first load
-                if (!tickerLoaded && newsData.length > 0) {
-                    const tickerHtml = newsData.slice(0, 10).map(function(n) {
+                if (!tickerLoaded && allNewsData.length > 0) {
+                    const tickerHtml = allNewsData.slice(0, 10).map(function(n) {
                         const tickerUrl = n.slug ? '/news/' + n.slug : '/news-detail.html?id=' + n.id;
                         return '<a href="' + tickerUrl + '" class="jks-ticker-link">' + n.heading + '</a><span class="jks-ticker-sep">◆</span>';
                     }).join('');
@@ -528,8 +531,8 @@
                     tickerLoaded = true;
                 }
 
-                if (newsData.length === 0 && currentPage === 0) {
-                    var is503       = response.status === 503;
+                if (allNewsData.length === 0 && currentPage === 0) {
+                    var is503       = response && response.status === 503;
                     var retryCount  = window._newsRetryCount || 0;
                     // 503 cold-start: retry quickly (1.5 s) up to 10 times
                     if (is503 && retryCount < 10) {
@@ -571,9 +574,9 @@
                     return 2;
                 }
 
-                // Sort all 200 articles by importance tier first, then recency — page 1 gets the best articles from the whole pool
+                // Sort all articles by importance tier first, then recency — page 1 gets the best articles from the whole pool
                 if (startIndex === 0) {
-                    newsData.sort(function(a, b) {
+                    allNewsData.sort(function(a, b) {
                         var ta = articleTier(a), tb = articleTier(b);
                         if (ta !== tb) return ta - tb;
                         return new Date(b.date) - new Date(a.date);
@@ -587,16 +590,16 @@
                     var cutoff2h = Date.now() - 7200000;
                     var leadIdx = -1;
                     // Pass 1: Google News Hindi trending (ordered by Google's trending rank)
-                    for (var li = 0; li < Math.min(newsData.length, 150) && leadIdx === -1; li++) {
-                        var n = newsData[li];
+                    for (var li = 0; li < Math.min(allNewsData.length, 150) && leadIdx === -1; li++) {
+                        var n = allNewsData[li];
                         if (!n.date || new Date(n.date) < cutoff2h || !n.rssSource) continue;
                         if (isHistoricalHeading(n.heading)) continue;
                         if (n.rssSource === 'Google News Hindi') leadIdx = li;
                     }
                     // Pass 2: Bhopal/MP news in last 5h
                     if (leadIdx === -1) {
-                        for (var li = 0; li < Math.min(newsData.length, 150) && leadIdx === -1; li++) {
-                            var n = newsData[li];
+                        for (var li = 0; li < Math.min(allNewsData.length, 150) && leadIdx === -1; li++) {
+                            var n = allNewsData[li];
                             if (!n.date || new Date(n.date) < cutoff5h || !n.rssSource) continue;
                             var h = (n.heading || '').toLowerCase();
                             if (n.category === 'bhopal' || h.includes('bhopal') || h.includes('भोपाल')) leadIdx = li;
@@ -604,8 +607,8 @@
                     }
                     // Pass 3: Politics or national breaking news in last 2h (non-historical)
                     if (leadIdx === -1) {
-                        for (var li = 0; li < Math.min(newsData.length, 150) && leadIdx === -1; li++) {
-                            var n = newsData[li];
+                        for (var li = 0; li < Math.min(allNewsData.length, 150) && leadIdx === -1; li++) {
+                            var n = allNewsData[li];
                             if (!n.date || new Date(n.date) < cutoff2h || !n.rssSource) continue;
                             if (isHistoricalHeading(n.heading)) continue;
                             if (n.category === 'rajniti' || n.category === 'desh') leadIdx = li;
@@ -613,17 +616,17 @@
                     }
                     // Pass 4: Any non-historical RSS article in last 5h
                     if (leadIdx === -1) {
-                        for (var li = 0; li < Math.min(newsData.length, 150) && leadIdx === -1; li++) {
-                            var n = newsData[li];
+                        for (var li = 0; li < Math.min(allNewsData.length, 150) && leadIdx === -1; li++) {
+                            var n = allNewsData[li];
                             if (!n.date || new Date(n.date) < cutoff5h || !n.rssSource) continue;
                             if (!isHistoricalHeading(n.heading)) leadIdx = li;
                         }
                     }
-                    if (leadIdx > 0) newsData.unshift(newsData.splice(leadIdx, 1)[0]);
+                    if (leadIdx > 0) allNewsData.unshift(allNewsData.splice(leadIdx, 1)[0]);
                 }
 
-                const pageItems = newsData.slice(startIndex, endIndex);
-                hasMore = endIndex < newsData.length;
+                const pageItems = allNewsData.slice(startIndex, endIndex);
+                hasMore = endIndex < allNewsData.length;
 
                 if (pageItems.length === 0) {
                     hasMore = false;
@@ -637,7 +640,7 @@
                     return '<div class="nc-img-placeholder"><span>NEWS</span></div>';
                 }
                 // Minor-city bureau articles ("Sambhal News:", "Sonipat News:" etc.) skip lead/feat slots
-                // newsData already tier+date sorted above; pageItems is a direct slice of that
+                // allNewsData already tier+date sorted above; pageItems is a direct slice of that
                 var sortedItems = pageItems;
 
                 var leadHtml = '', featHtml = '', listRaw = [];
@@ -727,7 +730,7 @@
                     var shownIds = new Set(sortedItems.slice(0,5).map(function(n){ return n.id||n._id; }));
                     // Priority 1: crime category articles from major sources (non-minor-city, non-historical)
                     var charchaKw = ['पति','पत्नी','दंपत्ति','प्रेमी','प्रेमिका','हत्या','कत्ल','murder','wife','husband','lover','प्रेम प्रसंग','पारिवारिक विवाद','घरेलू','domestic','रेप','बलात्कार','लूट','डकैती','गिरफ्तार','arrested','राजनीति','विरोध','protest','आंदोलन'];
-                    var charchaPool = newsData.filter(function(n){
+                    var charchaPool = allNewsData.filter(function(n){
                         if (shownIds.has(n.id||n._id)) return false;
                         if (!n.rssSource) return false; // skip editorials
                         if (isMinorCityHeading(n.heading)) return false;

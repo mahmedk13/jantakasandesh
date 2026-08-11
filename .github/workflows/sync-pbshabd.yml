@@ -1,7 +1,9 @@
 name: Sync PB SHABD News
 
 on:
-  workflow_dispatch:          # triggered by cron-job.org every hour via GitHub API
+  schedule:
+    - cron: '0 * * * *'       # every hour (GitHub may delay 15-60 min on low-activity repos)
+  workflow_dispatch:           # manual trigger
 
 concurrency:
   group: sync-pbshabd
