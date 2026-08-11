@@ -265,7 +265,7 @@ async function main() {
         ...Array.from({ length: maxPages }, (_, i) => ({ page: i + 1, state: '', pbCatId: '', search: '', label: `General pg${i + 1}` })),
     ];
 
-    for (const { page, state, pbCatId, label } of fetchPlan) {
+    for (const { page, state, pbCatId, search, label } of fetchPlan) {
         console.log(`📄 Fetching [${label}]…`);
         const json = await fetchPage(cookies, page, state, pbCatId, search);
         const stories = json.data || [];
