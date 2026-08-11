@@ -2387,6 +2387,34 @@ app.get('/api/news', async (req, res) => {
     }
 });
 
+// Search API: searches heading, content, category, author
+app.get('/api/news/search', async (req, res) => {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) return res.json([]);
+    // Escape regex special chars to prevent ReDoS
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
+    try {
+        if (!isMongoDBConnected) {
+            try {
+                await Promise.race([
+                    connectDB(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 25000))
+                ]);
+            } catch (_) {}
+            if (!isMongoDBConnected) return res.status(503).json({ error: 'DB not ready' });
+        }
+        const results = await News.find(
+            { $or: [{ heading: regex }, { content: regex }, { category: regex }, { author: regex }] },
+            { heading: 1, category: 1, author: 1, photos: 1, date: 1, slug: 1, rssSource: 1 }
+        ).sort({ date: -1 }).limit(60).lean();
+        res.json(results.map(r => ({ ...r, id: r._id.toString() })));
+    } catch (e) {
+        console.error('Search error:', e);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
 // API to add news (admin only)
 app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) => {
     try {
