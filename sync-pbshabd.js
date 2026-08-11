@@ -163,6 +163,18 @@ function stripHtml(html) {
         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// PB SHABD returns timestamps without timezone — V8 parses them as UTC, but they're actually IST
+function parsePbDate(str) {
+    if (!str) return null;
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return null;
+    // No timezone marker → was parsed as local/UTC but actual time is IST → subtract 5h30m
+    if (!/[Zz]|[+-]\d{2}:?\d{2}/.test(String(str))) {
+        return new Date(d.getTime() - 19800000);
+    }
+    return d;
+}
+
 // Removes PB SHABD metadata header lines and duplicate title from story_intro_line
 function cleanPbContent(text, title) {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ');
@@ -320,7 +332,7 @@ async function main() {
                 rssLink,
                 isOriginal: false,
                 headingNorm:(story.title || '').toLowerCase().replace(/\s+/g, ' ').trim(),
-                date:       new Date(story.created_at_src || story.created_at || Date.now()),
+                date:       parsePbDate(story.created_at_src) || parsePbDate(story.created_at) || new Date(),
                 slug,
             }).save();
 

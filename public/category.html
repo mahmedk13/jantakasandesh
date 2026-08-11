@@ -151,6 +151,7 @@
         <div id="newsGrid" class="news-grid">
             <div class="cat-loading">खबरें लोड हो रही हैं...</div>
         </div>
+        <div id="scrollSentinel" style="height:40px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:.85rem">और खबरें लोड हो रही हैं...</div>
 
         <div style="margin-top: 2rem; text-align: center;">
             <a href="/" class="btn btn-back" style="text-decoration:none; padding: 0.6rem 1.5rem; background: #f97316; color: #fff; border-radius: 8px; font-weight: 700;">← सभी खबरें</a>
@@ -260,11 +261,49 @@
 
     function timeAgo(dateStr) {
         if (!dateStr) return '';
-        const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-        if (diff < 3600)  return Math.floor(diff / 60)   + ' मिनट पहले';
-        if (diff < 86400) return Math.floor(diff / 3600) + ' घंटे पहले';
+        const diff = Math.max(0, Math.floor((Date.now() - new Date(dateStr)) / 1000));
+        if (diff < 60)     return 'अभी-अभी';
+        if (diff < 3600)   return Math.floor(diff / 60)   + ' मिनट पहले';
+        if (diff < 86400)  return Math.floor(diff / 3600) + ' घंटे पहले';
         if (diff < 172800) return 'कल';
         return Math.floor(diff / 86400) + ' दिन पहले';
+    }
+
+    let allArticles = [], shownCount = 0;
+    const PAGE_SIZE = 20;
+
+    function renderCard(a) {
+        const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
+        const img = a.photos && a.photos.length ? optimizeCloudinaryUrl(a.photos[0]) : null;
+        return `<a href="${url}" class="news-card">
+            ${img
+                ? `<img src="${img}" alt="${a.heading}" loading="lazy">`
+                : `<div class="news-card-placeholder">NEWS</div>`}
+            <div class="news-card-body">
+                <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
+                    <span class="news-card-cat" style="color:${cat.color}">${cat.name}</span>
+                    ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                </div>
+                <p class="news-card-title">${a.heading}</p>
+                <span class="news-card-date" data-date="${a.date}">⏰ ${timeAgo(a.date)}</span>
+            </div>
+        </a>`;
+    }
+
+    function loadMore() {
+        const grid = document.getElementById('newsGrid');
+        const next = allArticles.slice(shownCount, shownCount + PAGE_SIZE);
+        if (!next.length) return;
+        next.forEach(a => {
+            const el = document.createElement('div');
+            el.innerHTML = renderCard(a);
+            grid.appendChild(el.firstElementChild);
+        });
+        shownCount += next.length;
+        if (shownCount >= allArticles.length) {
+            const sentinel = document.getElementById('scrollSentinel');
+            if (sentinel) sentinel.style.display = 'none';
+        }
     }
 
     async function loadArticles() {
@@ -273,33 +312,32 @@
             return;
         }
         try {
-            const res  = await fetch('/api/news?category=' + encodeURIComponent(catId));
-            const data = await res.json();
-            if (!data.length) {
+            const res = await fetch('/api/news?category=' + encodeURIComponent(catId));
+            allArticles = await res.json();
+            if (!allArticles.length) {
                 document.getElementById('newsGrid').innerHTML = '<div class="cat-empty">इस श्रेणी में अभी कोई खबर नहीं है।</div>';
+                document.getElementById('scrollSentinel').style.display = 'none';
                 return;
             }
-            document.getElementById('newsGrid').innerHTML = data.map(a => {
-                const url  = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
-                const img  = a.photos && a.photos.length ? optimizeCloudinaryUrl(a.photos[0]) : null;
-                return `<a href="${url}" class="news-card">
-                    ${img
-                        ? `<img src="${img}" alt="${a.heading}" loading="lazy">`
-                        : `<div class="news-card-placeholder">NEWS</div>`}
-                    <div class="news-card-body">
-                        <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
-                            <span class="news-card-cat" style="color:${cat.color}">${cat.name}</span>
-                            ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
-                        </div>
-                        <p class="news-card-title">${a.heading}</p>
-                        <span class="news-card-date">⏰ ${timeAgo(a.date)}</span>
-                    </div>
-                </a>`;
-            }).join('');
+            document.getElementById('newsGrid').innerHTML = '';
+            loadMore();
+            const sentinel = document.getElementById('scrollSentinel');
+            const observer = new IntersectionObserver(
+                entries => { if (entries[0].isIntersecting) loadMore(); },
+                { rootMargin: '300px' }
+            );
+            if (sentinel) observer.observe(sentinel);
         } catch (err) {
             document.getElementById('newsGrid').innerHTML = '<div class="cat-empty">खबरें लोड करने में त्रुटि हुई।</div>';
         }
     }
+
+    // Refresh displayed times every 60 seconds
+    setInterval(() => {
+        document.querySelectorAll('.news-card-date[data-date]').forEach(el => {
+            el.textContent = '⏰ ' + timeAgo(el.dataset.date);
+        });
+    }, 60000);
 
     loadArticles();
 
