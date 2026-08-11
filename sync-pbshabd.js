@@ -163,11 +163,15 @@ function stripHtml(html) {
         .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-// Removes the title and synopsis paragraphs that PB SHABD duplicates at the top of story_intro_line
+// Removes PB SHABD metadata header lines and duplicate title from story_intro_line
 function cleanPbContent(text, title) {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ');
     let t = text.trim();
-    // Only strip the title repeat — keep synopsis as the article intro paragraph
+    // Strip labeled metadata lines PB SHABD prepends (Relevance/Slug/Title/Synopsis/Category/Deadline)
+    t = t.split('\n')
+        .filter(line => !/^(Relevance|Slug|Title|Synopsis|Category|Deadline|Priority)\s*:/i.test(line.trim()))
+        .join('\n').replace(/^\n+/, '').trim();
+    // Strip leading title repeat
     const titlePrefix = norm(title).substring(0, 30);
     if (titlePrefix && norm(t).startsWith(titlePrefix)) {
         const end = t.indexOf('\n');

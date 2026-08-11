@@ -405,6 +405,8 @@
         // Main content renderer — detects HTML (RSS articles) vs markdown (original articles)
         function renderContent(text) {
             if (!text) return '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>';
+            // Strip PB SHABD metadata header lines stored in older syncs
+            text = text.split('\n').filter(l => !/^(Relevance|Slug|Title|Synopsis|Category|Deadline|Priority)\s*:/i.test(l.trim())).join('\n').replace(/^\n+/, '').trim();
 
             // If content contains HTML markup (admin toolbar <b>/<i>, RSS feeds, etc.)
             if (/<(?:p|div|blockquote|ul|ol|li|b|i|br|strong|em|h[1-6]|a|span|table|tr|td|th|hr|figure|figcaption)\b/i.test(text)) {
