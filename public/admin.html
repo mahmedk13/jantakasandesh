@@ -1,0 +1,1883 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SFXC5EHMPL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SFXC5EHMPL');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - वॉयस ऑफ क्रांति</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="stylesheet" href="/styles.css?v=21">
+</head>
+<body>
+    <!-- Utility Bar -->
+    <div class="utility-bar">
+        <div class="container">
+            <div class="utility-bar-links">
+                <a href="/about.html">About Us</a>
+                <a href="/contact.html">Contact Us</a>
+                <a href="/authors.html">Founder</a>
+                <a href="/editorial-policy.html">Editorial Policy</a>
+            </div>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="container">
+            <div class="logo-container">
+                <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:14px;"><svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect width="52" height="52" rx="9" fill="rgba(255,255,255,0.18)"/><rect width="52" height="52" rx="9" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="1"/><rect x="19" y="5" width="14" height="22" rx="7" fill="white" opacity="0.95"/><line x1="22" y1="11" x2="30" y2="11" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="16" x2="31" y2="16" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="21" x2="31" y2="21" stroke="rgba(180,70,0,0.12)" stroke-width="1.5"/><path d="M 10,22 Q 10,35 26,35 Q 42,35 42,22" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="35" x2="26" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="17" y1="43" x2="35" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M 42,18 C 47,22 47,31 42,35" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/><path d="M 45,14 C 51,19 51,33 45,38" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/></svg><div><h1 class="logo">वॉयस ऑफ क्रांति</h1><p class="tagline">सत्य की आवाज़, जनता का विश्वास</p><p style="font-size:0.68rem;color:#1a1a1a;font-weight:700;margin:2px 0 0;letter-spacing:.3px;background:rgba(255,255,255,0.75);padding:1px 5px;border-radius:3px;">RNI: MPHIN/26/A5773</p></div></a>
+            </div>
+            <nav>
+                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/about.html" class="nav-link">About Us</a>
+                <a href="/contact.html" class="nav-link">Contact Us</a>
+                <a href="/admin" class="nav-link active">Admin Panel</a>
+                <button id="logoutBtn" class="btn btn-logout">Logout</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="admin-section">
+            <h2 class="section-title">नई खबर जोड़ें</h2>
+            
+            <form id="newsForm" class="news-form" enctype="multipart/form-data">
+                <input type="hidden" id="editingNewsId" value="">
+                
+                <div class="form-group">
+                    <label for="heading">समाचार शीर्षक *</label>
+                    <input 
+                        type="text" 
+                        id="heading" 
+                        name="heading" 
+                        required 
+                        placeholder="समाचार का शीर्षक यहाँ लिखें..."
+                        class="form-input"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="manualSlug" style="display:flex;align-items:center;gap:8px;">
+                        URL Slug
+                        <span style="font-size:0.78rem;font-weight:400;color:#718096;background:#edf2f7;padding:2px 8px;border-radius:10px;">वैकल्पिक (Optional)</span>
+                    </label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="color:#718096;font-size:0.9rem;white-space:nowrap;">voiceofkranti.com/news/</span>
+                        <input
+                            type="text"
+                            id="manualSlug"
+                            name="manualSlug"
+                            placeholder="जैसे: mp-congress-leaders-resign"
+                            class="form-input"
+                            style="flex:1;"
+                            oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')"
+                        >
+                    </div>
+                    <p id="slugHint" style="font-size:0.8rem;color:#718096;margin:4px 0 0;">
+                        खाली छोड़ें — शीर्षक से अपने आप बनेगा। या 3-4 अंग्रेज़ी शब्द लिखें जैसे: <code>mp-congress-resign</code>
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label for="content">समाचार विवरण *</label>
+                    <div class="formatting-toolbar">
+                        <button type="button" onclick="formatText('bold')" class="format-btn" title="Bold (Ctrl+B)"><strong>B</strong></button>
+                        <button type="button" onclick="formatText('italic')" class="format-btn" title="Italic (Ctrl+I)"><em>I</em></button>
+                        <button type="button" onclick="formatText('underline')" class="format-btn" title="Underline (Ctrl+U)"><u>U</u></button>
+                        <button type="button" onclick="formatText('h2')" class="format-btn" title="Section Heading (##)" style="font-weight:700;font-size:0.9rem;">H2</button>
+                        <button type="button" onclick="formatText('h3')" class="format-btn" title="Sub-heading (###)" style="font-weight:600;font-size:0.85rem;">H3</button>
+                        <span style="color: #718096; font-size: 0.85rem; margin-left: 10px;">उपशीर्षक के लिए H2/H3 बटन दबाएं — या लाइन शुरू में <code>## </code> लिखें</span>
+                    </div>
+                    <textarea 
+                        id="content" 
+                        name="content" 
+                        required 
+                        placeholder="समाचार का पूरा विवरण यहाँ लिखें...&#10;&#10;उपशीर्षक के लिए: ## उपशीर्षक यहाँ लिखें&#10;(हर उपशीर्षक अपनी अलग लाइन पर होना चाहिए)"
+                        class="form-input"
+                        rows="12"
+                    ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="category">श्रेणी *</label>
+                    <select 
+                        id="category" 
+                        name="category" 
+                        required 
+                        class="form-input"
+                    >
+                        <option value="">श्रेणी चुनें</option>
+                        <option value="desh">देश</option>
+                        <option value="videsh">विदेश</option>
+                        <option value="rajya">राज्य</option>
+                        <option value="bhopal">भोपाल</option>
+                        <option value="crime">अपराध</option>
+                        <option value="khel">खेल</option>
+                        <option value="rajniti">राजनीति</option>
+                        <option value="manoranjan">मनोरंजन</option>
+                        <option value="vyapar">व्यापार</option>
+                        <option value="itihas">इतिहास</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="author">लेखक का नाम *</label>
+                    <input 
+                        type="text" 
+                        id="author" 
+                        name="author" 
+                        required 
+                        placeholder="लेखक का नाम लिखें..."
+                        class="form-input"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="photos">समाचार फोटो <span style="color: #718096; font-size: 0.9rem;">(वैकल्पिक - अधिकतम 5 फोटो)</span></label>
+                    <input 
+                        type="file" 
+                        id="photos" 
+                        name="photos" 
+                        accept="image/*"
+                        multiple
+                        class="form-input"
+                    >
+                    <small style="color: #718096;">एक से अधिक फोटो चुनने के लिए Ctrl दबाकर रखें</small>
+                    <div id="imagePreview" class="image-preview"></div>
+                </div>
+
+                <div class="form-group" style="display:flex; align-items:center; gap:20px; margin-bottom:1rem; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="isPermanent" name="isPermanent" value="true" style="width:18px;height:18px;cursor:pointer;">
+                        <label for="isPermanent" style="margin:0; cursor:pointer; font-weight:600;">📌 स्थायी रखें (auto-delete नहीं होगा)</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="isOriginal" name="isOriginal" value="true" style="width:18px;height:18px;cursor:pointer;">
+                        <label for="isOriginal" style="margin:0; cursor:pointer; font-weight:600;">✍️ मूल लेख (एडिटर की डेस्क से में दिखेगा)</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <span id="submitText">समाचार प्रकाशित करें</span>
+                    <span id="loadingText" style="display: none;">प्रकाशित हो रहा है...</span>
+                </button>
+                <button type="button" id="cancelEdit" class="btn btn-secondary" style="display: none; margin-left: 10px;">
+                    रद्द करें
+                </button>
+            </form>
+
+            <div id="message" class="message"></div>
+        </section>
+
+        <!-- ── URL Scraper Tool ──────────────────────────────────────────── -->
+        <section class="admin-section" id="scrapeSection">
+            <h2 class="section-title">🔗 URL से खबर लाएं</h2>
+            <p style="color:#718096;font-size:0.88rem;margin:-0.5rem 0 1rem;">किसी भी खबर का URL पेस्ट करें — शीर्षक, इमेज और सारांश अपने आप आ जाएगा।</p>
+
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                <div style="flex:1;min-width:280px;">
+                    <label style="font-size:0.85rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px;">खबर का URL</label>
+                    <input id="scrapeUrlInput" type="url" class="form-input" placeholder="https://www.bhaskar.com/…"
+                        style="margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault();scrapeNewsUrl()}">
+                </div>
+                <button onclick="scrapeNewsUrl(false)" class="btn btn-primary" style="background:#0f766e;white-space:nowrap;">
+                    📥 खबर लाएं
+                </button>
+                <button onclick="scrapeNewsUrl(true)" class="btn btn-primary" style="background:#6b46c1;white-space:nowrap;" title="Groq AI से हिंदी में लिखवाएं">
+                    🤖 AI से लिखवाएं
+                </button>
+                <span id="scrapeStatus" style="font-size:0.85rem;color:#718096;align-self:center;"></span>
+            </div>
+
+            <!-- Preview panel — hidden until scrape completes -->
+            <div id="scrapePreview" style="display:none;margin-top:1.5rem;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                <div style="display:flex;gap:0;flex-wrap:wrap;">
+                    <div id="scrapeImgWrap" style="flex-shrink:0;width:220px;max-width:100%;background:#f0f2f5;display:flex;align-items:center;justify-content:center;">
+                        <img id="scrapeImg" src="" alt="Preview" style="width:220px;height:150px;object-fit:cover;display:block;">
+                    </div>
+                    <div style="flex:1;padding:1rem 1.25rem;min-width:200px;">
+                        <div style="font-size:0.72rem;font-weight:600;color:#dc2626;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;" id="scrapeSource"></div>
+                        <input id="scrapeTitle" type="text" style="font-size:1.05rem;font-weight:700;color:#1e293b;line-height:1.4;margin-bottom:0.5rem;width:100%;border:1.5px solid #cbd5e0;border-radius:5px;padding:5px 8px;background:#fff;box-sizing:border-box;" placeholder="शीर्षक संपादित करें">
+                        <div id="scrapeDesc" style="font-size:0.88rem;color:#4a5568;line-height:1.6;max-height:80px;overflow:hidden;"></div>
+                        <a id="scrapeLink" href="#" target="_blank" rel="noopener noreferrer"
+                            style="display:inline-block;margin-top:0.6rem;font-size:0.8rem;color:#3b82f6;text-decoration:none;">
+                            🔗 मूल खबर पढ़ें →
+                        </a>
+                    </div>
+                </div>
+                <div style="padding:0.9rem 1.25rem;border-top:1px solid #f1f5f9;background:#fafbfc;">
+                    <label style="font-size:0.82rem;font-weight:600;color:#4a5568;display:block;margin-bottom:6px;">📝 लेख सामग्री (संपादित कर सकते हैं)</label>
+                    <textarea id="scrapeContent" rows="7"
+                        style="width:100%;padding:0.65rem 0.75rem;border:1.5px solid #e2e8f0;border-radius:6px;font-size:0.9rem;font-family:inherit;resize:vertical;line-height:1.7;"></textarea>
+                    <!-- Fields row -->
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;align-items:center;">
+                        <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:140px;">
+                            <label style="font-size:0.78rem;font-weight:600;color:#4a5568;">श्रेणी</label>
+                            <select id="scrapeCategorySelect" class="form-input" style="padding:0.4rem 0.6rem;font-size:0.88rem;">
+                                <option value="desh">देश</option>
+                                <option value="rajya">राज्य</option>
+                                <option value="bhopal">भोपाल</option>
+                                <option value="crime">अपराध</option>
+                                <option value="rajniti">राजनीति</option>
+                                <option value="videsh">विदेश</option>
+                                <option value="khel">खेल</option>
+                                <option value="manoranjan">मनोरंजन</option>
+                                <option value="vyapar">व्यापार</option>
+                                <option value="itihas">इतिहास</option>
+                            </select>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:160px;">
+                            <label style="font-size:0.78rem;font-weight:600;color:#4a5568;">लेखक</label>
+                            <input id="scrapeAuthor" type="text" class="form-input" value="Maroof Ahmed Khan" style="padding:0.4rem 0.6rem;font-size:0.88rem;">
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            <label style="font-size:0.78rem;font-weight:600;color:#4a5568;">विकल्प</label>
+                            <div style="display:flex;gap:12px;align-items:center;">
+                                <label style="display:flex;align-items:center;gap:5px;font-size:0.83rem;cursor:pointer;">
+                                    <input type="checkbox" id="scrapeIsPermanent" style="width:15px;height:15px;"> स्थायी रखें
+                                </label>
+                                <label style="display:flex;align-items:center;gap:5px;font-size:0.83rem;cursor:pointer;">
+                                    <input type="checkbox" id="scrapeIsOriginal" style="width:15px;height:15px;"> मौलिक
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0.75rem;">
+                        <button onclick="fillNewsFormFromScrape()" class="btn btn-primary" style="background:#1e40af;">
+                            ✏️ फॉर्म में भरें और संपादित करें
+                        </button>
+                        <button onclick="publishDirectFromScrape()" class="btn btn-primary" style="background:#2f855a;">
+                            🚀 सीधे प्रकाशित करें
+                        </button>
+                        <button onclick="document.getElementById('scrapePreview').style.display='none'" class="btn btn-secondary btn-small">
+                            ✕ बंद करें
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- ─────────────────────────────────────────────────────────────── -->
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button id="fetchRssBtn" onclick="fetchRSS()" class="btn btn-primary btn-small" style="background:#e53e3e;">
+                        📡 RSS से खबरें लाएं
+                    </button>
+                    <button id="fetchNewsdataBtn" onclick="fetchNewsdata()" class="btn btn-primary btn-small" style="background:#2b6cb0;">
+                        🌐 NewsData से खबरें लाएं
+                    </button>
+                    <button id="fetchGnewsBtn" onclick="fetchGnews()" class="btn btn-primary btn-small" style="background:#0d6efd;">
+                        📰 GNews से खबरें लाएं
+                    </button>
+                    <button id="fetchCurrentsBtn" onclick="fetchCurrents()" class="btn btn-primary btn-small" style="background:#0f766e;">
+                        ⚡ Currents से खबरें लाएं
+                    </button>
+                    <button id="generateShortsBtn" onclick="generateShorts()" class="btn btn-primary btn-small" style="background:#6b46c1;">
+                        ⚡ 30 सेकंड में बदलें
+                    </button>
+                    <button id="dailyArticleBtn" onclick="generateDailyArticle()" class="btn btn-primary btn-small" style="background:#2f855a;">
+                        ✍️ आज का संपादकीय लिखें
+                    </button>
+                    <button id="itihasBtn" onclick="generateAajKaItihas()" class="btn btn-primary btn-small" style="background:#92400e;">
+                        📜 आज का इतिहास लिखें
+                    </button>
+                    <button id="explainersBtn" onclick="generateExplainers()" class="btn btn-primary btn-small" style="background:#1e40af;">
+                        💡 Explainers बनाएं
+                    </button>
+                    <button id="kaMatBtn" onclick="generateKaMat()" class="btn btn-primary btn-small" style="background:#9f1239;">
+                        🎙️ का मत बनाएं
+                    </button>
+                    <button id="weeklyRoundupBtn" onclick="generateWeeklyRoundup()" class="btn btn-primary btn-small" style="background:#065f46;">
+                        📋 साप्ताहिक समीक्षा
+                    </button>
+                    <button id="dailyFactBtn" onclick="generateDailyFact()" class="btn btn-primary btn-small" style="background:#7e22ce;">
+                        🧠 क्या आप जानते हैं?
+                    </button>
+                    <button id="deleteOldBtn" onclick="deleteOldArticles()" class="btn btn-primary btn-small" style="background:#744210;">
+                        🗑️ 1 महीने पुरानी खबरें हटाएं
+                    </button>
+                    <button id="cleanDupsBtn" onclick="cleanDuplicates()" class="btn btn-primary btn-small" style="background:#2d3748;border:1px solid #fc8181;">
+                        🧹 डुप्लीकेट हटाएं
+                    </button>
+                    <button id="recatBtn" onclick="recategorizeRSS()" class="btn btn-primary btn-small" style="background:#1e3a5f;border:1px solid #93c5fd;">
+                        🔄 गलत कैटेगरी ठीक करें
+                    </button>
+                    <button id="runAllBtn" onclick="runAll()" class="btn btn-primary btn-small" style="background:#1a202c;border:2px solid #f6e05e;font-weight:700;">
+                        🚀 सब चलाएं
+                    </button>
+                    <button id="stopAllBtn" onclick="runAllAbort=true" class="btn btn-primary btn-small" style="background:#c53030;display:none;">
+                        ⏹ रोकें
+                    </button>
+                    <span id="rssStatus" style="font-size:0.85rem; color:#718096;"></span>
+                </div>
+                <!-- Run-All progress log -->
+                <ul id="runAllLog" style="display:none;list-style:none;margin:0.75rem 0 0;padding:0.75rem 1rem;background:#1a202c;border-radius:8px;font-size:0.85rem;color:#e2e8f0;line-height:1.9;max-height:260px;overflow-y:auto;"></ul>
+            </div>
+
+            <!-- Filter Bar -->
+            <div id="newsFilterBar" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin:0.75rem 0 0.5rem; padding:0.65rem 0.85rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                <input id="newsSearch" type="text" placeholder="शीर्षक खोजें…" oninput="applyNewsFilter()"
+                    style="flex:1; min-width:160px; padding:0.38rem 0.7rem; border:1px solid #cbd5e0; border-radius:6px; font-size:0.88rem; font-family:inherit;">
+                <button onclick="setAuthorFilter('all')" id="filterAll" class="btn btn-primary btn-small" style="background:#4a5568;">सभी</button>
+                <button onclick="setAuthorFilter('maroof')" id="filterMaroof" class="btn btn-primary btn-small" style="background:#1e40af;">✍️ मारूफ के लेख</button>
+                <button onclick="setAuthorFilter('others')" id="filterOthers" class="btn btn-primary btn-small" style="background:#718096;">अन्य समाचार</button>
+                <span id="filterCount" style="font-size:0.8rem; color:#718096; margin-left:auto;"></span>
+            </div>
+
+            <div id="newsList" class="news-grid"></div>
+        </section>
+
+        <!-- ── Top 10 Most Visited ───────────────────────────────────────── -->
+        <section class="admin-section">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                <h2 class="section-title" style="margin:0;">📊 Top 10 सबसे ज़्यादा पढ़ी गई खबरें (पिछले 3 दिन)</h2>
+                <button onclick="loadTopNews()" class="btn btn-primary btn-small" style="background:#1e40af;">🔄 Refresh</button>
+            </div>
+            <div id="topNewsList">
+                <p style="color:#718096; font-size:0.9rem;">लोड हो रहा है…</p>
+            </div>
+        </section>
+
+        <!-- ── Top Cities by Views ────────────────────────────────────────── -->
+        <section class="admin-section">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+                <h2 class="section-title" style="margin:0;">🗺️ Top शहर (सबसे ज़्यादा पाठक)</h2>
+                <button onclick="loadTopCities()" class="btn btn-primary btn-small" style="background:#1e40af;">🔄 Refresh</button>
+            </div>
+            <div id="topCitiesList">
+                <p style="color:#718096; font-size:0.9rem;">लोड हो रहा है…</p>
+            </div>
+        </section>
+
+        <section class="admin-section">
+            <h2 class="section-title">🔒 पासवर्ड बदलें</h2>
+            
+            <form id="passwordForm" class="news-form">
+                <div class="form-group">
+                    <label for="currentPassword">Current Password</label>
+                    <input 
+                        type="password" 
+                        id="currentPassword" 
+                        name="currentPassword" 
+                        required 
+                        class="form-input"
+                        autocomplete="current-password"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="newPassword">New Password</label>
+                    <input 
+                        type="password" 
+                        id="newPassword" 
+                        name="newPassword" 
+                        required 
+                        minlength="6"
+                        class="form-input"
+                        autocomplete="new-password"
+                    >
+                    <small style="color: #718096;">At least 6 characters</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm New Password</label>
+                    <input 
+                        type="password" 
+                        id="confirmPassword" 
+                        name="confirmPassword" 
+                        required 
+                        class="form-input"
+                        autocomplete="new-password"
+                    >
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    <span id="passwordSubmitText">Change Password</span>
+                    <span id="passwordLoadingText" style="display: none;">Changing...</span>
+                </button>
+            </form>
+
+            <div id="passwordMessage" class="message"></div>
+        </section>
+
+        <!-- ── PB SHABD Importer ── -->
+        <section class="admin-section">
+            <h2 class="section-title">📡 PB SHABD खबर आयात करें</h2>
+
+            <!-- Auto-sync via API -->
+            <div style="margin-bottom:1.25rem;padding:1rem;background:#ebf8ff;border-radius:8px;border:1px solid #bee3f8;">
+                <strong style="display:block;margin-bottom:0.4rem;">🔄 स्वचालित सिंक (लॉगिन से सीधे)</strong>
+                <p style="color:#2c5282;font-size:0.88rem;margin:0 0 0.75rem;">सर्वर PB SHABD में लॉगिन कर के नई हिंदी खबरें (RUSH/PRI/URG) अपने आप आयात करेगा।<br>
+                पहले <code>.env</code> में <code>PBSHABD_EMAIL</code> और <code>PBSHABD_PASSWORD</code> सेट करें।</p>
+                <label style="font-size:0.88rem;color:#2c5282;">पृष्ठ (1 पृष्ठ = 50 खबरें):
+                    <input type="number" id="pbShabdPages" value="3" min="1" max="20"
+                        style="width:60px;margin-left:0.4rem;padding:2px 6px;border:1px solid #90cdf4;border-radius:4px;">
+                </label>
+                <label style="font-size:0.88rem;color:#2c5282;margin-left:0.75rem;">
+                    <input type="checkbox" id="pbShabdSkipImages"> छवियाँ छोड़ें (timeout से बचाव)
+                </label>
+                <button type="button" onclick="syncPbShabd()"
+                    style="margin-left:0.75rem;background:#2b6cb0;color:#fff;padding:0.4rem 1rem;border:none;border-radius:6px;cursor:pointer;font-size:0.95rem;">
+                    🔄 अभी सिंक करें
+                </button>
+                <div id="pbShabdSyncStatus" style="margin-top:0.6rem;font-size:0.9rem;"></div>
+            </div>
+
+            <!-- Manual ZIP upload -->
+            <p style="color:#718096;font-size:0.9rem;margin-bottom:0.5rem;">या PB SHABD से डाउनलोड की गई ZIP फ़ाइलें मैन्युअली अपलोड करें:</p>
+            <div class="form-group">
+                <input type="file" id="pbShabdFiles" accept=".zip" multiple
+                    style="display:block;margin-top:0.25rem;">
+            </div>
+            <button type="button" onclick="importPbShabd()"
+                style="background:#4a5568;color:#fff;padding:0.4rem 1rem;border:none;border-radius:6px;cursor:pointer;font-size:0.95rem;">
+                📥 ZIP से आयात करें
+            </button>
+            <div id="pbShabdStatus" style="margin-top:0.75rem;font-size:0.95rem;"></div>
+        </section>
+
+        <!-- ── ePaper Section ── -->
+        <section class="admin-section">
+            <h2 class="section-title">📰 ई-पेपर अपलोड करें</h2>
+
+            <form id="ePaperForm" class="news-form">
+                <div class="form-group">
+                    <label for="ePaperTitle">संस्करण शीर्षक *</label>
+                    <input type="text" id="ePaperTitle" name="title" required
+                        placeholder="जैसे: वॉयस ऑफ क्रांति — 13 जुलाई 2026"
+                        class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="ePaperEdition">संस्करण (वैकल्पिक)</label>
+                    <input type="text" id="ePaperEdition" name="edition"
+                        placeholder="जैसे: भोपाल संस्करण"
+                        class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="ePaperDate">प्रकाशन तिथि</label>
+                    <input type="date" id="ePaperDate" name="publishDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="ePaperFile">PDF फ़ाइल * <span style="color:#718096;font-size:0.9rem;">(अधिकतम 50 MB)</span></label>
+                    <input type="file" id="ePaperFile" name="pdf" accept="application/pdf,.pdf"
+                        required class="form-input">
+                </div>
+                <div id="ePaperProgress" style="display:none;margin-bottom:0.75rem;">
+                    <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;">
+                        <div id="ePaperProgressBar" style="background:#3182ce;height:100%;width:0%;transition:width 0.3s;"></div>
+                    </div>
+                    <small id="ePaperProgressText" style="color:#718096;">Cloudinary पर अपलोड हो रहा है…</small>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span id="ePaperSubmitText">📤 ई-पेपर अपलोड करें</span>
+                    <span id="ePaperLoadingText" style="display:none;">अपलोड हो रहा है…</span>
+                </button>
+            </form>
+            <div id="ePaperMessage" class="message"></div>
+
+            <!-- Published ePapers list -->
+            <div id="ePaperList" style="margin-top:1.5rem;"></div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 वॉयस ऑफ क्रांति. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        const newsForm = document.getElementById('newsForm');
+        const photoInput = document.getElementById('photos');
+        const imagePreview = document.getElementById('imagePreview');
+        const message = document.getElementById('message');
+        const submitText = document.getElementById('submitText');
+        const loadingText = document.getElementById('loadingText');
+        const newsList = document.getElementById('newsList');
+        const editingNewsId = document.getElementById('editingNewsId');
+        const cancelEditBtn = document.getElementById('cancelEdit');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const passwordForm = document.getElementById('passwordForm');
+        const passwordMessage = document.getElementById('passwordMessage');
+        const passwordSubmitText = document.getElementById('passwordSubmitText');
+        const passwordLoadingText = document.getElementById('passwordLoadingText');
+        const contentTextarea = document.getElementById('content');
+        let allNewsData = [];
+        let activeAuthorFilter = 'all';
+
+        function applyNewsFilter() {
+            const q = (document.getElementById('newsSearch').value || '').trim().toLowerCase();
+            let data = allNewsData;
+            if (activeAuthorFilter === 'maroof') {
+                data = data.filter(n => (n.author || '').toLowerCase().includes('maroof'));
+            } else if (activeAuthorFilter === 'others') {
+                data = data.filter(n => !(n.author || '').toLowerCase().includes('maroof'));
+            }
+            if (q) {
+                data = data.filter(n => (n.heading || '').toLowerCase().includes(q));
+            }
+            renderNewsList(data);
+        }
+
+        function setAuthorFilter(type) {
+            activeAuthorFilter = type;
+            document.getElementById('filterAll').style.opacity    = type === 'all'    ? '1' : '0.45';
+            document.getElementById('filterMaroof').style.opacity  = type === 'maroof' ? '1' : '0.45';
+            document.getElementById('filterOthers').style.opacity  = type === 'others' ? '1' : '0.45';
+            applyNewsFilter();
+        }
+
+        // Auth guard - Check authentication on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/status', {
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                
+                if (!data.isAuthenticated) {
+                    window.location.href = '/login';
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = '/login';
+                return false;
+            }
+        }
+
+        // Initialize page only if authenticated
+        (async function init() {
+            const isAuth = await checkAuth();
+            if (isAuth) {
+                loadNews();
+                loadTopNews();
+                loadTopCities();
+            }
+        })();
+
+        // Text formatting function
+        function formatText(command) {
+            const textarea = contentTextarea;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+            
+            if (!selectedText) {
+                alert('कृपया पहले टेक्स्ट को सिलेक्ट करें');
+                return;
+            }
+            
+            let formattedText = '';
+            let cursorOffset = 0;
+            switch(command) {
+                case 'bold':
+                    formattedText = `<b>${selectedText}</b>`;
+                    break;
+                case 'italic':
+                    formattedText = `<i>${selectedText}</i>`;
+                    break;
+                case 'underline':
+                    formattedText = `<u>${selectedText}</u>`;
+                    break;
+                case 'h2': {
+                    // Put ## on its own line, separated by blank lines
+                    const pre = start > 0 ? (textarea.value[start-1] === '\n' ? '' : '\n') : '';
+                    formattedText = `${pre}## ${selectedText}\n`;
+                    cursorOffset = pre.length + 3; // position after ## 
+                    break;
+                }
+                case 'h3': {
+                    const pre3 = start > 0 ? (textarea.value[start-1] === '\n' ? '' : '\n') : '';
+                    formattedText = `${pre3}### ${selectedText}\n`;
+                    cursorOffset = pre3.length + 4;
+                    break;
+                }
+            }
+            
+            textarea.value = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
+            textarea.focus();
+            textarea.selectionStart = start + cursorOffset;
+            textarea.selectionEnd = start + cursorOffset + selectedText.length;
+        }
+
+        // Keyboard shortcuts
+        contentTextarea.addEventListener('keydown', function(e) {
+            if (e.ctrlKey) {
+                if (e.key === 'b') {
+                    e.preventDefault();
+                    formatText('bold');
+                } else if (e.key === 'i') {
+                    e.preventDefault();
+                    formatText('italic');
+                } else if (e.key === 'u') {
+                    e.preventDefault();
+                    formatText('underline');
+                }
+            }
+        });
+
+        // Image preview for multiple photos
+        const photosInput = document.getElementById('photos');
+        photosInput.addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            imagePreview.innerHTML = '';
+            
+            if (files.length > 5) {
+                alert('अधिकतम 5 फोटो अपलोड कर सकते हैं');
+                photosInput.value = '';
+                return;
+            }
+            
+            if (files.length > 0) {
+                imagePreview.style.display = 'grid';
+                imagePreview.style.gridTemplateColumns = 'repeat(auto-fill, minmax(150px, 1fr))';
+                imagePreview.style.gap = '10px';
+                
+                files.forEach((file, index) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const div = document.createElement('div');
+                        div.style.position = 'relative';
+                        div.innerHTML = `
+                            <img src="${e.target.result}" alt="Preview ${index + 1}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px;">
+                            <span style="position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${index + 1}</span>
+                        `;
+                        imagePreview.appendChild(div);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            } else {
+                imagePreview.style.display = 'none';
+            }
+        });
+
+        // Logout functionality
+        logoutBtn.addEventListener('click', async () => {
+            if (confirm('क्या आप वाकई लॉगआउट करना चाहते हैं?')) {
+                try {
+                    const response = await fetch('/api/logout', { 
+                        method: 'POST',
+                        credentials: 'same-origin'
+                    });
+                    if (response.ok) {
+                        window.location.href = '/login';
+                    }
+                } catch (error) {
+                    alert('Logout failed');
+                }
+            }
+        });
+
+        // Image preview for multiple photos
+        photoInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                imagePreview.innerHTML = '';
+                imagePreview.style.display = 'grid';
+                
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const imgDiv = document.createElement('div');
+                        imgDiv.className = 'photo-preview-item';
+                        imgDiv.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                        imagePreview.appendChild(imgDiv);
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+        });
+
+        // Submit form
+        newsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(newsForm);
+            const newsId = editingNewsId.value;
+            
+            submitText.style.display = 'none';
+            loadingText.style.display = 'inline';
+            
+            try {
+                const url = newsId ? `/api/news/${newsId}` : '/api/news';
+                const method = newsId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showMessage(newsId ? 'समाचार सफलतापूर्वक अपडेट हो गई है!' : 'समाचार सफलतापूर्वक प्रकाशित हो गई है!', 'success');
+                    resetForm();
+                    loadNews();
+                } else {
+                    showMessage('त्रुटि: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showMessage(newsId ? 'समाचार अपडेट करने में त्रुटि हुई' : 'समाचार प्रकाशित करने में त्रुटि हुई', 'error');
+            } finally {
+                submitText.style.display = 'inline';
+                loadingText.style.display = 'none';
+            }
+        });
+
+        // Cancel edit
+        cancelEditBtn.addEventListener('click', resetForm);
+
+        // Reset form to add mode
+        function resetForm() {
+            newsForm.reset();
+            editingNewsId.value = '';
+            document.getElementById('manualSlug').value = '';
+            imagePreview.style.display = 'none';
+            submitText.textContent = 'समाचार प्रकाशित करें';
+            loadingText.textContent = 'प्रकाशित हो रहा है...';
+            cancelEditBtn.style.display = 'none';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message message-${type}`;
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+
+        // Edit news
+        async function editNews(id) {
+            const news = allNewsData.find(n => n.id === id);
+            if (!news) return;
+            
+            // Populate form
+            document.getElementById('heading').value = news.heading;
+            document.getElementById('content').value = news.content || '';
+            document.getElementById('category').value = news.category || '';
+            document.getElementById('author').value = news.author || '';
+            document.getElementById('isPermanent').checked = !!news.isPermanent;
+            document.getElementById('isOriginal').checked = !!news.isOriginal;
+            document.getElementById('manualSlug').value = news.slug || '';
+            editingNewsId.value = news.id;
+            
+            // Show current photos if exist
+            const photos = news.photos || (news.photo ? [news.photo] : []);
+            if (photos.length > 0) {
+                imagePreview.innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;">
+                        ${photos.map((photo, index) => `
+                            <div style="position: relative;">
+                                <img src="${photo}" alt="Photo ${index + 1}" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px;">
+                                <div style="position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem;">${index + 1}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <p style="margin-top: 10px; font-size: 0.9rem; color: #718096;">नई तस्वीरें अपलोड करने से ये तस्वीरें बदल जाएंगी</p>
+                `;
+                imagePreview.style.display = 'block';
+            }
+            
+            // Update button text
+            submitText.textContent = 'समाचार अपडेट करें';
+            loadingText.textContent = 'अपडेट हो रहा है...';
+            cancelEditBtn.style.display = 'inline-block';
+            
+            // Scroll to form
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Load all news
+        const categoryNames = {
+            'desh': 'देश', 'videsh': 'विदेश', 'rajya': 'राज्य', 'bhopal': 'भोपाल',
+            'crime': 'अपराध', 'khel': 'खेल', 'rajniti': 'राजनीति', 'manoranjan': 'मनोरंजन', 'vyapar': 'व्यापार', 'itihas': 'इतिहास'
+        };
+
+        function renderNewsList(data) {
+            const countEl = document.getElementById('filterCount');
+            if (!data.length) {
+                newsList.innerHTML = '<p class="no-news">कोई खबर नहीं मिली।</p>';
+                if (countEl) countEl.textContent = '0 खबरें';
+                return;
+            }
+            if (countEl) countEl.textContent = `${data.length} खबरें`;
+            newsList.innerHTML = data.map(news => {
+                    const photos = news.photos || (news.photo ? [news.photo] : []);
+                    const firstPhoto = optimizeCloudinaryUrl(photos[0]);
+                    const hasMultiplePhotos = photos.length > 1;
+                    
+                    return `
+                    <div class="news-card">
+                        ${firstPhoto ? `
+                            <div style="position: relative;">
+                                <img src="${firstPhoto}" alt="${news.heading}" class="news-image">
+                                ${hasMultiplePhotos ? `<span style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; border-radius: 15px; font-size: 0.85rem; font-weight: 600;">📷 ${photos.length}</span>` : ''}
+                            </div>
+                        ` : `
+                            <div class="news-img-placeholder" style="height:140px;">
+                                <span class="placeholder-word">NEWS</span>
+                                <span class="placeholder-lines"><em></em><em></em><em></em></span>
+                            </div>
+                        `}
+                        <div class="news-content">
+                            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+                                ${news.category ? `<span class="category-badge">${categoryNames[news.category] || news.category}</span>` : ''}
+                                ${news.isPermanent ? `<span style="background:#d97706;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">📌 स्थायी</span>` : ''}
+                                ${news.isOriginal ? `<span style="background:#16a34a;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">✍️ मूल लेख</span>` : ''}
+                            </div>
+                            <h3 class="news-heading">${news.heading}</h3>
+                            ${news.content ? `<p class="news-description">${news.content}</p>` : ''}
+                            <p class="news-date">${news.formattedDate}${news.author ? ` | लेखक: ${news.author}` : ''}${news.views ? ` | 👁️ ${news.views} views` : ''}</p>
+                            <div class="news-actions">
+                                <button onclick="editNews('${news.id}')" class="btn btn-primary btn-small">
+                                    संपादित करें
+                                </button>
+                                <button onclick="deleteNews('${news.id}')" class="btn btn-danger btn-small">हटाएं</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function loadTopNews() {
+            const container = document.getElementById('topNewsList');
+            container.innerHTML = '<p style="color:#718096; font-size:0.9rem;">लोड हो रहा है…</p>';
+            try {
+                const res = await fetch('/api/admin/top-news?limit=10', { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Failed to load');
+                const items = await res.json();
+                if (!items.length) {
+                    container.innerHTML = '<p style="color:#718096; font-size:0.9rem;">पिछले 3 दिनों में कोई व्यू डेटा उपलब्ध नहीं है।</p>';
+                    return;
+                }
+                const catMap = { desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल', crime:'अपराध', khel:'खेल', rajniti:'राजनीति', manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास' };
+                container.innerHTML = `
+                    <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+                        <thead>
+                            <tr style="background:#f1f5f9;text-align:left;">
+                                <th style="padding:0.55rem 0.75rem;width:36px;">#</th>
+                                <th style="padding:0.55rem 0.75rem;">शीर्षक</th>
+                                <th style="padding:0.55rem 0.75rem;width:90px;">श्रेणी</th>
+                                <th style="padding:0.55rem 0.75rem;width:70px;text-align:right;">👁 Views</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map((n, i) => {
+                                const url = n.slug ? `/news/${n.slug}` : `/news-detail.html?id=${n._id}`;
+                                const cat = catMap[n.category] || n.category || '—';
+                                const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+                                return `<tr style="background:${bg};border-bottom:1px solid #e2e8f0;">
+                                    <td style="padding:0.55rem 0.75rem;color:#94a3b8;font-weight:700;">${i + 1}</td>
+                                    <td style="padding:0.55rem 0.75rem;"><a href="${url}" target="_blank" style="color:#1e293b;text-decoration:none;font-weight:600;line-height:1.4;">${n.heading}</a></td>
+                                    <td style="padding:0.55rem 0.75rem;"><span style="background:#fef2f2;color:#dc2626;font-size:0.75rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:3px;">${cat}</span></td>
+                                    <td style="padding:0.55rem 0.75rem;text-align:right;font-weight:700;color:#1e40af;">${n.views.toLocaleString('hi-IN')}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>`;
+            } catch (e) {
+                container.innerHTML = `<p style="color:#e53e3e;font-size:0.9rem;">लोड करने में त्रुटि: ${e.message}</p>`;
+            }
+        }
+
+        async function syncPbShabd() {
+            const status = document.getElementById('pbShabdSyncStatus');
+            const pages = document.getElementById('pbShabdPages').value || 3;
+            const skipImages = document.getElementById('pbShabdSkipImages').checked;
+            status.style.color = '#718096';
+            status.textContent = 'PB SHABD में लॉगिन हो रहा है…';
+            try {
+                const res = await fetch(`/api/admin/sync-pbshabd?pages=${pages}&skipImages=${skipImages}`, { method: 'POST', credentials: 'same-origin' });
+                const data = await res.json();
+                if (!res.ok) { status.style.color = '#e53e3e'; status.textContent = data.error || 'त्रुटि'; return; }
+                status.style.color = data.imported > 0 ? '#276749' : '#718096';
+                let msg = `✅ ${data.imported} नई खबरें आयात हुईं, ${data.skipped} पहले से मौजूद थीं।`;
+                if (data.errors?.length) msg += `\n⚠️ ${data.errors.length} त्रुटियाँ: ${data.errors.slice(0,3).join('; ')}`;
+                status.innerHTML = msg.split('\n').map(l => `<div>${l}</div>`).join('');
+            } catch (e) {
+                status.style.color = '#e53e3e';
+                status.textContent = 'नेटवर्क त्रुटि: ' + e.message;
+            }
+        }
+
+        async function importPbShabd() {
+            const input = document.getElementById('pbShabdFiles');
+            const status = document.getElementById('pbShabdStatus');
+            if (!input.files.length) { status.textContent = 'कृपया कम से कम एक ZIP फ़ाइल चुनें।'; return; }
+            status.style.color = '#718096';
+            status.textContent = `${input.files.length} फ़ाइल(ें) अपलोड हो रही हैं…`;
+            const fd = new FormData();
+            for (const f of input.files) fd.append('zips', f);
+            try {
+                const res = await fetch('/api/admin/import-pbshabd', { method: 'POST', credentials: 'same-origin', body: fd });
+                const data = await res.json();
+                if (!res.ok) { status.style.color = '#e53e3e'; status.textContent = data.error || 'त्रुटि'; return; }
+                const lines = [`✅ ${data.imported} खबर(ें) आयात हुईं` + (data.skipped ? `, ${data.skipped} पहले से मौजूद थीं।` : '.')];
+                data.results.forEach(r => {
+                    if (r.error) lines.push(`❌ ${r.file}: ${r.error}`);
+                    else if (r.skipped) lines.push(`⏭ ${r.file}: पहले से मौजूद`);
+                    else lines.push(`✔ ${r.heading} [${r.category}]`);
+                });
+                status.style.color = data.imported > 0 ? '#276749' : '#718096';
+                status.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+                if (data.imported > 0) input.value = '';
+            } catch (e) {
+                status.style.color = '#e53e3e';
+                status.textContent = 'नेटवर्क त्रुटि: ' + e.message;
+            }
+        }
+
+        async function loadTopCities() {
+            const container = document.getElementById('topCitiesList');
+            container.innerHTML = '<p style="color:#718096; font-size:0.9rem;">लोड हो रहा है…</p>';
+            try {
+                const res = await fetch('/api/admin/top-cities?limit=15', { credentials: 'same-origin' });
+                if (!res.ok) throw new Error('Failed to load');
+                const items = await res.json();
+                if (!items.length) {
+                    container.innerHTML = '<p style="color:#718096; font-size:0.9rem;">अभी तक कोई शहर डेटा उपलब्ध नहीं है। जैसे-जैसे पाठक खबरें पढ़ेंगे, यहाँ दिखेगा।</p>';
+                    return;
+                }
+                const maxCount = items[0].count || 1;
+                container.innerHTML = `
+                    <table style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+                        <thead>
+                            <tr style="background:#f1f5f9;text-align:left;">
+                                <th style="padding:0.55rem 0.75rem;width:36px;">#</th>
+                                <th style="padding:0.55rem 0.75rem;">शहर</th>
+                                <th style="padding:0.55rem 0.75rem;">बार पढ़ा</th>
+                                <th style="padding:0.55rem 0.75rem;width:160px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${items.map((c, i) => {
+                                const pct = Math.round((c.count / maxCount) * 100);
+                                const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+                                return `<tr style="background:${bg};border-bottom:1px solid #e2e8f0;">
+                                    <td style="padding:0.55rem 0.75rem;color:#94a3b8;font-weight:700;">${i + 1}</td>
+                                    <td style="padding:0.55rem 0.75rem;font-weight:600;color:#1e293b;">📍 ${c.city}</td>
+                                    <td style="padding:0.55rem 0.75rem;font-weight:700;color:#1e40af;">${c.count.toLocaleString('hi-IN')}</td>
+                                    <td style="padding:0.55rem 0.75rem;">
+                                        <div style="background:#e2e8f0;border-radius:4px;height:8px;width:100%;">
+                                            <div style="background:#dc2626;height:8px;border-radius:4px;width:${pct}%;"></div>
+                                        </div>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>`;
+            } catch (e) {
+                container.innerHTML = `<p style="color:#e53e3e;font-size:0.9rem;">लोड करने में त्रुटि: ${e.message}</p>`;
+            }
+        }
+
+        async function loadNews() {
+            try {
+                const response = await fetch('/api/news', { credentials: 'same-origin' });
+                const newsData = await response.json();
+                allNewsData = newsData;
+                if (!newsData.length) {
+                    newsList.innerHTML = '<p class="no-news">अभी तक कोई समाचार प्रकाशित नहीं की गई है।</p>';
+                    return;
+                }
+                applyNewsFilter();
+            } catch (error) {
+                console.error('Error loading news:', error);
+            }
+        }
+
+        // Delete news
+        async function deleteNews(id) {
+            if (!id || id === 'undefined') {
+                showMessage('लेख ID नहीं मिली, पेज रिफ्रेश करें', 'error');
+                return;
+            }
+            if (!confirm('क्या आप वाकई इस समाचार को हटाना चाहते हैं?')) return;
+            
+            try {
+                const response = await fetch(`/api/news/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'same-origin'
+                });
+                
+                if (response.ok) {
+                    showMessage('समाचार सफलतापूर्वक हटा दी गई है', 'success');
+                    loadNews();
+                } else {
+                    const data = await response.json().catch(() => ({}));
+                    showMessage(data.error || 'समाचार हटाने में त्रुटि हुई', 'error');
+                }
+            } catch (error) {
+                showMessage('समाचार हटाने में त्रुटि हुई', 'error');
+            }
+        }
+
+        // Password change form
+        passwordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                showPasswordMessage('New passwords do not match', 'error');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showPasswordMessage('New password must be at least 6 characters', 'error');
+                return;
+            }
+            
+            passwordSubmitText.style.display = 'none';
+            passwordLoadingText.style.display = 'inline';
+            
+            try {
+                const response = await fetch('/api/change-password', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ currentPassword, newPassword })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showPasswordMessage('पासवर्ड सफलतापूर्वक बदल गया! कृपया सर्वर रीस्टार्ट करें।', 'success');
+                    passwordForm.reset();
+                } else {
+                    showPasswordMessage(data.error || 'Password change failed', 'error');
+                }
+            } catch (error) {
+                showPasswordMessage('Password change failed. Please try again.', 'error');
+            } finally {
+                passwordSubmitText.style.display = 'inline';
+                passwordLoadingText.style.display = 'none';
+            }
+        });
+
+        function showPasswordMessage(text, type) {
+            passwordMessage.textContent = text;
+            passwordMessage.className = `message message-${type}`;
+            passwordMessage.style.display = 'block';
+            setTimeout(() => {
+                passwordMessage.style.display = 'none';
+            }, 8000);
+        }
+
+        // Generate 60-second shorts via Groq
+        async function generateShorts() {
+            const btn = document.getElementById('generateShortsBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ शुरू हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-shorts', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = '✅ Shorts generation शुरू हो गई — background में चल रही है (देश, राजनीति, अपराध, भोपाल)';
+                    status.style.color = '#6b46c1';
+                } else {
+                    status.textContent = data.error || 'Generation failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚡ 30 सेकंड में बदलें';
+            }
+        }
+
+        // Cloudinary URL optimization
+        function optimizeCloudinaryUrl(url) {
+            if (!url || !url.includes('cloudinary')) return url;
+            return url.replace('/upload/', '/upload/q_auto,f_auto,w_800/');
+        }
+
+        // Generate one original editorial article via Groq
+        async function generateDailyArticle() {
+            if (!confirm('Groq AI से एक मौलिक संपादकीय लेख लिखवाया जाएगा और Maroof Ahmed Khan के नाम से प्रकाशित होगा। जारी रखें?')) return;
+            const btn = document.getElementById('dailyArticleBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लिखा जा रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-daily-article', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || '✅ लेख प्रकाशित हो गया';
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'लेख नहीं बन सका';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✍️ आज का संपादकीय लिखें';
+            }
+        }
+
+        // Generate Aaj Ka Itihas article via Groq
+        async function generateAajKaItihas() {
+            if (!confirm('Groq AI से आज की तारीख पर ऐतिहासिक लेख लिखवाया जाएगा। जारी रखें?')) return;
+            const btn = document.getElementById('itihasBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लिखा जा रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-aaj-ka-itihas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: 'true' }),
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || '✅ आज का इतिहास प्रकाशित हो गया';
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'लेख नहीं बन सका';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📜 आज का इतिहास लिखें';
+            }
+        }
+
+        async function generateExplainers() {
+            const btn = document.getElementById('explainersBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ बनाए जा रहे हैं...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-explainers', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                status.textContent = data.message || '✅ Explainers बनाने की प्रक्रिया शुरू हुई (background में चल रहा है)';
+                status.style.color = '#38a169';
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💡 Explainers बनाएं';
+            }
+        }
+
+        async function generateKaMat() {
+            const btn = document.getElementById('kaMatBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ बनाए जा रहे हैं...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-ka-mat', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                status.textContent = data.message || '✅ का मत बनाने की प्रक्रिया शुरू हुई (background में चल रहा है)';
+                status.style.color = '#38a169';
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎙️ का मत बनाएं';
+            }
+        }
+
+        async function generateWeeklyRoundup() {
+            if (!confirm('साप्ताहिक समीक्षा लेख लिखा जाएगा (केवल रविवार को स्वतः, आज force-generate होगा)। जारी रखें?')) return;
+            const btn = document.getElementById('weeklyRoundupBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लिखा जा रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-weekly-roundup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: 'true' }),
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || '✅ साप्ताहिक समीक्षा प्रकाशित';
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'लेख नहीं बन सका';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📋 साप्ताहिक समीक्षा';
+            }
+        }
+
+        async function generateDailyFact() {
+            if (!confirm('"क्या आप जानते हैं?" शैली का शैक्षणिक लेख लिखा जाएगा। जारी रखें?')) return;
+            const btn = document.getElementById('dailyFactBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लिखा जा रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/generate-daily-fact', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: 'true' }),
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || '✅ लेख प्रकाशित';
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'लेख नहीं बन सका';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧠 क्या आप जानते हैं?';
+            }
+        }
+
+        // Delete articles older than 15 days
+        async function recategorizeRSS() {
+            const btn = document.getElementById('recatBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true; btn.textContent = '⏳ जाँच रहे हैं...';
+            status.textContent = '';
+            try {
+                const r = await fetch('/api/admin/recategorize-rss', { method: 'POST', credentials: 'same-origin' });
+                const d = await r.json();
+                if (r.ok) {
+                    status.textContent = `✅ ${d.fixed} खबरों की कैटेगरी ठीक हुई (कुल ${d.total})`;
+                    status.style.color = '#38a169';
+                    if (d.fixed > 0) loadNews();
+                } else { status.textContent = d.error; status.style.color = '#e53e3e'; }
+            } catch(e) { status.textContent = 'नेटवर्क त्रुटि'; status.style.color = '#e53e3e'; }
+            finally { btn.disabled = false; btn.textContent = '🔄 गलत कैटेगरी ठीक करें'; }
+        }
+
+        async function cleanDuplicates() {
+            const btn = document.getElementById('cleanDupsBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ जाँच रहे हैं...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/clean-duplicates', { method: 'POST', credentials: 'same-origin' });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.deleted} डुप्लीकेट खबरें हटाई गईं (${data.groups} समूह)`;
+                    status.style.color = '#38a169';
+                    if (data.deleted > 0) loadNews();
+                } else {
+                    status.textContent = data.error || 'त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🧹 डुप्लीकेट हटाएं';
+            }
+        }
+
+        async function deleteOldArticles() {
+            if (!confirm('1 महीने से पुरानी सभी खबरें हटाई जाएंगी (Permanent खबरें सुरक्षित रहेंगी)। क्या आप सुनिश्चित हैं?')) return;
+            const btn = document.getElementById('deleteOldBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ हटाया जा रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/delete-old-articles', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.deleted} पुरानी खबरें हटाई गईं`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'हटाने में त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🗑️ 1 महीने पुरानी खबरें हटाएं';
+            }
+        }
+
+        // ── URL Scraper ──────────────────────────────────────────────────────
+        let _scrapeData = null; // holds last scrape result
+
+        async function scrapeNewsUrl(withRewrite) {
+            const url = document.getElementById('scrapeUrlInput').value.trim();
+            const status = document.getElementById('scrapeStatus');
+            if (!url) { status.textContent = 'URL डालें'; status.style.color = '#e53e3e'; return; }
+            status.textContent = withRewrite ? '⏳ AI से लिख रहे हैं...' : '⏳ खबर ला रहे हैं...';
+            status.style.color = '#718096';
+            document.getElementById('scrapePreview').style.display = 'none';
+            try {
+                const resp = await fetch('/api/admin/scrape-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ url, rewrite: withRewrite })
+                });
+                const data = await resp.json();
+                if (!resp.ok) { status.textContent = '❌ ' + (data.error || 'त्रुटि'); status.style.color = '#e53e3e'; return; }
+
+                _scrapeData = data;
+
+                // Fill preview
+                const imgEl = document.getElementById('scrapeImg');
+                const imgWrap = document.getElementById('scrapeImgWrap');
+                if (data.image) {
+                    imgEl.src = data.image;
+                    imgEl.onerror = () => { imgWrap.style.display = 'none'; };
+                    imgWrap.style.display = 'flex';
+                } else {
+                    imgWrap.style.display = 'none';
+                }
+                document.getElementById('scrapeSource').textContent = data.sourceName || '';
+                document.getElementById('scrapeTitle').value = data.heading || '';
+                document.getElementById('scrapeDesc').textContent = data.desc || '';
+                document.getElementById('scrapeContent').value = data.content || '';
+                const linkEl = document.getElementById('scrapeLink');
+                linkEl.href = data.sourceUrl || url;
+                linkEl.textContent = '🔗 ' + (data.sourceName || 'मूल खबर') + ' पर पढ़ें →';
+
+                // Auto-detect category from URL/title
+                const catGuess = guessCategoryFromText((data.heading || '') + ' ' + url);
+                document.getElementById('scrapeCategorySelect').value = catGuess;
+
+                document.getElementById('scrapePreview').style.display = 'block';
+                status.textContent = '✅ खबर मिली';
+                status.style.color = '#38a169';
+            } catch (err) {
+                status.textContent = '❌ नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            }
+        }
+
+        function guessCategoryFromText(text) {
+            const t = text.toLowerCase();
+            if (/crime|हत्या|बलात्कार|चोरी|डकैती|गिरफ्तार|पुलिस|क्राइम/.test(t)) return 'crime';
+            if (/bhopal|भोपाल|इंदौर|जबलपुर|ग्वालियर|मध्यप्रदेश|mp\//.test(t)) return 'bhopal';
+            if (/rajya|राज्य|state/.test(t)) return 'rajya';
+            if (/cricket|football|खेल|ipl|sport/.test(t)) return 'khel';
+            if (/bollywood|cinema|film|मनोरंजन|actor/.test(t)) return 'manoranjan';
+            if (/business|share|market|व्यापार|sensex/.test(t)) return 'vyapar';
+            if (/world|international|विदेश|usa|pakistan|china/.test(t)) return 'videsh';
+            if (/politics|congress|bjp|राजनीति|election|चुनाव/.test(t)) return 'rajniti';
+            return 'desh';
+        }
+
+        function fillNewsFormFromScrape() {
+            if (!_scrapeData) return;
+            document.getElementById('heading').value = document.getElementById('scrapeTitle').value.trim() || _scrapeData.heading || '';
+            document.getElementById('content').value = document.getElementById('scrapeContent').value;
+            document.getElementById('category').value = document.getElementById('scrapeCategorySelect').value;
+            document.getElementById('author').value = document.getElementById('scrapeAuthor').value || 'Maroof Ahmed Khan';
+            document.getElementById('isPermanent').checked = document.getElementById('scrapeIsPermanent').checked;
+            document.getElementById('isOriginal').checked = document.getElementById('scrapeIsOriginal').checked;
+            // Store scraped image URL in hidden field for form submission
+            let hiddenPhoto = document.getElementById('scrapePhotoUrlHidden');
+            if (!hiddenPhoto) {
+                hiddenPhoto = document.createElement('input');
+                hiddenPhoto.type = 'hidden';
+                hiddenPhoto.id = 'scrapePhotoUrlHidden';
+                hiddenPhoto.name = 'photoUrl';
+                document.querySelector('form.news-form') && document.querySelector('form.news-form').appendChild(hiddenPhoto);
+            }
+            if (hiddenPhoto) hiddenPhoto.value = _scrapeData.image || '';
+            document.querySelector('.news-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById('heading').focus();
+        }
+
+        async function publishDirectFromScrape() {
+            if (!_scrapeData) return;
+            const heading = document.getElementById('scrapeTitle').value.trim() || _scrapeData.heading?.trim();
+            const content = document.getElementById('scrapeContent').value.trim();
+            const category = document.getElementById('scrapeCategorySelect').value;
+            const author = document.getElementById('scrapeAuthor').value.trim() || 'Maroof Ahmed Khan';
+            const isPermanent = document.getElementById('scrapeIsPermanent').checked;
+            const isOriginal = document.getElementById('scrapeIsOriginal').checked;
+            if (!heading || !content) { alert('शीर्षक और सामग्री आवश्यक है'); return; }
+            if (!confirm(`"${heading.slice(0,60)}…" प्रकाशित करें?`)) return;
+            const status = document.getElementById('scrapeStatus');
+            status.textContent = '⏳ प्रकाशित हो रहा है...'; status.style.color = '#718096';
+            try {
+                const fd = new FormData();
+                fd.append('heading', heading);
+                fd.append('content', content);
+                fd.append('category', category);
+                fd.append('author', author);
+                fd.append('isPermanent', isPermanent ? 'true' : 'false');
+                fd.append('isOriginal', isOriginal ? 'true' : 'false');
+                if (_scrapeData.image) fd.append('photoUrl', _scrapeData.image);
+                const resp = await fetch('/api/news', { method: 'POST', credentials: 'same-origin', body: fd });
+                const data = await resp.json();
+                if (resp.ok) {
+                    status.textContent = '✅ प्रकाशित हो गया!'; status.style.color = '#38a169';
+                    document.getElementById('scrapePreview').style.display = 'none';
+                    document.getElementById('scrapeUrlInput').value = '';
+                    _scrapeData = null;
+                    loadNews();
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'त्रुटि'); status.style.color = '#e53e3e';
+                }
+            } catch (err) {
+                status.textContent = '❌ नेटवर्क त्रुटि'; status.style.color = '#e53e3e';
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
+        // Fetch RSS feeds manually
+        async function fetchRSS() {
+            const btn = document.getElementById('fetchRssBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लोड हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/fetch-rss', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || `${data.imported} नए लेख आयात हुए`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'RSS fetch failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📡 RSS से खबरें लाएं';
+            }
+        }
+
+        // Fetch NewsData.io articles manually
+        async function fetchNewsdata() {
+            const btn = document.getElementById('fetchNewsdataBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लोड हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/fetch-newsdata', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || `${data.imported} नए लेख आयात हुए`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'NewsData fetch failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🌐 NewsData से खबरें लाएं';
+            }
+        }
+
+        // Fetch GNews articles manually
+        async function fetchGnews() {
+            const btn = document.getElementById('fetchGnewsBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लोड हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/fetch-gnews', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || `${data.imported} नए लेख आयात हुए`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'GNews fetch failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📰 GNews से खबरें लाएं';
+            }
+        }
+
+        // Fetch Currents articles manually
+        async function fetchCurrents() {
+            const btn = document.getElementById('fetchCurrentsBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लोड हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/fetch-currents', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || `${data.imported} नए लेख आयात हुए`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'Currents fetch failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚡ Currents से खबरें लाएं';
+            }
+        }
+        async function fetchCurrents() {
+            const btn = document.getElementById('fetchCurrentsBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ लोड हो रहा है...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/fetch-currents', {
+                    method: 'POST',
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = data.message || `${data.imported} नए लेख आयात हुए`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'Currents fetch failed';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚡ Currents से खबरें लाएं';
+            }
+        }
+
+        // ── Run All ───────────────────────────────────────────────────────────
+        let runAllAbort = false;
+
+        const RUN_ALL_TASKS = [
+            { label: '📡 RSS से खबरें लाना',        endpoint: '/api/admin/fetch-rss',            method: 'POST' },
+            { label: '🌐 NewsData से खबरें लाना',   endpoint: '/api/admin/fetch-newsdata',       method: 'POST' },
+            { label: '📰 GNews से खबरें लाना',      endpoint: '/api/admin/fetch-gnews',          method: 'POST' },
+            { label: '⚡ Currents से खबरें लाना',   endpoint: '/api/admin/fetch-currents',       method: 'POST' },
+            { label: '⚡ Shorts बनाना',              endpoint: '/api/admin/generate-shorts',      method: 'POST' },
+            { label: '💡 Explainers बनाना',          endpoint: '/api/admin/generate-explainers', method: 'POST' },
+            { label: '🎙️ का मत बनाना',               endpoint: '/api/admin/generate-ka-mat',     method: 'POST' },
+            { label: '🗑️ पुरानी खबरें हटाना',       endpoint: '/api/admin/delete-old-articles', method: 'POST' },
+        ];
+
+        function runAllAddLog(text, cls) {
+            const li = document.createElement('li');
+            li.textContent = text;
+            if (cls) li.style.color = cls;
+            document.getElementById('runAllLog').appendChild(li);
+            document.getElementById('runAllLog').scrollTop = 9999;
+            return li;
+        }
+
+        async function runAllCountdown(seconds, nextLabel) {
+            const li = runAllAddLog('', '#a0aec0');
+            for (let s = seconds; s > 0; s--) {
+                if (runAllAbort) { li.remove(); return; }
+                const m = Math.floor(s / 60), sec = String(s % 60).padStart(2, '0');
+                li.textContent = `⏸ ${m}:${sec} बाद → ${nextLabel}`;
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            li.remove();
+        }
+
+        async function runAll() {
+            runAllAbort = false;
+            document.getElementById('runAllBtn').style.display  = 'none';
+            document.getElementById('stopAllBtn').style.display = 'inline-block';
+            const log = document.getElementById('runAllLog');
+            log.innerHTML = '';
+            log.style.display = 'block';
+            runAllAddLog(`▶ शुरू हो रहा है — ${RUN_ALL_TASKS.length} कार्य, हर 2 मिनट में एक`, '#f6e05e');
+
+            for (let i = 0; i < RUN_ALL_TASKS.length; i++) {
+                if (runAllAbort) { runAllAddLog('⏹ रोक दिया गया।', '#fc8181'); break; }
+                const t = RUN_ALL_TASKS[i];
+                const li = runAllAddLog(`⏳ ${t.label}…`, '#90cdf4');
+                try {
+                    const res  = await fetch(t.endpoint, { method: t.method, credentials: 'same-origin' });
+                    const data = await res.json();
+                    const info = data.message || data.imported != null ? `${data.imported ?? ''} ${data.message || ''}`.trim() : '';
+                    if (res.ok) {
+                        li.textContent = `✅ ${t.label}${info ? ' — ' + info : ''}`;
+                        li.style.color  = '#68d391';
+                    } else {
+                        li.textContent = `❌ ${t.label} — ${data.error || 'विफल'}`;
+                        li.style.color  = '#fc8181';
+                    }
+                } catch (err) {
+                    li.textContent = `❌ ${t.label} — ${err.message}`;
+                    li.style.color  = '#fc8181';
+                }
+                if (i < RUN_ALL_TASKS.length - 1 && !runAllAbort) {
+                    await runAllCountdown(120, RUN_ALL_TASKS[i + 1].label);
+                }
+            }
+
+            if (!runAllAbort) { runAllAddLog('🎉 सभी कार्य पूर्ण!', '#f6e05e'); loadNews(); }
+            document.getElementById('runAllBtn').style.display  = 'inline-block';
+            document.getElementById('stopAllBtn').style.display = 'none';
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
+        // ── ePaper admin ──────────────────────────────────────────────────────
+        // Set today's date as default
+        document.getElementById('ePaperDate').valueAsDate = new Date();
+
+        const ePaperForm    = document.getElementById('ePaperForm');
+        const ePaperMsg     = document.getElementById('ePaperMessage');
+        const ePaperSubmitT = document.getElementById('ePaperSubmitText');
+        const ePaperLoadT   = document.getElementById('ePaperLoadingText');
+
+        ePaperForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = document.getElementById('ePaperFile').files[0];
+            if (!file) { showEPaperMsg('PDF फ़ाइल चुनें', 'error'); return; }
+            if (!file.name.toLowerCase().endsWith('.pdf')) { showEPaperMsg('केवल PDF फ़ाइल अनुमत है', 'error'); return; }
+            if (file.size > 50 * 1024 * 1024) { showEPaperMsg('फ़ाइल 50 MB से छोटी होनी चाहिए', 'error'); return; }
+
+            ePaperSubmitT.style.display = 'none';
+            ePaperLoadT.style.display = 'inline';
+            showEPaperMsg('', '');
+
+            const progressWrap = document.getElementById('ePaperProgress');
+            const progressBar  = document.getElementById('ePaperProgressBar');
+            const progressText = document.getElementById('ePaperProgressText');
+
+            try {
+                // Step 1: get a signed upload from our server (tiny request — no file)
+                const signRes  = await fetch('/api/admin/epaper/sign', { credentials: 'same-origin' });
+                const signData = await signRes.json();
+                if (!signRes.ok) throw new Error(signData.error || 'Signature प्राप्त नहीं हुई');
+
+                // Step 2: upload PDF directly to Cloudinary (bypasses Vercel limit)
+                // Strip .pdf extension from the File object so Cloudinary does NOT append
+                // it to the public_id — raw files served with a .pdf URL return 401 on
+                // this account, while extension-less URLs return 200 (matches old uploads).
+                const uploadFile = new File([file], file.name.replace(/\.pdf$/i, ''), { type: file.type });
+                const cldFd = new FormData();
+                cldFd.append('file',          uploadFile);
+                cldFd.append('api_key',       signData.api_key);
+                cldFd.append('timestamp',     signData.timestamp);
+                cldFd.append('signature',     signData.signature);
+                cldFd.append('folder',        signData.folder);
+                cldFd.append('public_id',     signData.public_id);
+                cldFd.append('access_mode',   'public');
+                cldFd.append('resource_type', 'raw');
+
+                progressWrap.style.display = 'block';
+                progressBar.style.width    = '0%';
+
+                const cldResult = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `https://api.cloudinary.com/v1_1/${signData.cloud_name}/raw/upload`);
+                    xhr.upload.onprogress = (ev) => {
+                        if (ev.lengthComputable) {
+                            const pct = Math.round((ev.loaded / ev.total) * 100);
+                            progressBar.style.width  = pct + '%';
+                            progressText.textContent = `अपलोड हो रहा है… ${pct}%`;
+                        }
+                    };
+                    xhr.onload = () => {
+                        const r = JSON.parse(xhr.responseText);
+                        xhr.status === 200 ? resolve(r) : reject(new Error(r.error?.message || 'Cloudinary अपलोड विफल'));
+                    };
+                    xhr.onerror = () => reject(new Error('नेटवर्क त्रुटि (Cloudinary)'));
+                    xhr.send(cldFd);
+                });
+
+                progressBar.style.width  = '100%';
+                progressText.textContent = 'सहेजा जा रहा है…';
+
+                // Step 3: save metadata in our DB
+                const title       = document.getElementById('ePaperTitle').value.trim();
+                const edition     = document.getElementById('ePaperEdition').value.trim();
+                const publishDate = document.getElementById('ePaperDate').value;
+
+                const saveRes  = await fetch('/api/admin/epaper', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        pdfUrl:      cldResult.secure_url,
+                        cloudinaryId: cldResult.public_id,
+                        title,
+                        edition,
+                        publishDate,
+                    })
+                });
+                const saveData = await saveRes.json();
+                if (saveRes.ok && saveData.success) {
+                    showEPaperMsg('✅ ई-पेपर सफलतापूर्वक अपलोड हो गया!', 'success');
+                    ePaperForm.reset();
+                    document.getElementById('ePaperDate').valueAsDate = new Date();
+                    loadEPapers();
+                } else {
+                    showEPaperMsg('❌ ' + (saveData.error || 'सहेजना विफल'), 'error');
+                }
+            } catch (err) {
+                showEPaperMsg('❌ ' + err.message, 'error');
+            } finally {
+                ePaperSubmitT.style.display  = 'inline';
+                ePaperLoadT.style.display    = 'none';
+                progressWrap.style.display   = 'none';
+                progressBar.style.width      = '0%';
+            }
+        });
+
+        function showEPaperMsg(text, type) {
+            ePaperMsg.textContent = text;
+            ePaperMsg.className = 'message' + (type === 'success' ? ' success' : type === 'error' ? ' error' : '');
+        }
+
+        async function loadEPapers() {
+            const list = document.getElementById('ePaperList');
+            try {
+                const res   = await fetch('/api/epaper');
+                const papers = await res.json();
+                if (!papers.length) { list.innerHTML = '<p style="color:#718096;font-size:0.9rem;">अभी कोई ई-पेपर नहीं।</p>'; return; }
+                list.innerHTML = `
+                    <h3 style="font-size:1rem;font-weight:700;margin:0 0 0.75rem;color:#2d3748;">प्रकाशित ई-पेपर (${papers.length})</h3>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                    ${papers.map(p => {
+                        const d = new Date(p.publishDate).toLocaleDateString('hi-IN',{day:'numeric',month:'long',year:'numeric'});
+                        const dateSlug = p.dateSlug || (p.publishDate ? new Date(p.publishDate).toISOString().slice(0, 10) : '');
+                        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.9rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;gap:0.5rem;flex-wrap:wrap;">
+                            <div>
+                                <span style="font-weight:600;font-size:0.92rem;color:#2d3748;">${escAdmin(p.title)}</span>
+                                ${p.edition ? `<span style="color:#718096;font-size:0.8rem;margin-left:8px;">${escAdmin(p.edition)}</span>` : ''}
+                                <span style="color:#a0aec0;font-size:0.8rem;margin-left:8px;">${d}</span>
+                            </div>
+                            <div style="display:flex;gap:0.4rem;">
+                                <a href="${dateSlug ? `/epaper/${escAdmin(dateSlug)}` : escAdmin(p.pdfUrl)}" target="_blank" rel="noopener"
+                                    style="padding:0.3rem 0.7rem;background:#3182ce;color:#fff;border-radius:5px;font-size:0.82rem;text-decoration:none;">👁 देखें</a>
+                                <button onclick="deleteEPaper('${p.id || p._id}','${escAdmin((p.title||'').replace(/'/g, '&#39;'))}')"
+                                    title="यह ई-पेपर स्थायी रूप से हटाएं"
+                                    style="padding:0.3rem 0.7rem;background:#c53030;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:0.82rem;font-weight:700;">🗑 Delete</button>
+                            </div>
+                        </div>`;
+                    }).join('')}
+                    </div>`;
+            } catch (e) {
+                list.innerHTML = '<p style="color:#e53e3e;">लोड नहीं हो सका।</p>';
+            }
+        }
+
+        async function deleteEPaper(id, title = '') {
+            const prompt = title
+                ? `क्या आप "${title}" ई-पेपर हटाना चाहते हैं?`
+                : 'क्या आप यह ई-पेपर हटाना चाहते हैं?';
+            if (!confirm(prompt)) return;
+            try {
+                const res = await fetch(`/api/admin/epaper/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showEPaperMsg('✅ ई-पेपर हटा दिया गया।', 'success');
+                    loadEPapers();
+                } else {
+                    showEPaperMsg('❌ ' + (data.error || 'हटाना विफल'), 'error');
+                }
+            } catch (e) {
+                showEPaperMsg('❌ नेटवर्क त्रुटि', 'error');
+            }
+        }
+
+        function escAdmin(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        // Load ePapers on page init
+        loadEPapers();
+        // ─────────────────────────────────────────────────────────────────────
+    </script>
+</body>
+</html>
+
+

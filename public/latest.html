@@ -1,0 +1,363 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SFXC5EHMPL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SFXC5EHMPL');
+    </script>
+    <meta charset="UTF-8">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9398040019774807" crossorigin="anonymous"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ff9933">
+    <title>लाइव फीड — ताज़ा खबरें | वॉयस ऑफ क्रांति</title>
+    <meta name="description" content="वॉयस ऑफ क्रांति की ताज़ातरीन खबरें — आगमन समय के अनुसार। हर मिनट अपडेट।">
+    <meta name="robots" content="noindex, follow">
+    <link rel="stylesheet" href="/styles.css?v=21">
+    <style>
+        .lf-hero {
+            background: linear-gradient(135deg, #0a0a1a 0%, #0f172a 60%, #1e1b4b 100%);
+            color: #fff;
+            padding: 1.6rem 1.5rem 1.2rem;
+            text-align: center;
+        }
+        .lf-hero h1 { font-size: 1.7rem; margin: 0 0 0.3rem; font-weight: 800; }
+        .lf-hero p  { margin: 0; color: rgba(255,255,255,.7); font-size: 0.9rem; }
+        .lf-live-dot {
+            display: inline-block;
+            width: 9px; height: 9px;
+            background: #22c55e;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: liveDot 1.2s ease-in-out infinite;
+            vertical-align: middle;
+        }
+        @keyframes liveDot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+
+        .lf-controls {
+            background: #0f172a;
+            padding: 0.6rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #1e293b;
+        }
+        .lf-refresh-info { color: rgba(255,255,255,.55); font-size: 0.78rem; }
+        .lf-refresh-btn {
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-radius: 5px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: background .18s;
+        }
+        .lf-refresh-btn:hover { background: #334155; color: #fff; }
+        .lf-count { color: #86efac; font-size: 0.82rem; font-weight: 600; }
+
+        .lf-feed { max-width: 860px; margin: 0 auto; padding: 0.5rem 1rem 3rem; }
+
+        .lf-item {
+            display: grid;
+            grid-template-columns: 115px 1fr;
+            gap: 0.75rem;
+            padding: 0.85rem 0;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background .15s;
+            border-radius: 6px;
+        }
+        .lf-item:hover { background: #f8fafc; padding-left: 0.4rem; }
+        .lf-item.fresh { border-left: 3px solid #22c55e; padding-left: 0.5rem; }
+        .lf-item.fresh:hover { background: #f0fdf4; }
+
+        .lf-thumb {
+            width: 115px; height: 80px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: #e2e8f0;
+            flex-shrink: 0;
+        }
+        .lf-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .lf-thumb-placeholder {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            color: #94a3b8; font-size: 0.65rem; font-weight: 700; letter-spacing: .5px;
+        }
+
+        .lf-body { min-width: 0; }
+        .lf-meta {
+            display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;
+            margin-bottom: 0.25rem;
+        }
+        .lf-cat {
+            font-size: 0.68rem; font-weight: 700; color: #dc2626;
+            background: #fef2f2; padding: 1px 6px; border-radius: 3px;
+            text-transform: uppercase; letter-spacing: .4px;
+        }
+        .lf-new {
+            font-size: 0.65rem; font-weight: 800; color: #fff;
+            background: #22c55e; padding: 1px 6px; border-radius: 3px;
+            letter-spacing: .4px; animation: newBadge 2s ease-in-out infinite;
+        }
+        .nc-pb-badge {
+            display: inline-flex; align-items: center;
+            font-size: 0.62rem; font-weight: 700; letter-spacing: 0.05em;
+            color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe;
+            padding: 0.12rem 0.4rem; border-radius: 3px;
+        }
+        @keyframes newBadge { 0%,100%{opacity:1} 50%{opacity:.6} }
+        .lf-time { font-size: 0.72rem; color: #94a3b8; }
+        .lf-exact { font-size: 0.68rem; color: #cbd5e1; }
+
+        .lf-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1.4;
+            font-family: 'Noto Serif Devanagari', Georgia, serif;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .lf-source { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+
+        .lf-section-header {
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            padding: 0.9rem 0 0.3rem;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 0.1rem;
+        }
+
+        .lf-empty { text-align: center; padding: 3rem 1rem; color: #94a3b8; }
+        .lf-spinner {
+            width: 36px; height: 36px; border: 3px solid #e2e8f0;
+            border-top-color: #22c55e; border-radius: 50%;
+            animation: spin .8s linear infinite; margin: 2rem auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 480px) {
+            .lf-item { grid-template-columns: 72px 1fr; gap: 0.5rem; }
+            .lf-thumb { width: 72px; height: 54px; }
+            .lf-title { font-size: 0.88rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Utility Bar -->
+    <div class="utility-bar">
+        <div class="container">
+            <span class="utility-date" id="utilDate"></span>
+            <div class="utility-bar-links">
+                <a href="/about.html">About Us</a>
+                <a href="/contact.html">Contact Us</a>
+                <a href="/authors.html">Founder</a>
+                <a href="/editorial-policy.html">Editorial Policy</a>
+            </div>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="container">
+            <div class="logo-container">
+                <a href="/" style="display:flex;align-items:center;gap:14px;text-decoration:none;color:inherit;">
+                    <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect width="52" height="52" rx="9" fill="rgba(255,255,255,0.18)"/><rect width="52" height="52" rx="9" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="1"/><!-- Mic capsule --><rect x="19" y="5" width="14" height="22" rx="7" fill="white" opacity="0.95"/><!-- Grille --><line x1="22" y1="11" x2="30" y2="11" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="16" x2="31" y2="16" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="21" x2="31" y2="21" stroke="rgba(180,70,0,0.12)" stroke-width="1.5"/><!-- Pickup arc --><path d="M 10,22 Q 10,35 26,35 Q 42,35 42,22" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Stand --><line x1="26" y1="35" x2="26" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Base --><line x1="17" y1="43" x2="35" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Waves --><path d="M 42,18 C 47,22 47,31 42,35" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/><path d="M 45,14 C 51,19 51,33 45,38" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <div>
+                        <h1 class="logo">वॉयस ऑफ क्रांति</h1>
+                        <p class="tagline">सत्य की आवाज़, जनता का विश्वास</p>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
+                            <p style="font-size:0.72rem;color:#1a1a1a;font-weight:700;margin:0;letter-spacing:.4px;background:rgba(255,255,255,0.85);padding:2px 7px;border-radius:3px;display:inline-block;">RNI: MPHIN/26/A5773</p>
+                            <span id="headerDate" style="font-size:0.88rem;color:#fbbf24;font-weight:800;letter-spacing:.4px;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.5);"></span>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <nav>
+                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
+                <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
+                <a href="/latest" class="nav-link nav-link-latest active">🟢 लाइव फीड</a>
+                <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
+                <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
+                <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
+                <a href="/glossary.html" class="nav-link">शब्दकोश</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Category nav identical to homepage -->
+    <div class="category-menu" id="categoryMenu">
+        <button class="cat-toggle" id="catToggle" aria-expanded="false" aria-label="श्रेणियाँ">
+            <span class="cat-toggle-icon"><span></span><span></span><span></span></span>
+        </button>
+        <div class="container">
+            <nav class="category-nav" id="categoryNav">
+                <a href="/" class="category-link">मुख्य</a>
+                <a href="/?written=true" class="category-link">एडिटर की डेस्क से</a>
+                <a href="/?category=desh" class="category-link">देश</a>
+                <a href="/?category=videsh" class="category-link">विदेश</a>
+                <a href="/?category=rajniti" class="category-link">राजनीति</a>
+                <a href="/?category=bhopal" class="category-link">भोपाल</a>
+                <a href="/?category=rajya" class="category-link">राज्य</a>
+                <a href="/?category=crime" class="category-link">अपराध</a>
+                <a href="/?category=khel" class="category-link">खेल</a>
+                <a href="/?category=manoranjan" class="category-link">मनोरंजन</a>
+                <a href="/?category=vyapar" class="category-link">व्यापार</a>
+                <a href="/?category=itihas" class="category-link">इतिहास</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="lf-hero">
+        <h1><span class="lf-live-dot"></span>लाइव न्यूज़ फीड</h1>
+        <p>ताज़ातरीन खबरें — आगमन समय के अनुसार &nbsp;·&nbsp; हर 60 सेकंड में ऑटो-रिफ्रेश</p>
+    </div>
+
+    <div class="lf-controls">
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <span class="lf-count" id="totalCount"></span>
+            <span class="lf-refresh-info" id="refreshInfo">लोड हो रहा है...</span>
+        </div>
+        <button class="lf-refresh-btn" onclick="loadFeed(true)">↺ अभी रिफ्रेश करें</button>
+    </div>
+
+    <div class="lf-feed" id="feed">
+        <div class="lf-spinner"></div>
+    </div>
+
+    <script>
+    const categoryNames = {
+        desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल',
+        crime:'अपराध', khel:'खेल', rajniti:'राजनीति',
+        manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास'
+    };
+
+    function timeAgo(dateStr) {
+        const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+        if (diff <= 0)  return 'अभी-अभी';
+        if (diff < 60)  return diff + ' सेकंड पहले';
+        if (diff < 3600) return Math.floor(diff/60) + ' मिनट पहले';
+        if (diff < 86400) return Math.floor(diff/3600) + ' घंटे पहले';
+        return Math.floor(diff/86400) + ' दिन पहले';
+    }
+
+    function exactTime(dateStr) {
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) +
+               ', ' + d.toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' });
+    }
+
+    function optimizeImg(url) {
+        if (!url) return null;
+        if (url.includes('res.cloudinary.com') && !url.includes('f_auto')) {
+            return url.replace('/upload/', '/upload/f_auto,q_auto:low,w_180,h_130,c_fill/');
+        }
+        return url;
+    }
+
+    let refreshTimer = null, countdown = 60;
+
+    async function loadFeed(manual) {
+        if (manual) { clearInterval(refreshTimer); countdown = 60; startCountdown(); }
+        try {
+            const res = await fetch('/api/news', { credentials: 'same-origin' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const articles = await res.json();
+            // already sorted by date desc from server
+            renderFeed(articles);
+            document.getElementById('totalCount').textContent = articles.length + ' खबरें';
+        } catch(e) {
+            document.getElementById('feed').innerHTML = '<div class="lf-empty">लोड करने में त्रुटि हुई। रिफ्रेश करें।</div>';
+        }
+    }
+
+    function renderFeed(articles) {
+        const feed = document.getElementById('feed');
+        const now = Date.now();
+        const FRESH_MS = 30 * 60 * 1000;  // 30 minutes
+        const HOUR_MS  = 60 * 60 * 1000;
+        const DAY_MS   = 24 * 60 * 60 * 1000;
+
+        let html = '';
+        let lastSection = null;
+
+        articles.forEach(a => {
+            const age = now - new Date(a.date);
+            let section;
+            if      (age < FRESH_MS) section = '🟢 पिछले 30 मिनट में';
+            else if (age < HOUR_MS)  section = '🕐 पिछले 1 घंटे में';
+            else if (age < 3*HOUR_MS) section = '🕒 पिछले 3 घंटे में';
+            else if (age < 6*HOUR_MS) section = '🕕 पिछले 6 घंटे में';
+            else if (age < DAY_MS)   section = '📅 आज की खबरें';
+            else                     section = '🗓️ पुरानी खबरें';
+
+            if (section !== lastSection) {
+                html += `<div class="lf-section-header">${section}</div>`;
+                lastSection = section;
+            }
+
+            const isFresh = age < FRESH_MS;
+            const cat = categoryNames[a.category] || a.category || '';
+            const url = a.slug ? '/news/' + a.slug : '/news-detail.html?id=' + a.id;
+            const img = optimizeImg((a.photos && a.photos[0]) || a.photo);
+
+            html += `<div class="lf-item${isFresh ? ' fresh' : ''}" onclick="location.href='${url}'">
+                <div class="lf-thumb">
+                    ${img ? `<img src="${img}" alt="" loading="lazy">` : '<div class="lf-thumb-placeholder">NEWS</div>'}
+                </div>
+                <div class="lf-body">
+                    <div class="lf-meta">
+                        ${cat ? `<span class="lf-cat">${cat}</span>` : ''}
+                        ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                        ${isFresh ? '<span class="lf-new">नया</span>' : ''}
+                        <span class="lf-time">${timeAgo(a.date)}</span>
+                        <span class="lf-exact">(${exactTime(a.date)})</span>
+                    </div>
+                    <div class="lf-title">${a.heading}</div>
+                    ${a.rssSource && a.rssSource !== 'PB SHABD' ? `<div class="lf-source">स्रोत: ${a.rssSource}</div>` : ''}
+                </div>
+            </div>`;
+        });
+
+        feed.innerHTML = html || '<div class="lf-empty">कोई खबर नहीं मिली।</div>';
+    }
+
+    function startCountdown() {
+        countdown = 60;
+        refreshTimer = setInterval(() => {
+            countdown--;
+            const el = document.getElementById('refreshInfo');
+            if (el) el.textContent = 'अगला रिफ्रेश: ' + countdown + ' सेकंड में';
+            if (countdown <= 0) {
+                clearInterval(refreshTimer);
+                loadFeed(false).then(() => startCountdown());
+            }
+        }, 1000);
+    }
+
+    // Date display
+    (function(){
+        var d = new Date();
+        var days = ['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार'];
+        var months = ['जनवरी','फरवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'];
+        var str = days[d.getDay()] + ', ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+        var el = document.getElementById('utilDate'); if (el) el.textContent = str;
+        var hd = document.getElementById('headerDate'); if (hd) hd.textContent = '📅 ' + str;
+    })();
+
+    loadFeed(false);
+    startCountdown();
+    </script>
+</body>
+</html>

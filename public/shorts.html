@@ -1,0 +1,462 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SFXC5EHMPL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SFXC5EHMPL');
+    </script>
+    <meta charset="UTF-8">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9398040019774807" crossorigin="anonymous"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ff9933">
+
+    <title>30 सेकंड में खबर - वॉयस ऑफ क्रांति</title>
+    <meta name="description" content="वॉयस ऑफ क्रांति पर 30 सेकंड में पढ़ें आज की बड़ी खबरें। देश, राजनीति, अपराध और भोपाल की संक्षिप्त खबरें।">
+    <meta name="robots" content="noindex, follow">
+    <link rel="canonical" href="https://voiceofkranti.com/shorts.html">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://voiceofkranti.com/shorts.html">
+    <meta property="og:title" content="60 सेकंड में खबर - वॉयस ऑफ क्रांति">
+    <meta property="og:description" content="देश, राजनीति, अपराध और भोपाल की बड़ी खबरें — 60 सेकंड में।">
+    <meta property="og:image" content="https://voiceofkranti.com/og-banner.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="60 सेकंड में खबर - वॉयस ऑफ क्रांति">
+    <meta name="twitter:image" content="https://voiceofkranti.com/og-banner.svg">
+    <link rel="preconnect" href="https://res.cloudinary.com">
+    <link rel="dns-prefetch" href="https://res.cloudinary.com">
+    <link rel="preconnect" href="https://www.googletagmanager.com">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="stylesheet" href="/styles.css?v=21">
+    <style>
+        /* ── Shorts page layout ────────────────────────────── */
+        .shorts-hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            margin-bottom: 0;
+        }
+        .shorts-hero h1 { font-size: 2rem; margin: 0 0 0.4rem; }
+        .shorts-hero p  { margin: 0; opacity: 0.85; font-size: 1rem; }
+        .shorts-hero .live-badge {
+            display: inline-block;
+            background: #e63946;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            margin-bottom: 0.6rem;
+            letter-spacing: 1px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+        /* ── Category filter tabs ──────────────────────────── */
+        .shorts-tabs {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            background: #f8f8f8;
+            border-bottom: 1px solid #eee;
+            overflow-x: auto;
+            scrollbar-width: none;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        .shorts-tabs::-webkit-scrollbar { display: none; }
+        .shorts-tab {
+            flex-shrink: 0;
+            padding: 0.45rem 1.1rem;
+            border-radius: 20px;
+            border: 1.5px solid #ddd;
+            background: white;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #444;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .shorts-tab.active, .shorts-tab:hover {
+            background: #e63946;
+            color: white;
+            border-color: #e63946;
+        }
+
+        /* ── Shorts grid ───────────────────────────────────── */
+        .shorts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+            padding: 1.5rem;
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        /* ── Single short card ─────────────────────────────── */
+        .short-card {
+            background: white;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #f0f0f0;
+        }
+        .short-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.13);
+        }
+
+        .short-card-img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            display: block;
+        }
+        .short-card-img-placeholder {
+            width: 100%;
+            height: 180px;
+            background: linear-gradient(135deg, #0f1729 0%, #1a2540 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            user-select: none;
+        }
+
+        .short-card-body {
+            padding: 1.1rem 1.2rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .short-top-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+        }
+        .short-live { font-size: 0.72rem; font-weight: 700; color: #e63946; letter-spacing: 1px; }
+        .short-time { font-size: 0.75rem; color: #999; }
+
+        .short-cat-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .cat-desh     { background: #fff3cd; color: #856404; }
+        .cat-rajniti  { background: #d1e7dd; color: #0a5932; }
+        .cat-crime    { background: #f8d7da; color: #842029; }
+        .cat-bhopal   { background: #cff4fc; color: #055160; }
+
+        .short-headline {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #1a1a2e;
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        .short-section { display: flex; flex-direction: column; gap: 0.2rem; }
+        .short-section-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #e63946;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+        .short-section-text { font-size: 0.88rem; color: #444; line-height: 1.5; margin: 0; }
+
+        .short-key-points { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+        .short-key-points li {
+            font-size: 0.85rem;
+            color: #444;
+            padding-left: 1.2rem;
+            position: relative;
+            line-height: 1.45;
+        }
+        .short-key-points li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #e63946;
+            font-weight: 700;
+        }
+
+        .short-why {
+            background: #fff8f0;
+            border-left: 3px solid #ff9800;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0 6px 6px 0;
+        }
+        .short-why .short-section-label { color: #e65100; }
+        .short-why .short-section-text  { color: #5d4037; }
+
+        .short-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.8rem 1.2rem;
+            border-top: 1px solid #f0f0f0;
+            background: #fafafa;
+        }
+        .short-read-more {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #e63946;
+            text-decoration: none;
+        }
+        .short-read-more:hover { text-decoration: underline; }
+        .short-share {
+            font-size: 0.8rem;
+            color: #555;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-family: inherit;
+            padding: 0;
+        }
+        .short-share:hover { color: #e63946; }
+
+        /* ── Loading / empty states ────────────────────────── */
+        .shorts-loading, .shorts-empty {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: #666;
+            grid-column: 1 / -1;
+        }
+        .shorts-loading .spinner {
+            width: 40px; height: 40px;
+            border: 4px solid #eee;
+            border-top-color: #e63946;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 1rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .shorts-empty h3 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+
+        @media (max-width: 600px) {
+            .shorts-grid { padding: 1rem; gap: 1rem; grid-template-columns: 1fr; }
+            .shorts-hero h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Utility Bar -->
+    <div class="utility-bar">
+        <div class="container">
+            <div class="utility-bar-links">
+                <a href="/about.html">About Us</a>
+                <a href="/contact.html">Contact Us</a>
+                <a href="/authors.html">Founder</a>
+                <a href="/editorial-policy.html">Editorial Policy</a>
+            </div>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="container">
+            <div class="logo-container">
+                <a href="/" style="text-decoration:none;color:inherit;">
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect width="52" height="52" rx="9" fill="rgba(255,255,255,0.18)"/><rect width="52" height="52" rx="9" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="1"/><!-- Mic capsule --><rect x="19" y="5" width="14" height="22" rx="7" fill="white" opacity="0.95"/><!-- Grille --><line x1="22" y1="11" x2="30" y2="11" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="16" x2="31" y2="16" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="21" x2="31" y2="21" stroke="rgba(180,70,0,0.12)" stroke-width="1.5"/><!-- Pickup arc --><path d="M 10,22 Q 10,35 26,35 Q 42,35 42,22" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Stand --><line x1="26" y1="35" x2="26" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Base --><line x1="17" y1="43" x2="35" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><!-- Waves --><path d="M 42,18 C 47,22 47,31 42,35" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/><path d="M 45,14 C 51,19 51,33 45,38" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+                        <div>
+                            <h1 class="logo">वॉयस ऑफ क्रांति</h1>
+                            <p class="tagline">सत्य की आवाज़, जनता का विश्वास</p>
+                        <p style="font-size:0.68rem;color:#1a1a1a;font-weight:700;margin:2px 0 0;letter-spacing:.3px;background:rgba(255,255,255,0.75);padding:1px 5px;border-radius:3px;">RNI: MPHIN/26/A5773</p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <nav>
+                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
+                <a href="/shorts.html" class="nav-link nav-link-shorts active"><span class="shorts-dot"></span>खबरें 30 सेकंड में</a>
+                <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
+                <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
+                <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>                <a href="/glossary.html" class="nav-link">शब्दकोश</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="shorts-hero">
+        <div class="live-badge">⚡ SHORTS</div>
+        <h1>30 सेकंड में खबर</h1>
+        <p>बड़ी खबरें, संक्षेप में — देश · राजनीति · अपराध · भोपाल</p>
+    </div>
+
+    <div class="shorts-tabs">
+        <button class="shorts-tab active" data-category="all">🗞️ सभी</button>
+        <button class="shorts-tab" data-category="desh">🇮🇳 देश</button>
+        <button class="shorts-tab" data-category="rajniti">🏛️ राजनीति</button>
+        <button class="shorts-tab" data-category="crime">🚔 अपराध</button>
+        <button class="shorts-tab" data-category="bhopal">📍 भोपाल</button>
+    </div>
+
+    <div class="shorts-grid" id="shortsGrid">
+        <div class="shorts-loading">
+            <div class="spinner"></div>
+            <p>खबरें लोड हो रही हैं…</p>
+        </div>
+    </div>
+
+    <script>
+        const categoryNames = { desh: 'देश', rajniti: 'राजनीति', crime: 'अपराध', bhopal: 'भोपाल' };
+        const categoryClass = { desh: 'cat-desh', rajniti: 'cat-rajniti', crime: 'cat-crime', bhopal: 'cat-bhopal' };
+
+        let allShorts = [];
+        let activeCategory = 'all';
+
+        function timeAgo(dateStr) {
+            const diff = (Date.now() - new Date(dateStr)) / 1000;
+            if (diff < 60)    return 'अभी';
+            if (diff < 3600)  return Math.floor(diff / 60) + ' मिनट पहले';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' घंटे पहले';
+            return Math.floor(diff / 86400) + ' दिन पहले';
+        }
+
+        function renderShorts(shorts) {
+            const grid = document.getElementById('shortsGrid');
+            if (!shorts.length) {
+                grid.innerHTML = `
+                    <div class="shorts-empty">
+                        <h3>⏳ अभी कोई शॉर्ट्स उपलब्ध नहीं</h3>
+                        <p>शॉर्ट्स जल्द ही तैयार होंगी। थोड़ी देर में फिर देखें।</p>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = shorts.map(s => {
+                const img = s.photos && s.photos.length
+                    ? `<img src="${optimizeCloudinaryUrl(s.photos[0])}" alt="${s.shortNews.headline}" class="short-card-img" loading="lazy" onerror="this.parentNode.innerHTML='<div class=short-card-img-placeholder><span class=placeholder-word>NEWS</span><span class=placeholder-lines><em></em><em></em><em></em></span></div>'">`
+                    : `<div class="short-card-img-placeholder"><span class="placeholder-word">NEWS</span><span class="placeholder-lines"><em></em><em></em><em></em></span></div>`;
+
+                const articleUrl = s.slug ? `/news/${s.slug}` : `/news-detail.html?id=${s.id || s._id}`;
+                const catBadge = s.category ? `<span class="short-cat-badge ${categoryClass[s.category] || ''}">${categoryNames[s.category] || s.category}</span>` : '';
+
+                const keyPointsHtml = s.shortNews.keyPoints && s.shortNews.keyPoints.length
+                    ? `<div class="short-section">
+                        <span class="short-section-label">📊 मुख्य बिंदु</span>
+                        <ul class="short-key-points">${s.shortNews.keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+                       </div>` : '';
+
+                const whyHtml = s.shortNews.whyItMatters
+                    ? `<div class="short-section short-why">
+                        <span class="short-section-label">🧠 क्यों जरूरी है?</span>
+                        <p class="short-section-text">${s.shortNews.whyItMatters}</p>
+                       </div>` : '';
+
+                return `
+                <div class="short-card" id="short-${s.id || s._id}">
+                    ${img}
+                    <div class="short-card-body">
+                        <div class="short-top-row">
+                            <div style="display:flex;gap:0.4rem;align-items:center;">
+                                <span class="short-live">🔴 LIVE</span>
+                                ${catBadge}
+                            </div>
+                            <span class="short-time">${timeAgo(s.date)}</span>
+                        </div>
+                        <h2 class="short-headline">${s.shortNews.headline}</h2>
+                        <div class="short-section">
+                            <span class="short-section-label">⚡ क्या हुआ?</span>
+                            <p class="short-section-text">${s.shortNews.whatHappened}</p>
+                        </div>
+                        ${keyPointsHtml}
+                        ${whyHtml}
+                    </div>
+                    <div class="short-footer">
+                        <a href="${articleUrl}" class="short-read-more">👉 पूरी खबर पढ़ें →</a>
+                        <button class="short-share" onclick="shareShort('${s.shortNews.headline.replace(/'/g,"\\'")}','${articleUrl}')">📤 शेयर</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function filterAndRender() {
+            const filtered = activeCategory === 'all'
+                ? allShorts
+                : allShorts.filter(s => s.category === activeCategory);
+            renderShorts(filtered);
+        }
+
+        function optimizeCloudinaryUrl(url) {
+            if (!url || !url.includes('cloudinary')) return url;
+            return url.replace('/upload/', '/upload/q_auto,f_auto,w_800/');
+        }
+
+        async function loadShorts() {
+            try {
+                const res = await fetch('/api/news/shorts');
+                allShorts = await res.json();
+                filterAndRender();
+                // Scroll to specific card if ?id= is in URL
+                const targetId = new URLSearchParams(window.location.search).get('id');
+                if (targetId) {
+                    setTimeout(() => {
+                        const el = document.getElementById('short-' + targetId);
+                        if (el) {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            el.style.outline = '3px solid #e63946';
+                            el.style.borderRadius = '14px';
+                            setTimeout(() => el.style.outline = '', 2500);
+                        }
+                    }, 300);
+                }
+            } catch (e) {
+                document.getElementById('shortsGrid').innerHTML = `
+                    <div class="shorts-empty">
+                        <h3>⚠️ लोड करने में समस्या</h3>
+                        <p>पेज को ताज़ा करें।</p>
+                    </div>`;
+            }
+        }
+
+        function shareShort(headline, url) {
+            const fullUrl = 'https://voiceofkranti.com' + url;
+            const text = headline + '\n\nपूरी खबर: ' + fullUrl + '\n\nवॉयस ऑफ क्रांति पर पढ़ें ⚡';
+            if (navigator.share) {
+                navigator.share({ title: headline, text, url: fullUrl });
+            } else {
+                navigator.clipboard.writeText(text).then(() => alert('लिंक कॉपी हो गया!'));
+            }
+        }
+
+        // Tab switching
+        document.querySelectorAll('.shorts-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.shorts-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                activeCategory = tab.dataset.category;
+                filterAndRender();
+            });
+        });
+
+        loadShorts();
+    </script>
+
+    <!-- Cookie Consent -->
+    <div id="cookieBanner" style="display:none;"><p>हम आपके अनुभव को बेहतर बनाने के लिए कुकीज़ का उपयोग करते हैं। अधिक जानकारी के लिए हमारी <a href="/privacy-policy.html">गोपनीयता नीति</a> देखें।</p><button id="cookieAcceptBtn" onclick="acceptCookies()">स्वीकार करें</button></div>
+    <script>(function(){if(!localStorage.getItem('cookieConsent')){document.getElementById('cookieBanner').style.display='flex';}})();function acceptCookies(){localStorage.setItem('cookieConsent','1');document.getElementById('cookieBanner').style.display='none';}</script>
+</body>
+</html>
+
+
+
+

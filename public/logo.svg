@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9933"/>
+      <stop offset="100%" stop-color="#BF3900"/>
+    </linearGradient>
+    <linearGradient id="micHL" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.86"/>
+    </linearGradient>
+    <clipPath id="bgclip">
+      <rect width="512" height="512" rx="72"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="72" fill="url(#bg)"/>
+
+  <!-- Soft top-left radial highlight -->
+  <ellipse cx="148" cy="88" rx="270" ry="145" fill="rgba(255,255,255,0.07)" clip-path="url(#bgclip)"/>
+
+  <!-- ═══ MICROPHONE ICON ═══ -->
+
+  <!-- Mic capsule body -->
+  <rect x="208" y="68" width="96" height="168" rx="48" fill="url(#micHL)"/>
+
+  <!-- Subtle grille lines on capsule -->
+  <line x1="225" y1="108" x2="287" y2="108" stroke="rgba(180,70,0,0.14)" stroke-width="2"/>
+  <line x1="220" y1="130" x2="292" y2="130" stroke="rgba(180,70,0,0.14)" stroke-width="2"/>
+  <line x1="220" y1="152" x2="292" y2="152" stroke="rgba(180,70,0,0.14)" stroke-width="2"/>
+  <line x1="225" y1="174" x2="287" y2="174" stroke="rgba(180,70,0,0.14)" stroke-width="2"/>
+  <line x1="232" y1="196" x2="280" y2="196" stroke="rgba(180,70,0,0.10)" stroke-width="2"/>
+
+  <!-- Pickup / mounting arc -->
+  <path d="M 130,222 Q 130,348 256,348 Q 382,348 382,222"
+        fill="none" stroke="white" stroke-width="18" stroke-linecap="round"/>
+
+  <!-- Stand -->
+  <line x1="256" y1="348" x2="256" y2="410"
+        stroke="white" stroke-width="17" stroke-linecap="round"/>
+
+  <!-- Base -->
+  <line x1="184" y1="410" x2="328" y2="410"
+        stroke="white" stroke-width="17" stroke-linecap="round"/>
+
+  <!-- ═══ SOUND WAVES (right side) ═══ -->
+  <!-- Wave 1 — strongest -->
+  <path d="M 382,196 C 428,230 428,314 382,348"
+        fill="none" stroke="white" stroke-opacity="0.88" stroke-width="13" stroke-linecap="round"/>
+  <!-- Wave 2 -->
+  <path d="M 405,168 C 465,218 465,326 405,376"
+        fill="none" stroke="white" stroke-opacity="0.50" stroke-width="10" stroke-linecap="round"/>
+  <!-- Wave 3 — faintest -->
+  <path d="M 428,140 C 500,206 500,338 428,404"
+        fill="none" stroke="white" stroke-opacity="0.24" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- ═══ TEXT ═══ -->
+
+  <!-- Divider -->
+  <line x1="56" y1="428" x2="456" y2="428"
+        stroke="rgba(255,255,255,0.20)" stroke-width="1"/>
+
+  <!-- Hindi brand name -->
+  <text x="256" y="466"
+        text-anchor="middle"
+        font-family="'Noto Sans Devanagari', Mangal, 'Devanagari MT', sans-serif"
+        font-size="46" font-weight="800"
+        fill="white">वॉयस ऑफ क्रांति</text>
+
+  <!-- English subtitle -->
+  <text x="256" y="491"
+        text-anchor="middle"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="15" font-weight="600" letter-spacing="4"
+        fill="rgba(255,255,255,0.70)">VOICE OF KRANTI</text>
+
+  <!-- RNI number -->
+  <text x="256" y="508"
+        text-anchor="middle"
+        font-family="Arial, sans-serif"
+        font-size="11" letter-spacing="1.5"
+        fill="rgba(255,255,255,0.40)">RNI: MPHIN/26/A5773</text>
+</svg>

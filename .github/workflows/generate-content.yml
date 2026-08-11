@@ -1,0 +1,30 @@
+name: Generate AI Content (Explainers, Shorts, Ka Mat)
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # every 4 hours
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Generate Explainers
+        run: |
+          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-explainers" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            && echo "✅ Explainers done" || echo "⚠️ Explainers failed"
+
+      - name: Generate Shorts
+        run: |
+          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-shorts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            && echo "✅ Shorts done" || echo "⚠️ Shorts failed"
+
+      - name: Generate Ka Mat (Voice of Kranti opinion)
+        run: |
+          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-ka-mat" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            && echo "✅ Ka Mat done" || echo "⚠️ Ka Mat failed"

@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /login
+Disallow: /login.html
+Disallow: /api/
+Disallow: /news-detail.html
+
+Sitemap: https://voiceofkranti.com/sitemap-index.xml
+Sitemap: https://voiceofkranti.com/sitemap.xml
+Sitemap: https://voiceofkranti.com/sitemap-news.xml

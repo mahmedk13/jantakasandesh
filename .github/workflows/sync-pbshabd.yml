@@ -1,0 +1,36 @@
+name: Sync PB SHABD News
+
+on:
+  schedule:
+    - cron: '0 * * * *'    # every hour
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run PB SHABD sync
+        run: node sync-pbshabd.js --pages 3
+        env:
+          PBSHABD_EMAIL:          ${{ secrets.PBSHABD_EMAIL }}
+          PBSHABD_PASSWORD:       ${{ secrets.PBSHABD_PASSWORD }}
+          MONGODB_URI:            ${{ secrets.MONGODB_URI }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          RESEND_API_KEY:         ${{ secrets.RESEND_API_KEY }}
+          SITE_URL:               https://voiceofkranti.com

@@ -1,0 +1,866 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SFXC5EHMPL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SFXC5EHMPL');
+    </script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9398040019774807" crossorigin="anonymous"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ff9933">
+    <title>ई-पेपर — वॉयस ऑफ क्रांति</title>
+    <meta name="description" content="वॉयस ऑफ क्रांति का ई-पेपर — आज का अख़बार ऑनलाइन पढ़ें, पेज दर पेज।">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://voiceofkranti.com/epaper">
+    <meta property="og:title" content="ई-पेपर — वॉयस ऑफ क्रांति">
+    <meta property="og:description" content="वॉयस ऑफ क्रांति का ई-पेपर — आज का अख़बार ऑनलाइन पढ़ें।">
+    <meta property="og:url" content="https://voiceofkranti.com/epaper">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="stylesheet" href="/styles.css?v=21">
+    <style>
+        .cat-toggle { display: none; }
+        @media (max-width: 768px) {
+            .header .container { flex-direction: column !important; align-items: stretch !important; padding: 0.5rem 0.75rem !important; gap: 0.15rem !important; }
+            .logo-container { width: 100% !important; }
+            .logo { font-size: 1.1rem !important; }
+            .tagline { display: none !important; }
+            .logo-container svg { width: 34px !important; height: 34px !important; }
+            .header nav { width: 100% !important; overflow-x: auto !important; overflow-y: visible !important; justify-content: flex-start !important; flex-wrap: nowrap !important; gap: 0.1rem !important; padding: 0.2rem 0 0.3rem !important; border-top: 1px solid rgba(255,255,255,0.18) !important; scrollbar-width: none !important; }
+            .header nav::-webkit-scrollbar { display: none !important; }
+            .nav-link { font-size: 0.78rem !important; padding: 0.3rem 0.5rem !important; white-space: nowrap !important; flex-shrink: 0 !important; }
+        }
+        /* ── ePaper listing ── */
+        .epaper-hero { background: linear-gradient(135deg,#1a0a00 0%,#4a1800 50%,#ff6b00 100%); color:#fff; padding:2.5rem 1rem 2rem; text-align:center; }
+        .epaper-hero h1 { font-size:2rem; font-weight:800; margin:0 0 0.4rem; }
+        .epaper-hero p  { opacity:.85; font-size:1rem; margin:0; }
+        .epaper-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:1.4rem; padding:2rem 0; }
+        .epaper-card { background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.09); overflow:hidden; cursor:pointer; transition:transform .18s,box-shadow .18s; border:2px solid transparent; }
+        .epaper-card:hover { transform:translateY(-4px); box-shadow:0 8px 28px rgba(0,0,0,.14); border-color:#ff9933; }
+        .epaper-card-thumb { background:linear-gradient(135deg,#fff8f0,#ffe8cc); height:180px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+        .epaper-card-thumb .page-preview { position:absolute; inset:12px; background:#fff; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,.12); display:flex; flex-direction:column; padding:10px; gap:5px; overflow:hidden; }
+        .epaper-thumb-canvas { width:100%; height:100%; object-fit:cover; object-position:top center; display:block; }
+        .epaper-thumb-loading {
+            position:absolute;
+            inset:0;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:#9aa3b2;
+            font-size:.78rem;
+            background:linear-gradient(135deg,#fff8f0,#ffe8cc);
+            z-index:2;
+        }
+        .page-preview-line { background:#e2e8f0; border-radius:3px; height:6px; }
+        .page-preview-line.bold { background:#718096; height:9px; width:70%; }
+        .page-preview-line.short { width:45%; }
+        .epaper-card-body { padding:1rem; }
+        .epaper-card-date { font-size:.78rem; color:#ff6b00; font-weight:700; margin-bottom:.3rem; }
+        .epaper-card-title { font-size:1rem; font-weight:700; color:#1a202c; line-height:1.35; margin-bottom:.4rem; }
+        .epaper-card-edition { font-size:.8rem; color:#718096; }
+        .epaper-card-btn { display:block; width:100%; text-align:center; background:linear-gradient(135deg,#ff9933,#ff6b00); color:#fff; border:none; border-radius:0 0 10px 10px; padding:.65rem; font-size:.9rem; font-weight:700; cursor:pointer; }
+        .epaper-empty { text-align:center; padding:4rem 1rem; color:#718096; }
+        .epaper-empty h3 { font-size:1.2rem; margin:0 0 .5rem; color:#4a5568; }
+        /* ══ Full-screen Reader ══ */
+        .reader-overlay { position:fixed; inset:0; background:#1a1a1a; z-index:1000; display:none; flex-direction:column; }
+        .reader-overlay.open { display:flex; }
+        /* Toolbar */
+        .reader-tb { background:#111; display:flex; align-items:center; gap:4px; padding:0 8px; height:50px; flex-shrink:0; overflow-x:auto; scrollbar-width:none; border-bottom:1px solid #2d2d2d; }
+        .reader-tb::-webkit-scrollbar { display:none; }
+        .tb-btn { background:#2a2a2a; color:#e0e0e0; border:1px solid #3a3a3a; border-radius:6px; padding:0 10px; height:32px; cursor:pointer; font-size:.82rem; white-space:nowrap; transition:background .12s; display:inline-flex; align-items:center; gap:4px; flex-shrink:0; text-decoration:none; }
+        .tb-btn:hover { background:#3a3a3a; }
+        .tb-btn:disabled { opacity:.35; cursor:default; }
+        .tb-btn.danger { background:#7f1d1d; border-color:#7f1d1d; }
+        .tb-btn.danger:hover { background:#991b1b; }
+        .tb-btn.accent { background:#92400e; border-color:#b45309; color:#fde68a; }
+        .tb-btn.accent.on { background:#d97706; border-color:#f59e0b; color:#fff; }
+        .tb-title { font-size:.85rem; color:#aaa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; flex-shrink:1; padding:0 6px; }
+        .tb-sep { color:#555; padding:0 2px; flex-shrink:0; }
+        .page-num-input { width:44px; background:#2a2a2a; border:1px solid #3a3a3a; color:#e0e0e0; border-radius:5px; padding:0 4px; height:30px; font-size:.82rem; text-align:center; flex-shrink:0; -moz-appearance:textfield; }
+        .page-num-input::-webkit-inner-spin-button, .page-num-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .tb-total { font-size:.82rem; color:#888; white-space:nowrap; flex-shrink:0; }
+        .tb-div { width:1px; height:22px; background:#333; flex-shrink:0; margin:0 2px; }
+        /* Crop action bar */
+        .crop-bar { background:#1c1209; border-bottom:1px solid #3d2600; padding:0 10px; height:0; overflow-x:auto; overflow-y:hidden; transition:height .2s; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+        .crop-bar.open { height:48px; }
+        .crop-bar-label { font-size:.78rem; color:#fbbf24; white-space:nowrap; }
+        .fmt-btn { background:#292318; border:1px solid #92400e; color:#fde68a; border-radius:6px; padding:0 10px; height:34px; cursor:pointer; font-size:.8rem; white-space:nowrap; transition:background .12s; flex-shrink:0; display:inline-flex; align-items:center; gap:4px; }
+        .fmt-btn:hover { background:#92400e; color:#fff; }
+        .fmt-btn:disabled { opacity:.4; cursor:default; }
+        .fmt-btn.all { background:#d97706; border-color:#f59e0b; color:#fff; font-weight:700; }
+        .fmt-btn.all:hover { background:#b45309; }
+        .crop-bar-dims { font-size:.75rem; color:#6b7280; }
+        .crop-bar-cancel { margin-left:auto; background:none; border:1px solid #3d2600; color:#aaa; border-radius:6px; padding:0 8px; height:28px; cursor:pointer; font-size:.75rem; }
+        /* Results drawer */
+        .results-drawer { background:#111; border-top:2px solid #ff9933; flex-shrink:0; overflow:hidden; max-height:0; transition:max-height .3s ease; }
+        .results-drawer.open { max-height:300px; }
+        .results-row { display:flex; align-items:flex-start; gap:10px; padding:10px 14px; overflow-x:auto; scrollbar-width:thin; scrollbar-color:#444 #111; }
+        .result-card { background:#1e1e1e; border:1px solid #333; border-radius:10px; overflow:hidden; flex-shrink:0; display:flex; flex-direction:column; align-items:stretch; }
+        .result-card-head { background:#2a2a2a; padding:4px 10px; font-size:.75rem; color:#aaa; display:flex; justify-content:space-between; align-items:center; white-space:nowrap; }
+        .result-card-head strong { color:#e0e0e0; }
+        .result-card canvas { display:block; align-self:center; }
+        .result-dl { display:block; text-align:center; background:linear-gradient(135deg,#ff9933,#ff6b00); color:#fff; border:none; padding:6px; font-size:.8rem; font-weight:700; cursor:pointer; text-decoration:none; }
+        .results-close-row { display:flex; justify-content:flex-end; padding:4px 14px 8px; }
+        .results-close-btn { background:none; border:1px solid #333; color:#888; border-radius:5px; padding:2px 10px; cursor:pointer; font-size:.75rem; }
+        /* Canvas area */
+        .canvas-area { flex:1; overflow:auto; background:#2a2a2a; display:flex; justify-content:center; align-items:flex-start; padding:16px; position:relative; }
+        .body-nav-btn {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(17,17,17,0.75);
+            color: #fff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1002;
+            backdrop-filter: blur(3px);
+        }
+        .body-nav-btn.show { display:flex; }
+        .body-nav-btn:hover { background: rgba(255, 153, 51, 0.92); border-color:#ff9933; }
+        .body-nav-btn:disabled { opacity: .35; cursor: default; }
+        .body-nav-left { left: 12px; }
+        .body-nav-right { right: 12px; }
+        .pdf-stack { position:relative; display:inline-block; line-height:0; }
+        #pdfCanvas { display:block; max-width:100%; height:auto; border-radius:3px; box-shadow:0 4px 24px rgba(0,0,0,.6); }
+        #cropLayer { position:absolute; top:0; left:0; width:100%; height:100%; border-radius:3px; display:none; cursor:crosshair; touch-action:none; }
+        #cropLayer.on { display:block; }
+        .crop-hint { position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.75); color:#fbbf24; border:1px solid #92400e; border-radius:20px; padding:5px 14px; font-size:.78rem; white-space:nowrap; pointer-events:none; display:none; }
+        .crop-hint.on { display:block; }
+        /* Loading */
+        .rd-loading { display:none; flex-direction:column; align-items:center; justify-content:center; color:#aaa; gap:12px; padding:4rem; font-size:.95rem; }
+        .rd-loading.on { display:flex; }
+        .rd-spinner { width:40px; height:40px; border:3px solid #444; border-top-color:#ff9933; border-radius:50%; animation:spin .7s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        @media (max-width:600px) {
+            .epaper-hero h1 { font-size:1.4rem; }
+            .tb-title { max-width:90px; }
+            .canvas-area { padding:8px; }
+            .body-nav-btn { width: 36px; height: 36px; font-size: 1rem; }
+            .body-nav-left { left: 8px; }
+            .body-nav-right { right: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div class="utility-bar">
+    <div class="container">
+        <div class="utility-bar-links">
+            <a href="/about.html">About Us</a>
+            <a href="/contact.html">Contact Us</a>
+            <a href="/authors.html">Founder</a>
+            <a href="/editorial-policy.html">Editorial Policy</a>
+        </div>
+    </div>
+</div>
+<header class="header">
+    <div class="container">
+        <div class="logo-container">
+            <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:14px;">
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect width="52" height="52" rx="9" fill="rgba(255,255,255,0.18)"/><rect width="52" height="52" rx="9" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="1"/><rect x="19" y="5" width="14" height="22" rx="7" fill="white" opacity="0.95"/><line x1="22" y1="11" x2="30" y2="11" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="16" x2="31" y2="16" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="21" x2="31" y2="21" stroke="rgba(180,70,0,0.12)" stroke-width="1.5"/><path d="M 10,22 Q 10,35 26,35 Q 42,35 42,22" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="35" x2="26" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="17" y1="43" x2="35" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M 42,18 C 47,22 47,31 42,35" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/><path d="M 45,14 C 51,19 51,33 45,38" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <div>
+                    <h1 class="logo">वॉयस ऑफ क्रांति</h1>
+                    <p class="tagline">सत्य की आवाज़, जनता का विश्वास</p>
+                    <p style="font-size:.68rem;color:#1a1a1a;font-weight:700;margin:2px 0 0;letter-spacing:.3px;background:rgba(255,255,255,.75);padding:1px 5px;border-radius:3px;">RNI: MPHIN/26/A5773</p>
+                </div>
+            </a>
+        </div>
+        <nav>
+            <a href="/" class="nav-link">🏠 होम</a>
+            <a href="/epaper" class="nav-link nav-link-epaper active">ई-पेपर</a>
+            <a href="/shorts.html" class="nav-link"><span class="shorts-dot"></span>खबरें 30 सेकंड में</a>
+            <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
+            <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
+            <a href="/glossary.html" class="nav-link">शब्दकोश</a>
+        </nav>
+    </div>
+</header>
+<div class="epaper-hero">
+    <h1>📰 ई-पेपर</h1>
+    <p>वॉयस ऑफ क्रांति — आज का अख़बार, पेज दर पेज पढ़ें और शेयर करें</p>
+</div>
+<main class="container">
+    <div id="ePaperGrid" class="epaper-grid">
+        <div class="epaper-card" style="pointer-events:none;"><div class="epaper-card-thumb"><div class="page-preview"><div class="page-preview-line bold"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div></div></div><div class="epaper-card-body"><div style="height:10px;background:#edf2f7;border-radius:4px;width:40%;margin-bottom:8px;"></div><div style="height:16px;background:#e2e8f0;border-radius:4px;margin-bottom:6px;"></div><div style="height:12px;background:#edf2f7;border-radius:4px;width:60%;"></div></div></div>
+        <div class="epaper-card" style="pointer-events:none;"><div class="epaper-card-thumb"><div class="page-preview"><div class="page-preview-line bold"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div></div></div><div class="epaper-card-body"><div style="height:10px;background:#edf2f7;border-radius:4px;width:40%;margin-bottom:8px;"></div><div style="height:16px;background:#e2e8f0;border-radius:4px;margin-bottom:6px;"></div><div style="height:12px;background:#edf2f7;border-radius:4px;width:60%;"></div></div></div>
+    </div>
+</main>
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div><p class="footer-brand">वॉयस ऑफ क्रांति</p><p class="footer-brand-tag">सत्य की आवाज़, जनता का विश्वास</p><p class="footer-contact-line">भोपाल, मध्यप्रदेश, भारत</p><p class="footer-contact-line">📧 editor@voiceofkranti.com</p></div>
+            <div><p class="footer-col-title">महत्वपूर्ण लिंक</p><ul class="footer-links"><li><a href="/">मुख्य पेज</a></li><li><a href="/epaper">ई-पेपर</a></li><li><a href="/aaj-ka-itihas.html">आज का इतिहास</a></li><li><a href="/about.html">हमारे बारे में</a></li><li><a href="/contact.html">संपर्क करें</a></li></ul></div>
+            <div><p class="footer-col-title">नीतियाँ</p><ul class="footer-links"><li><a href="/editorial-policy.html">संपादकीय नीति</a></li><li><a href="/fact-checking-policy.html">तथ्य-जाँच नीति</a></li><li><a href="/corrections-policy.html">सुधार नीति</a></li><li><a href="/ethics-policy.html">आचार संहिता</a></li><li><a href="/privacy-policy.html">गोपनीयता नीति</a></li><li><a href="/terms.html">उपयोग की शर्तें</a></li></ul></div>
+        </div>
+        <div class="footer-bottom"><p>&copy; 2026 वॉयस ऑफ क्रांति. सर्वाधिकार सुरक्षित।</p></div>
+    </div>
+</footer>
+
+<!-- ══ Reader + Clip Generator ══════════════════════════════════════════════ -->
+<div class="reader-overlay" id="readerOverlay" role="dialog" aria-modal="true">
+
+    <!-- Toolbar -->
+    <div class="reader-tb">
+        <button class="tb-btn danger" onclick="closeReader()" title="बंद करें (Esc)">✕</button>
+        <span class="tb-title" id="readerTitle">ई-पेपर</span>
+        <span class="tb-div"></span>
+        <!-- Navigation -->
+        <button class="tb-btn" id="btnPrev" onclick="changePage(-1)" title="पिछला (←)" disabled>◀ पिछला</button>
+        <input type="number" id="pageInput" class="page-num-input" min="1" value="1" title="पेज नंबर">
+        <span class="tb-sep">/</span>
+        <span class="tb-total" id="pageTotal">—</span>
+        <button class="tb-btn" id="btnNext" onclick="changePage(1)" title="अगला (→)" disabled>अगला ▶</button>
+        <span class="tb-div"></span>
+        <!-- Zoom -->
+        <button class="tb-btn" onclick="doZoom(-0.3)" title="छोटा (−)">−</button>
+        <button class="tb-btn" onclick="doZoom(0.3)"  title="बड़ा (+)">+</button>
+        <button class="tb-btn" onclick="resetZoom()"  title="सामान्य">↺</button>
+        <span class="tb-div"></span>
+        <!-- Clip mode -->
+        <button class="tb-btn accent" id="clipBtn" onclick="toggleCrop()" title="न्यूज़ क्लिप बनाएं (C)">✂️ Clip</button>
+        <span class="tb-div"></span>
+        <!-- Download PDF -->
+        <a id="dlPdfBtn" href="#" download class="tb-btn" title="PDF डाउनलोड करें">⬇ PDF</a>
+    </div>
+
+    <!-- Crop action bar — appears when user selects an area -->
+    <div class="crop-bar" id="cropBar">
+        <span class="crop-bar-label">✂️ चयनित:</span>
+        <span class="crop-bar-dims" id="cropDims"></span>
+        <span class="tb-div" style="background:#3d2600;height:18px;"></span>
+        <button class="fmt-btn" id="fb-insta" onclick="makeClip('instagram')" disabled>📱 Instagram <small style="opacity:.7;">1080×1080</small></button>
+        <button class="fmt-btn" id="fb-face"  onclick="makeClip('facebook')"  disabled>👍 Facebook  <small style="opacity:.7;">1200×628</small></button>
+        <button class="fmt-btn" id="fb-x"     onclick="makeClip('x')"         disabled>𝕏 Twitter/X <small style="opacity:.7;">1200×675</small></button>
+        <button class="fmt-btn" id="fb-wa"    onclick="makeClip('whatsapp')"  disabled>💬 WhatsApp  <small style="opacity:.7;">1080×1920</small></button>
+        <button class="fmt-btn all" id="fb-all" onclick="makeAllClips()"      disabled>⚡ सभी एक साथ</button>
+        <button class="crop-bar-cancel" onclick="clearSel()">↩ रद्द</button>
+    </div>
+
+    <!-- Results drawer (slides up after generation) -->
+    <div class="results-drawer" id="resultsDrawer">
+        <div class="results-row" id="resultsRow"></div>
+        <div class="results-close-row"><button class="results-close-btn" onclick="closeResults()">✕ बंद करें</button></div>
+    </div>
+
+    <!-- Canvas area -->
+    <div class="canvas-area" id="canvasArea">
+        <button class="body-nav-btn body-nav-left" id="bodyPrevBtn" onclick="changePage(-1)" title="पिछला पेज" aria-label="पिछला पेज">◀</button>
+        <button class="body-nav-btn body-nav-right" id="bodyNextBtn" onclick="changePage(1)" title="अगला पेज" aria-label="अगला पेज">▶</button>
+        <div class="rd-loading on" id="rdLoading">
+            <div class="rd-spinner"></div>
+            <span>PDF लोड हो रही है…</span>
+        </div>
+        <div class="pdf-stack" id="pdfStack" style="display:none;">
+            <div class="crop-hint" id="cropHint">✂️ माउस से खींचकर क्षेत्र चुनें — फिर फॉर्मेट बटन दबाएं</div>
+            <canvas id="pdfCanvas"></canvas>
+            <canvas id="cropLayer"></canvas>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+// ── Boot ─────────────────────────────────────────────────────────────────────
+await document.fonts.ready;
+const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
+const HF = "'Noto Sans Devanagari','Mangal','Arial Unicode MS',sans-serif"; // Hindi canvas font
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const overlay    = $('readerOverlay');
+const titleEl    = $('readerTitle');
+const btnPrev    = $('btnPrev');
+const btnNext    = $('btnNext');
+const bodyPrevBtn = $('bodyPrevBtn');
+const bodyNextBtn = $('bodyNextBtn');
+const pageInput  = $('pageInput');
+const pageTotal  = $('pageTotal');
+const dlPdfBtn   = $('dlPdfBtn');
+const clipBtn    = $('clipBtn');
+const cropBar    = $('cropBar');
+const cropDims   = $('cropDims');
+const resultsDrawer = $('resultsDrawer');
+const resultsRow    = $('resultsRow');
+const canvasArea = $('canvasArea');
+const pdfStack   = $('pdfStack');
+const pdfCanvas  = $('pdfCanvas');
+const pdfCtx     = pdfCanvas.getContext('2d');
+const cropLayer  = $('cropLayer');
+const cropCtx    = cropLayer.getContext('2d');
+const rdLoading  = $('rdLoading');
+const cropHint   = $('cropHint');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+const DPR = window.devicePixelRatio || 1;
+let pdf = null, curP = 1, totP = 0, scale = 1.4, rendering = false;
+let cropOn = false, dragging = false;
+let sel = null;           // {x,y,w,h} in cropLayer pixel space
+let dragO = null;         // drag origin {x,y}
+let openedFromDateSlug = false;
+let resultBlobUrls = [];
+let currentEditionDateText = '';
+
+function toDateSlug(dateLike) {
+    const d = new Date(dateLike);
+    if (Number.isNaN(d.getTime())) return '';
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+function getPathDateSlug() {
+    const m = location.pathname.match(/^\/epaper\/(\d{4}-\d{2}-\d{2})$/);
+    return m ? m[1] : '';
+}
+
+function dateLabelFromSlug(slug) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slug || '')) return '';
+    const d = new Date(`${slug}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('hi-IN', { day:'numeric', month:'long', year:'numeric' });
+}
+
+// ── Open / close ──────────────────────────────────────────────────────────────
+window.openReader = async (url, title, dateSlug = '') => {
+    titleEl.textContent = title || 'ई-पेपर';
+    dlPdfBtn.href = url;
+    dlPdfBtn.download = (title || 'epaper') + '.pdf';
+    currentEditionDateText = dateLabelFromSlug(dateSlug) || new Date().toLocaleDateString('hi-IN', { day:'numeric', month:'long', year:'numeric' });
+    if (dateSlug && location.pathname !== `/epaper/${dateSlug}`) {
+        history.pushState({ dateSlug }, '', `/epaper/${dateSlug}`);
+    }
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    pdf = null; curP = 1; totP = 0;
+    exitCrop(); closeResults();
+    pdfStack.style.display = 'none';
+    rdLoading.className = 'rd-loading on';
+    rdLoading.innerHTML = '<div class="rd-spinner"></div><span>PDF लोड हो रही है…</span>';
+    btnPrev.disabled = btnNext.disabled = true;
+    bodyPrevBtn.disabled = true;
+    bodyNextBtn.disabled = true;
+    bodyPrevBtn.classList.add('show');
+    bodyNextBtn.classList.add('show');
+    pageInput.value = 1; pageTotal.textContent = '…';
+
+    try {
+        pdf = await pdfjsLib.getDocument({ url, withCredentials: false }).promise;
+        totP = pdf.numPages;
+        pageTotal.textContent = totP;
+        pageInput.max = totP;
+        await renderPage(1);
+    } catch (e) {
+        rdLoading.innerHTML = `<div style="color:#fc8181;text-align:center"><b>PDF लोड नहीं हुई</b><br><small>${escH(e.message)}</small></div>`;
+    }
+};
+
+window.closeReader = () => {
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    if (location.pathname !== '/epaper') {
+        history.pushState({}, '', '/epaper');
+    }
+    pdf = null; exitCrop(); closeResults();
+    bodyPrevBtn.classList.remove('show');
+    bodyNextBtn.classList.remove('show');
+    pdfStack.style.display = 'none';
+    rdLoading.className = 'rd-loading on';
+    rdLoading.innerHTML = '<div class="rd-spinner"></div><span>PDF लोड हो रही है…</span>';
+};
+
+// ── Render ────────────────────────────────────────────────────────────────────
+async function renderPage(n) {
+    if (!pdf || rendering) return;
+    rendering = true; clearSel();
+    try {
+        const page = await pdf.getPage(n);
+        const vp   = page.getViewport({ scale: scale * DPR });
+        pdfCanvas.width  = vp.width;
+        pdfCanvas.height = vp.height;
+        pdfCanvas.style.width  = Math.round(vp.width  / DPR) + 'px';
+        pdfCanvas.style.height = '';  // height:auto in CSS maintains aspect ratio under max-width
+        await page.render({ canvasContext: pdfCtx, viewport: vp }).promise;
+        // Sync crop layer
+        cropLayer.width  = vp.width;
+        cropLayer.height = vp.height;
+        curP = n;
+        pageInput.value  = n;
+        btnPrev.disabled = n <= 1;
+        btnNext.disabled = n >= totP;
+        bodyPrevBtn.disabled = n <= 1;
+        bodyNextBtn.disabled = n >= totP;
+        pdfStack.style.display = 'inline-block';
+        rdLoading.className = 'rd-loading';
+    } catch (e) { console.error(e); }
+    finally { rendering = false; }
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+window.changePage = delta => {
+    const n = curP + delta;
+    if (n < 1 || n > totP || rendering) return;
+    renderPage(n); canvasArea.scrollTop = 0;
+};
+const goToInput = () => {
+    const n = parseInt(pageInput.value, 10);
+    if (isNaN(n) || n < 1 || n > totP) { pageInput.value = curP; return; }
+    renderPage(n); canvasArea.scrollTop = 0;
+};
+pageInput.addEventListener('change', goToInput);
+pageInput.addEventListener('keydown', e => { if (e.key === 'Enter') goToInput(); });
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+window.doZoom   = d => { scale = Math.max(0.4, Math.min(5, scale + d)); renderPage(curP); };
+window.resetZoom = () => { scale = 1.4; renderPage(curP); };
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (!overlay.classList.contains('open')) return;
+    if (document.activeElement === pageInput) return;
+    if (e.key === 'Escape')      { cropOn ? exitCrop() : closeReader(); }
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  changePage(1);
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    changePage(-1);
+    if (e.key === '+' || e.key === '=') doZoom(0.3);
+    if (e.key === '-') doZoom(-0.3);
+    if (e.key === 'c' || e.key === 'C') toggleCrop();
+});
+
+// ── Crop mode ─────────────────────────────────────────────────────────────────
+window.toggleCrop = () => { cropOn ? exitCrop() : enterCrop(); };
+
+function enterCrop() {
+    cropOn = true;
+    cropLayer.classList.add('on');
+    clipBtn.classList.add('on');
+    clipBtn.textContent = '✂️ Cancel';
+    cropHint.classList.add('on');
+    // Keep scroll enabled for long articles while crop mode is active.
+    canvasArea.style.overflow = 'auto';
+}
+function exitCrop() {
+    cropOn = false;
+    cropLayer.classList.remove('on');
+    clipBtn.classList.remove('on');
+    clipBtn.textContent = '✂️ Clip';
+    cropHint.classList.remove('on');
+    canvasArea.style.overflow = 'auto';
+    clearSel();
+}
+
+// Expose for onclick
+window.clearSel = clearSel;
+function clearSel() {
+    dragging = false; dragO = null; sel = null;
+    cropCtx.clearRect(0, 0, cropLayer.width, cropLayer.height);
+    cropBar.classList.remove('open');
+    ['fb-insta','fb-face','fb-x','fb-wa','fb-all'].forEach(id => $(id).disabled = true);
+}
+
+// ── Crop interaction ──────────────────────────────────────────────────────────
+function layerPos(e) {
+    const src  = e.touches ? e.touches[0] : e;
+    const rect = cropLayer.getBoundingClientRect();
+    const sx   = cropLayer.width  / rect.width;
+    const sy   = cropLayer.height / rect.height;
+    return {
+        x: Math.max(0, Math.min(cropLayer.width,  (src.clientX - rect.left) * sx)),
+        y: Math.max(0, Math.min(cropLayer.height, (src.clientY - rect.top)  * sy))
+    };
+}
+
+cropLayer.addEventListener('mousedown',  startDrag);
+cropLayer.addEventListener('mousemove',  moveDrag);
+cropLayer.addEventListener('mouseup',    endDrag);
+cropLayer.addEventListener('mouseleave', endDrag);
+cropLayer.addEventListener('wheel', e => {
+    // Allow scrolling long pages even when crop overlay is active.
+    canvasArea.scrollTop += e.deltaY;
+    canvasArea.scrollLeft += e.deltaX;
+    e.preventDefault();
+}, { passive: false });
+cropLayer.addEventListener('touchstart', e => {
+    if (e.touches && e.touches.length > 1) return;
+    e.preventDefault();
+    startDrag(e);
+}, { passive:false });
+cropLayer.addEventListener('touchmove',  e => {
+    if (!dragging) return; // allow page scroll when not drawing selection
+    e.preventDefault();
+    moveDrag(e);
+}, { passive:false });
+cropLayer.addEventListener('touchend',   e => { e.preventDefault(); endDrag(e);   }, { passive:false });
+
+function startDrag(e) {
+    if (!cropOn) return;
+    // Reset previous selection visuals without canceling the new drag action.
+    sel = null;
+    cropCtx.clearRect(0, 0, cropLayer.width, cropLayer.height);
+    cropBar.classList.remove('open');
+    ['fb-insta','fb-face','fb-x','fb-wa','fb-all'].forEach(id => $(id).disabled = true);
+    dragO = layerPos(e);
+    dragging = true;
+}
+function moveDrag(e) {
+    if (!dragging) return;
+    const p = layerPos(e);
+    sel = { x: Math.min(dragO.x,p.x), y: Math.min(dragO.y,p.y), w: Math.abs(p.x-dragO.x), h: Math.abs(p.y-dragO.y) };
+    paintCrop();
+}
+function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    if (sel && sel.w > 12 && sel.h > 12) {
+        cropDims.textContent = `${Math.round(sel.w)} × ${Math.round(sel.h)} px`;
+        cropBar.classList.add('open');
+        ['fb-insta','fb-face','fb-x','fb-wa','fb-all'].forEach(id => $(id).disabled = false);
+        cropHint.classList.remove('on');
+    } else { clearSel(); }
+}
+
+function paintCrop() {
+    const W = cropLayer.width, H = cropLayer.height;
+    cropCtx.clearRect(0, 0, W, H);
+    if (!sel || sel.w < 2 || sel.h < 2) return;
+    const { x, y, w, h } = sel;
+
+    // Dark vignette with selection hole
+    cropCtx.save();
+    cropCtx.fillStyle = 'rgba(0,0,0,.55)';
+    cropCtx.beginPath();
+    cropCtx.rect(0, 0, W, H);
+    cropCtx.rect(x+w, y, -w, h); // CCW = punch hole
+    cropCtx.fill('evenodd');
+    cropCtx.restore();
+
+    // Border
+    cropCtx.strokeStyle = '#ff9933'; cropCtx.lineWidth = 2;
+    cropCtx.strokeRect(x+1, y+1, w-2, h-2);
+
+    // Corner handles
+    const hs = 9; cropCtx.fillStyle = '#ff9933';
+    [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([hx,hy]) =>
+        cropCtx.fillRect(hx-hs/2, hy-hs/2, hs, hs));
+
+    // Rule-of-thirds
+    cropCtx.strokeStyle = 'rgba(255,153,51,.2)'; cropCtx.lineWidth = 1;
+    [1/3,2/3].forEach(f => {
+        cropCtx.beginPath(); cropCtx.moveTo(x+w*f,y); cropCtx.lineTo(x+w*f,y+h); cropCtx.stroke();
+        cropCtx.beginPath(); cropCtx.moveTo(x,y+h*f); cropCtx.lineTo(x+w,y+h*f); cropCtx.stroke();
+    });
+}
+
+// ── Clip generation ───────────────────────────────────────────────────────────
+const FMTS = {
+    instagram: { label:'Instagram',      icon:'📱', w:1080, h:1080, hH:165, fH:62 },
+    facebook:  { label:'Facebook',       icon:'👍', w:1200, h:628,  hH:130, fH:55 },
+    x:         { label:'Twitter / X',    icon:'𝕏', w:1200, h:675,  hH:130, fH:55 },
+    whatsapp:  { label:'WhatsApp Status',icon:'💬', w:1080, h:1920, hH:200, fH:75, dynamic:true }
+};
+
+window.makeClip     = fk  => buildClips([fk]);
+window.makeAllClips = ()  => buildClips(['instagram','facebook','x','whatsapp']);
+
+async function buildClips(keys) {
+    if (!pdf || !sel || sel.w < 8) return;
+
+    closeResults();
+    resultsRow.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;color:#aaa;font-size:.85rem;"><div class="rd-spinner" style="width:26px;height:26px;border-width:2px;"></div>इमेज बन रही है…</div>`;
+    resultsDrawer.classList.add('open');
+
+    // High-res re-render
+    const HI = 4.0;
+    const page = await pdf.getPage(curP);
+    const hvp  = page.getViewport({ scale: HI });
+    const hc   = document.createElement('canvas');
+    hc.width   = hvp.width; hc.height = hvp.height;
+    await page.render({ canvasContext: hc.getContext('2d'), viewport: hvp }).promise;
+
+    // Use masthead from page 1 for consistent branded header on all clips.
+    let headerSrc = hc;
+    if (curP !== 1) {
+        try {
+            const p1 = await pdf.getPage(1);
+            const p1vp = p1.getViewport({ scale: HI });
+            const p1c = document.createElement('canvas');
+            p1c.width = p1vp.width;
+            p1c.height = p1vp.height;
+            await p1.render({ canvasContext: p1c.getContext('2d'), viewport: p1vp }).promise;
+            headerSrc = p1c;
+        } catch (_) {
+            headerSrc = hc;
+        }
+    }
+
+    const r = HI / (scale * DPR);
+    const hSel = { x: sel.x*r, y: sel.y*r, w: sel.w*r, h: sel.h*r };
+
+    resultsRow.innerHTML = '';
+    for (const k of keys) {
+        const fmt = FMTS[k];
+        const out = buildOutputCanvas(fmt, hc, hSel, headerSrc);
+        resultsRow.appendChild(buildResultCard(k, fmt, out));
+    }
+
+    // Return to normal reading interaction after clips are generated.
+    exitCrop();
+}
+
+function buildOutputCanvas(fmt, src, sc, headerSrc) {
+    const c = document.createElement('canvas');
+    let outH = fmt.h;
+    if (fmt.dynamic) {
+        // Size height to content — no empty space
+        const pad = fmt.w * 0.04;
+        const contentH = Math.ceil((fmt.w - pad*2) / (sc.w / sc.h));
+        outH = Math.max(fmt.hH + fmt.fH + 100, Math.min(fmt.h, fmt.hH + pad*2 + contentH + fmt.fH));
+    }
+    c.width = fmt.w; c.height = outH;
+    const ctx = c.getContext('2d');
+    const cH  = outH - fmt.hH - fmt.fH;
+    drawHdr(ctx, 0, 0,         fmt.w, fmt.hH, headerSrc || src);
+    drawImg(ctx, 0, fmt.hH,    fmt.w, cH, src, sc);
+    drawFtr(ctx, 0, fmt.hH+cH, fmt.w, fmt.fH);
+    return c;
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+function drawHdr(ctx, x, y, w, h, src) {
+    if (src && src.width > 0 && src.height > 0) {
+        // Strict top-only masthead: avoid article rows, keep destination aspect by width crop.
+        const targetAspect = w / h;
+        const sy = 0;
+        const sh = Math.min(src.height, Math.max(150, Math.floor(src.height * 0.17)));
+        const desiredSw = Math.floor(sh * targetAspect);
+        const sw = Math.min(src.width, Math.max(1, desiredSw));
+        const sx = Math.max(0, Math.floor((src.width - sw) / 2));
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, w, h);
+        ctx.drawImage(src, sx, sy, sw, sh, x, y, w, h);
+
+        // Orange separator like print banner edge.
+        ctx.fillStyle = '#ef6c00';
+        ctx.fillRect(x, y + h - 2, w, 2);
+        return;
+    }
+
+    const g = ctx.createLinearGradient(x,y,x+w,y+h);
+    g.addColorStop(0,'#ff9933'); g.addColorStop(1,'#ff6b00');
+    ctx.fillStyle = g; ctx.fillRect(x,y,w,h);
+
+    const ls = h*.72, lx = x+h*.14, ly = y+(h-ls)/2;
+    drawMic(ctx, lx, ly, ls);
+
+    const tx = lx+ls+h*.17;
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff';
+    ctx.font = `800 ${h*.37}px ${HF}`;
+    ctx.fillText('वॉयस ऑफ क्रांति', tx, y+h*.09);
+    ctx.font = `400 ${h*.175}px ${HF}`;
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillText('सत्य की आवाज़, जनता का विश्वास', tx, y+h*.52);
+    ctx.font = `400 ${h*.14}px system-ui,sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.fillText('RNI: MPHIN/26/A5773', tx, y+h*.74);
+    ctx.textAlign = 'right';
+    ctx.font = `700 ${h*.175}px ${HF}`;
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fillText(new Date().toLocaleDateString('hi-IN',{day:'numeric',month:'long',year:'numeric'}), x+w-h*.14, y+h*.09);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
+// ── Content ───────────────────────────────────────────────────────────────────
+function drawImg(ctx, x, y, w, h, src, sc) {
+    ctx.fillStyle = '#fffdf5'; ctx.fillRect(x,y,w,h);
+    const sh = ctx.createLinearGradient(0,y,0,y+20);
+    sh.addColorStop(0,'rgba(0,0,0,.12)'); sh.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = sh; ctx.fillRect(x,y,w,20);
+
+    const pad = Math.min(w,h)*.04;
+    const aw = w-pad*2, ah = h-pad*2;
+    const ca = sc.w/sc.h, aa = aw/ah;
+    let dw, dh;
+    if (ca > aa) { dw=aw; dh=aw/ca; } else { dh=ah; dw=ah*ca; }
+    const dx = x+pad+(aw-dw)/2;
+    const dy = y+pad;
+
+    ctx.save();
+    ctx.shadowColor='rgba(0,0,0,.22)'; ctx.shadowBlur=18; ctx.shadowOffsetY=5;
+    ctx.fillStyle='#fff'; ctx.fillRect(dx-3,dy-3,dw+6,dh+6);
+    ctx.restore();
+
+    ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1.5;
+    ctx.strokeRect(dx-1,dy-1,dw+2,dh+2);
+    ctx.drawImage(src, sc.x,sc.y,sc.w,sc.h, dx,dy,dw,dh);
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+function drawFtr(ctx, x, y, w, h) {
+    ctx.fillStyle='#1a202c'; ctx.fillRect(x,y,w,h);
+    ctx.textBaseline='middle';
+    ctx.textAlign='left'; ctx.fillStyle='rgba(255,255,255,.92)';
+    ctx.font=`700 ${h*.42}px system-ui,sans-serif`;
+    const leftText = currentEditionDateText
+        ? `voiceofkranti.com | ${currentEditionDateText}`
+        : 'voiceofkranti.com';
+    ctx.fillText(leftText, x+h*.5, y+h/2);
+    ctx.textAlign='right'; ctx.fillStyle='rgba(255,255,255,.5)';
+    ctx.font=`400 ${h*.36}px system-ui,sans-serif`;
+    ctx.fillText('@voiceofkranti', x+w-h*.5, y+h/2);
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+}
+
+// ── Mic icon (canvas draw) ────────────────────────────────────────────────────
+function drawMic(ctx, x, y, sz) {
+    const s = sz/52;
+    ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+    ctx.fillStyle='rgba(255,255,255,.22)'; rrect(ctx,0,0,52,52,9); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.lineWidth=1; rrect(ctx,0,0,52,52,9); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.95)'; rrect(ctx,19,5,14,22,7); ctx.fill();
+    ctx.strokeStyle='rgba(180,70,0,.2)'; ctx.lineWidth=1.5; ctx.lineCap='round';
+    [[22,11,30,11],[21,16,31,16],[21,21,31,21]].forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
+    ctx.strokeStyle='white'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(10,22); ctx.quadraticCurveTo(10,35,26,35); ctx.quadraticCurveTo(42,35,42,22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(26,35); ctx.lineTo(26,43); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(17,43); ctx.lineTo(35,43); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(42,18); ctx.bezierCurveTo(47,22,47,31,42,35); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(45,14); ctx.bezierCurveTo(51,19,51,33,45,38); ctx.stroke();
+    ctx.restore();
+}
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+
+// ── Result card ───────────────────────────────────────────────────────────────
+function buildResultCard(k, fmt, out) {
+    const maxH = 190, tw = Math.round(maxH*(out.width/out.height));
+    const th = document.createElement('canvas');
+    th.width=tw; th.height=maxH;
+    th.getContext('2d').drawImage(out, 0,0,tw,maxH);
+
+    const card = document.createElement('div');
+    card.className='result-card';
+    const head=document.createElement('div'); head.className='result-card-head';
+    head.innerHTML=`<strong>${fmt.icon} ${fmt.label}</strong><span>${out.width}×${out.height}</span>`;
+    const dl=document.createElement('a'); dl.className='result-dl';
+    dl.textContent='⬇ Download'; dl.download=`voiceofkranti-${k}-${Date.now()}.jpg`;
+    // Set href immediately via dataURL so the button works before toBlob finishes
+    dl.href = out.toDataURL('image/jpeg', 0.93);
+    out.toBlob(b=>{
+        if (!b) return;
+        const u = URL.createObjectURL(b);
+        resultBlobUrls.push(u);
+        dl.href = u;  // upgrade to lighter blob URL once ready
+    },'image/jpeg',0.93);
+    dl.addEventListener('click', () => {
+        setTimeout(() => {
+            closeResults();
+            clearSel();
+        }, 250);
+    });
+    card.appendChild(head); card.appendChild(th); card.appendChild(dl);
+    return card;
+}
+
+window.closeResults = () => {
+    resultsDrawer.classList.remove('open');
+    resultsRow.innerHTML='';
+    if (resultBlobUrls.length) {
+        resultBlobUrls.forEach(u => URL.revokeObjectURL(u));
+        resultBlobUrls = [];
+    }
+};
+
+// ── ePaper card listing ───────────────────────────────────────────────────────
+async function loadCards() {
+    const grid = $('ePaperGrid');
+    try {
+        const list = await fetch('/api/epaper').then(r=>r.json());
+        grid.innerHTML='';
+        if (!list.length) {
+            grid.innerHTML='<div class="epaper-empty" style="grid-column:1/-1;"><h3>अभी कोई ई-पेपर उपलब्ध नहीं</h3><p>जल्द ही नया संस्करण प्रकाशित होगा।</p></div>';
+            return;
+        }
+        list.forEach(p => {
+            const ds = new Date(p.publishDate).toLocaleDateString('hi-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+            const dateSlug = p.dateSlug || toDateSlug(p.publishDate);
+            const c  = document.createElement('div'); c.className='epaper-card';
+            const thumbId = `thumb-${Math.random().toString(36).slice(2, 10)}`;
+            c.innerHTML=`<div class="epaper-card-thumb"><div class="epaper-thumb-loading" id="${thumbId}-loading">थंबनेल लोड हो रही है…</div><div class="page-preview" id="${thumbId}-fallback"><div class="page-preview-line bold"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div><div class="page-preview-line"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div></div><canvas class="epaper-thumb-canvas" id="${thumbId}" aria-label="ePaper thumbnail"></canvas></div><div class="epaper-card-body"><div class="epaper-card-date">📅 ${ds}</div><div class="epaper-card-title">${eH(p.title)}</div>${p.edition?`<div class="epaper-card-edition">📍 ${eH(p.edition)}</div>`:''}</div><a href="/epaper/${eA(dateSlug)}" class="epaper-card-btn" onclick="event.preventDefault();openReader('${eA(p.pdfUrl)}','${eA(p.title)}','${eA(dateSlug)}')">📖 पढ़ें</a>`;
+            grid.appendChild(c);
+            renderCardThumbnailFromPdf(p.pdfUrl, thumbId).catch(() => {});
+        });
+
+        const pathDateSlug = getPathDateSlug();
+        if (pathDateSlug && !openedFromDateSlug) {
+            openedFromDateSlug = true;
+            const match = list.find(p => (p.dateSlug || toDateSlug(p.publishDate)) === pathDateSlug);
+            if (match) {
+                openReader(match.pdfUrl, match.title, pathDateSlug);
+            } else {
+                const byDate = await fetch(`/api/epaper/by-date/${pathDateSlug}`).then(r => r.ok ? r.json() : null).catch(() => null);
+                if (byDate && byDate.pdfUrl) {
+                    openReader(byDate.pdfUrl, byDate.title, pathDateSlug);
+                }
+            }
+        }
+    } catch { grid.innerHTML='<div class="epaper-empty" style="grid-column:1/-1;"><h3>लोड नहीं हो सका</h3><p>पेज रीफ्रेश करें।</p></div>'; }
+}
+
+async function renderCardThumbnailFromPdf(pdfUrl, thumbId) {
+    const canvas = document.getElementById(thumbId);
+    const loadingEl = document.getElementById(`${thumbId}-loading`);
+    const fallbackEl = document.getElementById(`${thumbId}-fallback`);
+    if (!canvas) return;
+
+    try {
+        const doc = await pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
+        const page = await doc.getPage(1);
+        const viewport = page.getViewport({ scale: 1.1 });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (fallbackEl) fallbackEl.style.display = 'none';
+    } catch (_) {
+        if (loadingEl) loadingEl.style.display = 'none';
+        // keep fallback visible on failure
+    }
+}
+
+const escH = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const eH   = escH;
+const eA   = s => (s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+
+window.addEventListener('popstate', () => {
+    const pathDateSlug = getPathDateSlug();
+    if (!pathDateSlug && overlay.classList.contains('open')) {
+        closeReader();
+    } else if (pathDateSlug && !overlay.classList.contains('open')) {
+        openedFromDateSlug = false;
+        loadCards();
+    }
+});
+
+loadCards();
+</script>
+</body>
+</html>
+
+

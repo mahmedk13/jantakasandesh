@@ -1,0 +1,950 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SFXC5EHMPL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-SFXC5EHMPL');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clip Generator — वॉयस ऑफ क्रांति Admin</title>
+    <meta name="robots" content="noindex, nofollow">
+    <!-- Noto Sans Devanagari for canvas Hindi text rendering -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="stylesheet" href="/styles.css?v=21">
+    <style>
+        /* ── Mobile header overrides ── */
+        @media (max-width: 768px) {
+            .header .container { flex-direction: column !important; align-items: stretch !important; padding: 0.5rem 0.75rem !important; gap: 0.15rem !important; }
+            .logo-container { width: 100% !important; }
+            .logo { font-size: 1.1rem !important; }
+            .tagline { display: none !important; }
+            .logo-container svg { width: 34px !important; height: 34px !important; }
+            .header nav { width: 100% !important; overflow-x: auto !important; justify-content: flex-start !important; flex-wrap: nowrap !important; gap: 0.1rem !important; padding: 0.2rem 0 0.3rem !important; border-top: 1px solid rgba(255,255,255,0.18) !important; scrollbar-width: none !important; }
+            .header nav::-webkit-scrollbar { display: none !important; }
+            .nav-link { font-size: 0.78rem !important; padding: 0.3rem 0.5rem !important; white-space: nowrap !important; flex-shrink: 0 !important; }
+        }
+
+        /* ── Page layout ── */
+        body { background: #f7fafc; }
+
+        .clip-hero {
+            background: linear-gradient(135deg, #1a0a00, #4a1800 50%, #ff6b00);
+            color: #fff;
+            padding: 2rem 1rem 1.6rem;
+            text-align: center;
+        }
+        .clip-hero h1 { font-size: 1.8rem; font-weight: 800; margin: 0 0 0.3rem; }
+        .clip-hero p  { opacity: 0.85; font-size: 0.95rem; margin: 0; }
+
+        /* Steps */
+        .clip-steps { display: flex; flex-direction: column; gap: 1.6rem; padding: 2rem 0 3rem; }
+
+        .clip-step {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            padding: 1.5rem;
+            position: relative;
+        }
+        .step-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: #ff9933;
+            color: #fff;
+            font-weight: 800;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        .clip-step h2 { font-size: 1.1rem; font-weight: 700; color: #2d3748; margin: 0 0 1rem; }
+
+        /* Upload zone */
+        .upload-zone {
+            border: 2.5px dashed #e2e8f0;
+            border-radius: 12px;
+            padding: 2.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            background: #f8fafc;
+            font-size: 1rem;
+            color: #718096;
+        }
+        .upload-zone:hover, .upload-zone.dragover { border-color: #ff9933; background: #fff8f0; color: #c05621; }
+        .upload-zone .upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .upload-zone p { margin: 0.3rem 0 0; font-size: 0.85rem; }
+
+        /* Loaded file info */
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.65rem 1rem;
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #276749;
+            margin-top: 0.75rem;
+        }
+
+        /* PDF page nav */
+        .pdf-nav {
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .pdf-nav.visible { display: flex; }
+        .pdf-nav-btn {
+            background: #edf2f7;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.35rem 0.8rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: #4a5568;
+        }
+        .pdf-nav-btn:disabled { opacity: 0.4; cursor: default; }
+        .pdf-nav-info { font-size: 0.9rem; color: #718096; }
+
+        /* Crop canvas */
+        .crop-canvas-wrap {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #2d3748;
+            cursor: crosshair;
+            user-select: none;
+            touch-action: none;
+            line-height: 0; /* remove gap below canvas */
+        }
+        .crop-canvas-wrap canvas { display: block; max-width: 100%; height: auto; }
+
+        .crop-hint {
+            font-size: 0.82rem;
+            color: #718096;
+            margin-top: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .crop-info-badge {
+            display: inline-block;
+            background: #fff8f0;
+            border: 1px solid #fed7aa;
+            color: #c05621;
+            border-radius: 6px;
+            padding: 0.25rem 0.6rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .reset-btn {
+            background: none;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.3rem 0.75rem;
+            cursor: pointer;
+            font-size: 0.82rem;
+            color: #718096;
+        }
+        .reset-btn:hover { background: #f7fafc; }
+
+        /* Format buttons */
+        .format-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.9rem;
+        }
+        .format-card {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem;
+            cursor: pointer;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            text-align: center;
+            background: #fff;
+        }
+        .format-card:hover { border-color: #ff9933; box-shadow: 0 4px 16px rgba(255,153,51,0.15); }
+        .format-card .format-icon { font-size: 1.8rem; margin-bottom: 0.4rem; }
+        .format-card .format-name { font-weight: 700; color: #2d3748; font-size: 0.95rem; }
+        .format-card .format-size { font-size: 0.75rem; color: #718096; margin-top: 0.2rem; }
+        .format-card-all {
+            border-color: #ff9933;
+            background: linear-gradient(135deg, #fff8f0, #fff3e0);
+            grid-column: 1 / -1;
+        }
+        .format-card-all:hover { border-color: #ff6b00; background: linear-gradient(135deg, #fff3e0, #ffe0b2); }
+        .format-card-all .format-name { color: #c05621; font-size: 1rem; }
+        .generate-spinner { display: none; }
+        .generating .generate-spinner { display: inline; }
+        .generating .generate-label { display: none; }
+
+        /* Output cards */
+        #outputSection { display: none; }
+        #outputSection.visible { display: block; }
+        .output-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.4rem;
+            margin-top: 1rem;
+        }
+        .output-card {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        .output-card-header {
+            background: #2d3748;
+            color: #fff;
+            padding: 0.65rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .output-card-header .label { font-weight: 700; font-size: 0.9rem; }
+        .output-card-header .size-tag { font-size: 0.75rem; color: #a0aec0; }
+        .output-card canvas { display: block; width: 100%; }
+        .output-card-footer {
+            padding: 0.75rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        .dl-btn {
+            flex: 1;
+            display: block;
+            text-align: center;
+            background: linear-gradient(135deg, #ff9933, #ff6b00);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .dl-btn:hover { opacity: 0.9; }
+
+        /* Disabled state for step 2 & 3 before upload */
+        .clip-step.locked { opacity: 0.45; pointer-events: none; }
+
+        @media (max-width: 600px) {
+            .clip-hero h1 { font-size: 1.3rem; }
+            .format-grid { grid-template-columns: 1fr 1fr; }
+            .format-card-all { grid-column: 1 / -1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="utility-bar">
+    <div class="container">
+        <div class="utility-bar-links">
+            <a href="/about.html">About Us</a>
+            <a href="/contact.html">Contact Us</a>
+            <a href="/authors.html">Founder</a>
+            <a href="/editorial-policy.html">Editorial Policy</a>
+        </div>
+    </div>
+</div>
+
+<header class="header">
+    <div class="container">
+        <div class="logo-container">
+            <a href="/" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:14px;">
+                <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><rect width="52" height="52" rx="9" fill="rgba(255,255,255,0.18)"/><rect width="52" height="52" rx="9" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="1"/><rect x="19" y="5" width="14" height="22" rx="7" fill="white" opacity="0.95"/><line x1="22" y1="11" x2="30" y2="11" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="16" x2="31" y2="16" stroke="rgba(180,70,0,0.18)" stroke-width="1.5"/><line x1="21" y1="21" x2="31" y2="21" stroke="rgba(180,70,0,0.12)" stroke-width="1.5"/><path d="M 10,22 Q 10,35 26,35 Q 42,35 42,22" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="26" y1="35" x2="26" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="17" y1="43" x2="35" y2="43" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M 42,18 C 47,22 47,31 42,35" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round"/><path d="M 45,14 C 51,19 51,33 45,38" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <div>
+                    <h1 class="logo">वॉयस ऑफ क्रांति</h1>
+                    <p class="tagline">सत्य की आवाज़, जनता का विश्वास</p>
+                    <p style="font-size:0.68rem;color:#1a1a1a;font-weight:700;margin:2px 0 0;letter-spacing:.3px;background:rgba(255,255,255,0.75);padding:1px 5px;border-radius:3px;">RNI: MPHIN/26/A5773</p>
+                </div>
+            </a>
+        </div>
+        <nav>
+            <a href="/admin" class="nav-link">🏠 Admin</a>
+            <a href="/epaper" class="nav-link">ई-पेपर</a>
+            <a href="/clip-generator" class="nav-link active">✂️ Clip Generator</a>
+            <button id="logoutBtn" class="btn btn-logout">Logout</button>
+        </nav>
+    </div>
+</header>
+
+<div class="clip-hero">
+    <h1>✂️ न्यूज़ क्लिप जेनरेटर</h1>
+    <p>अख़बार की कटिंग चुनें — Instagram, Facebook, X और WhatsApp के लिए ब्रांडेड इमेज तुरंत बनाएं</p>
+</div>
+
+<main class="container">
+    <div class="clip-steps">
+
+        <!-- ── Step 1: Upload ─────────────────────────────────────────────── -->
+        <div class="clip-step" id="step1">
+            <div class="step-badge">1</div>
+            <h2>अख़बार की इमेज या PDF अपलोड करें</h2>
+
+            <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="Upload file">
+                <div class="upload-icon">🗞️</div>
+                <strong>यहाँ क्लिक करें या फ़ाइल खींचकर छोड़ें</strong>
+                <p>JPG, PNG, WEBP — या PDF (किसी भी पेज से क्रॉप करें)</p>
+                <input type="file" id="sourceFile" accept="image/*,application/pdf,.pdf" style="display:none;">
+            </div>
+
+            <div id="fileInfo" class="file-info" style="display:none;">
+                <span id="fileIcon">📄</span>
+                <span id="fileName">—</span>
+            </div>
+
+            <!-- PDF page navigation -->
+            <div class="pdf-nav" id="pdfNav">
+                <button class="pdf-nav-btn" id="pdfPrev" disabled>◀ पिछला</button>
+                <span class="pdf-nav-info" id="pdfPageInfo">पेज 1</span>
+                <button class="pdf-nav-btn" id="pdfNext">अगला ▶</button>
+                <span style="font-size:0.8rem;color:#a0aec0;">PDF के किसी भी पेज पर जाकर क्रॉप करें</span>
+            </div>
+        </div>
+
+        <!-- ── Step 2: Crop ───────────────────────────────────────────────── -->
+        <div class="clip-step locked" id="step2">
+            <div class="step-badge">2</div>
+            <h2>जिस हिस्से को क्लिप करना है उसे माउस से खींचकर चुनें</h2>
+
+            <div class="crop-canvas-wrap" id="cropWrap">
+                <canvas id="cropCanvas"></canvas>
+            </div>
+
+            <div class="crop-hint">
+                <span>✋ खींचें: चयन बनाएं &nbsp;|&nbsp; दोबारा खींचें: नया चयन</span>
+                <span id="cropDims" class="crop-info-badge" style="display:none;"></span>
+                <button class="reset-btn" id="resetBtn" style="display:none;" onclick="resetCrop()">↺ Reset</button>
+            </div>
+        </div>
+
+        <!-- ── Step 3: Generate ───────────────────────────────────────────── -->
+        <div class="clip-step locked" id="step3">
+            <div class="step-badge">3</div>
+            <h2>सोशल मीडिया फॉर्मेट चुनें</h2>
+
+            <div class="format-grid">
+                <div class="format-card" onclick="generate('instagram')">
+                    <div class="format-icon">📱</div>
+                    <div class="format-name">Instagram</div>
+                    <div class="format-size">1080 × 1080 (Square)</div>
+                </div>
+                <div class="format-card" onclick="generate('facebook')">
+                    <div class="format-icon">👍</div>
+                    <div class="format-name">Facebook</div>
+                    <div class="format-size">1200 × 628 (Landscape)</div>
+                </div>
+                <div class="format-card" onclick="generate('x')">
+                    <div class="format-icon">𝕏</div>
+                    <div class="format-name">X / Twitter</div>
+                    <div class="format-size">1200 × 675 (16:9)</div>
+                </div>
+                <div class="format-card" onclick="generate('whatsapp')">
+                    <div class="format-icon">💬</div>
+                    <div class="format-name">WhatsApp Status</div>
+                    <div class="format-size">1080 × 1920 (9:16 Portrait)</div>
+                </div>
+                <div class="format-card format-card-all" id="generateAllBtn" onclick="generateAll()">
+                    <div class="format-icon">⚡</div>
+                    <div class="format-name">
+                        <span class="generate-label">सभी फॉर्मेट एक साथ बनाएं</span>
+                        <span class="generate-spinner">⏳ बन रहा है…</span>
+                    </div>
+                    <div class="format-size">Instagram + Facebook + X + WhatsApp एक क्लिक में</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Step 4: Download ───────────────────────────────────────────── -->
+        <div class="clip-step" id="outputSection">
+            <div class="step-badge">4</div>
+            <h2>तैयार इमेज — डाउनलोड करें</h2>
+            <div class="output-grid" id="outputGrid"></div>
+        </div>
+
+    </div><!-- /clip-steps -->
+</main>
+
+<footer class="footer">
+    <div class="container">
+        <p>&copy; 2026 वॉयस ऑफ क्रांति. All rights reserved. &nbsp;|&nbsp; <a href="/admin" style="color:inherit;">Admin Panel</a></p>
+    </div>
+</footer>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs" type="module"></script>
+
+<script type="module">
+// ── Auth guard ─────────────────────────────────────────────────────────────
+try {
+    const auth = await fetch('/api/auth/status', { credentials: 'same-origin' });
+    const { isAuthenticated } = await auth.json();
+    if (!isAuthenticated) { window.location.href = '/login'; }
+} catch (_) { window.location.href = '/login'; }
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (!confirm('Logout?')) return;
+    await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+    window.location.href = '/login';
+});
+
+// ── PDF.js setup ───────────────────────────────────────────────────────────
+const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.mjs';
+
+// ── Wait for fonts (Noto Sans Devanagari needed for canvas text) ───────────
+await document.fonts.ready;
+const HINDI_FONT = "'Noto Sans Devanagari', 'Mangal', 'Arial Unicode MS', sans-serif";
+
+// ── State ──────────────────────────────────────────────────────────────────
+const DPR = window.devicePixelRatio || 1;
+let sourceImage  = null;   // HTMLImageElement or offscreen Canvas
+let srcW = 0, srcH = 0;    // original source dimensions
+let pdfDoc       = null;
+let pdfPage      = 1;
+let displayScale = 1;
+let dispW = 0, dispH = 0;  // display (CSS) dimensions of crop canvas
+let dispOffX = 0, dispOffY = 0;
+
+// Crop state (in original source coordinates)
+let cropRect  = null;   // {x, y, w, h}
+let dragStart = null;
+let isDragging = false;
+
+const cropCanvas = document.getElementById('cropCanvas');
+const cropCtx    = cropCanvas.getContext('2d');
+
+// ── Upload handling ────────────────────────────────────────────────────────
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('sourceFile');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+});
+
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+async function handleFile(file) {
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    showFileInfo(isPDF ? '📄' : '🖼️', file.name);
+
+    if (isPDF) {
+        const ab = await file.arrayBuffer();
+        pdfDoc = await pdfjsLib.getDocument({ data: ab }).promise;
+        pdfPage = 1;
+        updatePdfNav();
+        document.getElementById('pdfNav').classList.add('visible');
+        await renderPdfPage(pdfPage);
+    } else {
+        document.getElementById('pdfNav').classList.remove('visible');
+        pdfDoc = null;
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+            sourceImage = img;
+            srcW = img.naturalWidth;
+            srcH = img.naturalHeight;
+            initCropCanvas();
+            unlockSteps();
+        };
+        img.src = url;
+    }
+}
+
+function showFileInfo(icon, name) {
+    document.getElementById('fileIcon').textContent = icon;
+    document.getElementById('fileName').textContent = name;
+    document.getElementById('fileInfo').style.display = 'flex';
+}
+
+async function renderPdfPage(num) {
+    const page     = await pdfDoc.getPage(num);
+    const viewport = page.getViewport({ scale: 2 }); // high-res render
+    const offscreen = document.createElement('canvas');
+    offscreen.width  = viewport.width;
+    offscreen.height = viewport.height;
+    const oCtx = offscreen.getContext('2d');
+    await page.render({ canvasContext: oCtx, viewport }).promise;
+    sourceImage = offscreen;
+    srcW = offscreen.width;
+    srcH = offscreen.height;
+    initCropCanvas();
+    unlockSteps();
+}
+
+function updatePdfNav() {
+    if (!pdfDoc) return;
+    document.getElementById('pdfPageInfo').textContent = `पेज ${pdfPage} / ${pdfDoc.numPages}`;
+    document.getElementById('pdfPrev').disabled = pdfPage <= 1;
+    document.getElementById('pdfNext').disabled = pdfPage >= pdfDoc.numPages;
+}
+
+document.getElementById('pdfPrev').addEventListener('click', async () => {
+    if (pdfPage > 1) { pdfPage--; updatePdfNav(); cropRect = null; await renderPdfPage(pdfPage); }
+});
+document.getElementById('pdfNext').addEventListener('click', async () => {
+    if (pdfDoc && pdfPage < pdfDoc.numPages) { pdfPage++; updatePdfNav(); cropRect = null; await renderPdfPage(pdfPage); }
+});
+
+// ── Crop canvas setup ─────────────────────────────────────────────────────
+const MAX_CANVAS_W = Math.min(900, window.innerWidth - 64);
+const MAX_CANVAS_H = 700;
+
+function initCropCanvas() {
+    cropRect = null;
+    hideCropInfo();
+
+    // Fit image into display bounds
+    const scaleX = MAX_CANVAS_W / srcW;
+    const scaleY = MAX_CANVAS_H / srcH;
+    displayScale = Math.min(scaleX, scaleY, 1); // never upscale beyond 1x
+
+    dispW = Math.round(srcW * displayScale);
+    dispH = Math.round(srcH * displayScale);
+    dispOffX = 0;
+    dispOffY = 0;
+
+    // Scale canvas by DPR so each canvas pixel = 1 physical pixel
+    cropCanvas.width  = dispW * DPR;
+    cropCanvas.height = dispH * DPR;
+    cropCanvas.style.width  = dispW + 'px';
+    cropCanvas.style.height = '';  // let CSS height:auto maintain aspect ratio
+    cropCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawCropCanvas();
+}
+
+function drawCropCanvas() {
+    // Use display dimensions because the context is scaled by DPR
+    const W = dispW || cropCanvas.width, H = dispH || cropCanvas.height;
+    cropCtx.clearRect(0, 0, W, H);
+
+    if (!sourceImage) return;
+    cropCtx.drawImage(sourceImage, dispOffX, dispOffY, srcW * displayScale, srcH * displayScale);
+
+    if (!cropRect || cropRect.w < 2 || cropRect.h < 2) return;
+
+    // Display coordinates of crop
+    const cx = dispOffX + cropRect.x * displayScale;
+    const cy = dispOffY + cropRect.y * displayScale;
+    const cw = cropRect.w * displayScale;
+    const ch = cropRect.h * displayScale;
+
+    // Dark overlay with hole (evenodd fill rule)
+    cropCtx.save();
+    cropCtx.fillStyle = 'rgba(0,0,0,0.52)';
+    cropCtx.beginPath();
+    cropCtx.rect(0, 0, W, H);                       // outer (CW)
+    cropCtx.rect(cx + cw, cy, -cw, ch);             // inner CCW = hole
+    cropCtx.fill('evenodd');
+    cropCtx.restore();
+
+    // Selection border
+    cropCtx.strokeStyle = '#ff9933';
+    cropCtx.lineWidth = 2.5;
+    cropCtx.strokeRect(cx + 1.25, cy + 1.25, cw - 2.5, ch - 2.5);
+
+    // Corner handles
+    const hs = 10;
+    cropCtx.fillStyle = '#ff9933';
+    [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]].forEach(([hx, hy]) => {
+        cropCtx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    });
+
+    // Rule-of-thirds guides (faint)
+    cropCtx.strokeStyle = 'rgba(255,153,51,0.25)';
+    cropCtx.lineWidth = 1;
+    [1/3, 2/3].forEach(f => {
+        cropCtx.beginPath(); cropCtx.moveTo(cx + cw * f, cy); cropCtx.lineTo(cx + cw * f, cy + ch); cropCtx.stroke();
+        cropCtx.beginPath(); cropCtx.moveTo(cx, cy + ch * f); cropCtx.lineTo(cx + cw, cy + ch * f); cropCtx.stroke();
+    });
+}
+
+// ── Mouse / touch events ───────────────────────────────────────────────────
+function getEventPos(e) {
+    const touch = e.touches ? e.touches[0] : e;
+    const rect  = cropCanvas.getBoundingClientRect();
+    // Use CSS display dimensions (not canvas pixel dimensions) to avoid DPR skew
+    const scaleX = dispW / rect.width;
+    const scaleY = dispH / rect.height;
+    return {
+        x: Math.max(0, Math.min(srcW, ((touch.clientX - rect.left) * scaleX - dispOffX) / displayScale)),
+        y: Math.max(0, Math.min(srcH, ((touch.clientY - rect.top)  * scaleY - dispOffY) / displayScale))
+    };
+}
+
+cropCanvas.addEventListener('mousedown',  onDown);
+cropCanvas.addEventListener('mousemove',  onMove);
+cropCanvas.addEventListener('mouseup',    onUp);
+cropCanvas.addEventListener('mouseleave', onUp);
+cropCanvas.addEventListener('touchstart', e => { e.preventDefault(); onDown(e); }, { passive: false });
+cropCanvas.addEventListener('touchmove',  e => { e.preventDefault(); onMove(e); }, { passive: false });
+cropCanvas.addEventListener('touchend',   e => { e.preventDefault(); onUp(e); },   { passive: false });
+
+function onDown(e) {
+    if (!sourceImage) return;
+    isDragging = true;
+    dragStart  = getEventPos(e);
+    cropRect   = null;
+    drawCropCanvas();
+}
+
+function onMove(e) {
+    if (!isDragging) return;
+    const pos = getEventPos(e);
+    cropRect = {
+        x: Math.min(dragStart.x, pos.x),
+        y: Math.min(dragStart.y, pos.y),
+        w: Math.abs(pos.x - dragStart.x),
+        h: Math.abs(pos.y - dragStart.y)
+    };
+    drawCropCanvas();
+}
+
+function onUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+    if (cropRect && cropRect.w > 8 && cropRect.h > 8) {
+        showCropInfo();
+        document.getElementById('step3').classList.remove('locked');
+    } else {
+        cropRect = null;
+        drawCropCanvas();
+    }
+}
+
+function showCropInfo() {
+    const dims = document.getElementById('cropDims');
+    dims.textContent = `${Math.round(cropRect.w)} × ${Math.round(cropRect.h)} px`;
+    dims.style.display = 'inline-block';
+    document.getElementById('resetBtn').style.display = 'inline-block';
+}
+function hideCropInfo() {
+    document.getElementById('cropDims').style.display = 'none';
+    document.getElementById('resetBtn').style.display = 'none';
+    document.getElementById('step3').classList.add('locked');
+}
+
+window.resetCrop = function() {
+    cropRect = null;
+    drawCropCanvas();
+    hideCropInfo();
+};
+
+function unlockSteps() {
+    document.getElementById('step2').classList.remove('locked');
+}
+
+// ── Output generation ──────────────────────────────────────────────────────
+const FORMATS = {
+    instagram: { label: 'Instagram',    icon: '📱', w: 1080, h: 1080, headerH: 170, footerH: 65 },
+    facebook:  { label: 'Facebook',     icon: '👍', w: 1200, h: 628,  headerH: 130, footerH: 55 },
+    x:         { label: 'X / Twitter',  icon: '𝕏', w: 1200, h: 675,  headerH: 130, footerH: 55 },
+    whatsapp:  { label: 'WhatsApp Status', icon: '💬', w: 1080, h: 1920, headerH: 200, footerH: 75 }
+};
+
+window.generate = function(fmtKey) { buildOutput([fmtKey]); };
+window.generateAll = function() {
+    const btn = document.getElementById('generateAllBtn');
+    btn.classList.add('generating');
+    setTimeout(() => {
+        buildOutput(['instagram', 'facebook', 'x', 'whatsapp']);
+        btn.classList.remove('generating');
+    }, 50);
+};
+
+function buildOutput(keys) {
+    if (!sourceImage || !cropRect || cropRect.w < 5 || cropRect.h < 5) {
+        alert('पहले Step 2 में कोई क्षेत्र चुनें।');
+        return;
+    }
+
+    const outputSection = document.getElementById('outputSection');
+    const outputGrid    = document.getElementById('outputGrid');
+    outputSection.style.display = 'block';
+    outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    keys.forEach(key => {
+        // Remove existing card for this format if present
+        const old = document.getElementById('out-' + key);
+        if (old) old.remove();
+
+        const fmt    = FORMATS[key];
+        const canvas = renderOutput(fmt);
+        const card   = buildOutputCard(key, fmt, canvas);
+        outputGrid.appendChild(card);
+    });
+}
+
+function renderOutput(fmt) {
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width  = fmt.w;
+    outCanvas.height = fmt.h;
+    const ctx = outCanvas.getContext('2d');
+
+    drawHeader(ctx,  0, 0,                    fmt.w, fmt.headerH);
+    drawContent(ctx, 0, fmt.headerH,           fmt.w, fmt.h - fmt.headerH - fmt.footerH);
+    drawFooter(ctx,  0, fmt.h - fmt.footerH,   fmt.w, fmt.footerH);
+
+    return outCanvas;
+}
+
+// ── Draw header ────────────────────────────────────────────────────────────
+function drawHeader(ctx, x, y, w, h) {
+    // Gradient background
+    const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+    grad.addColorStop(0, '#e8580a');
+    grad.addColorStop(1, '#ff6b00');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, y, w, h);
+
+    // Logo icon
+    const logoSize = h * 0.72;
+    const logoX    = x + h * 0.14;
+    const logoY    = y + (h - logoSize) / 2;
+    drawLogoIcon(ctx, logoX, logoY, logoSize);
+
+    // Text block
+    const textX  = logoX + logoSize + h * 0.18;
+    const nameFS = h * 0.38;
+    const tagFS  = h * 0.175;
+    const rniFS  = h * 0.14;
+
+    ctx.textBaseline = 'top';
+    ctx.textAlign    = 'left';
+    ctx.fillStyle    = '#ffffff';
+
+    // Newspaper name — shadow improves contrast against orange gradient
+    ctx.shadowColor   = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur    = 8;
+    ctx.shadowOffsetX = 1;
+    ctx.shadowOffsetY = 2;
+    ctx.font = `800 ${nameFS}px ${HINDI_FONT}`;
+    ctx.fillText('वॉयस ऑफ क्रांति', textX, y + h * 0.09);
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur  = 0;
+
+    // Tagline
+    ctx.font = `400 ${tagFS}px ${HINDI_FONT}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillText('सत्य की आवाज़, जनता का विश्वास', textX, y + h * 0.52);
+
+    // RNI
+    ctx.font = `400 ${rniFS}px system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
+    ctx.fillText('RNI: MPHIN/26/A5773', textX, y + h * 0.74);
+
+    // Date on right
+    const today = new Date().toLocaleDateString('hi-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    ctx.textAlign = 'right';
+    ctx.font = `700 ${tagFS}px ${HINDI_FONT}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.fillText(today, x + w - h * 0.14, y + h * 0.09);
+    ctx.textAlign = 'left';
+}
+
+// ── Draw content (cropped clip) ────────────────────────────────────────────
+function drawContent(ctx, x, y, w, h) {
+    // Newsprint background
+    ctx.fillStyle = '#fffdf5';
+    ctx.fillRect(x, y, w, h);
+
+    // Subtle top shadow
+    const topShadow = ctx.createLinearGradient(0, y, 0, y + 22);
+    topShadow.addColorStop(0, 'rgba(0,0,0,0.13)');
+    topShadow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = topShadow;
+    ctx.fillRect(x, y, w, 22);
+
+    // Padding
+    const pad = Math.min(w, h) * 0.045;
+    const availW = w - pad * 2;
+    const availH = h - pad * 2;
+
+    // Scale clip to fit (contain)
+    const cropAspect = cropRect.w / cropRect.h;
+    const availAspect = availW / availH;
+    let drawW, drawH;
+    if (cropAspect > availAspect) {
+        drawW = availW;
+        drawH = availW / cropAspect;
+    } else {
+        drawH = availH;
+        drawW = availH * cropAspect;
+    }
+
+    const drawX = x + pad + (availW - drawW) / 2;
+    const drawY = y + pad + (availH - drawH) / 2;
+
+    // Drop shadow
+    ctx.save();
+    ctx.shadowColor   = 'rgba(0,0,0,0.22)';
+    ctx.shadowBlur    = 18;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 5;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(drawX - 3, drawY - 3, drawW + 6, drawH + 6);
+    ctx.restore();
+
+    // Clip border
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth   = 2;
+    ctx.strokeRect(drawX - 1, drawY - 1, drawW + 2, drawH + 2);
+
+    // Draw the clipping
+    ctx.drawImage(
+        sourceImage,
+        cropRect.x, cropRect.y, cropRect.w, cropRect.h,
+        drawX, drawY, drawW, drawH
+    );
+}
+
+// ── Draw footer ────────────────────────────────────────────────────────────
+function drawFooter(ctx, x, y, w, h) {
+    ctx.fillStyle = '#1a202c';
+    ctx.fillRect(x, y, w, h);
+
+    const fs = h * 0.42;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign    = 'left';
+    ctx.fillStyle    = 'rgba(255,255,255,0.92)';
+    ctx.font         = `700 ${fs}px system-ui, sans-serif`;
+    ctx.fillText('voiceofkranti.com', x + h * 0.5, y + h / 2);
+
+    ctx.textAlign  = 'right';
+    ctx.fillStyle  = 'rgba(255,255,255,0.55)';
+    ctx.font       = `400 ${fs * 0.88}px system-ui, sans-serif`;
+    ctx.fillText('@voiceofkranti', x + w - h * 0.5, y + h / 2);
+    ctx.textAlign  = 'left';
+    ctx.textBaseline = 'alphabetic';
+}
+
+// ── Logo icon drawn with canvas ────────────────────────────────────────────
+function drawLogoIcon(ctx, x, y, size) {
+    const s = size / 52;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+
+    // Background rounded rect
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    rrect(ctx, 0, 0, 52, 52, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 1;
+    rrect(ctx, 0, 0, 52, 52, 9); ctx.stroke();
+
+    // Mic capsule
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    rrect(ctx, 19, 5, 14, 22, 7); ctx.fill();
+
+    // Grille lines
+    ctx.strokeStyle = 'rgba(180,70,0,0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    [[22,11,30,11],[21,16,31,16],[21,21,31,21]].forEach(([x1,y1,x2,y2]) => {
+        ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+
+    // Pickup arc
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(10,22); ctx.quadraticCurveTo(10,35,26,35); ctx.quadraticCurveTo(42,35,42,22); ctx.stroke();
+
+    // Stand + base
+    ctx.beginPath(); ctx.moveTo(26,35); ctx.lineTo(26,43); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(17,43); ctx.lineTo(35,43); ctx.stroke();
+
+    // Wave 1
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(42,18); ctx.bezierCurveTo(47,22,47,31,42,35); ctx.stroke();
+
+    // Wave 2
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(45,14); ctx.bezierCurveTo(51,19,51,33,45,38); ctx.stroke();
+
+    ctx.restore();
+}
+
+function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+// ── Build output card ──────────────────────────────────────────────────────
+function buildOutputCard(key, fmt, outCanvas) {
+    // Thumbnail canvas — 2× resolution so CSS width:100% stays sharp on all screens
+    const thumbW = 640;
+    const thumbH = Math.round(fmt.h * (thumbW / fmt.w));
+    const thumb  = document.createElement('canvas');
+    thumb.width  = thumbW;
+    thumb.height = thumbH;
+    thumb.getContext('2d').drawImage(outCanvas, 0, 0, thumbW, thumbH);
+
+    const card = document.createElement('div');
+    card.className = 'output-card';
+    card.id = 'out-' + key;
+
+    const header = document.createElement('div');
+    header.className = 'output-card-header';
+    header.innerHTML = `<span class="label">${fmt.icon} ${fmt.label}</span><span class="size-tag">${fmt.w}×${fmt.h}</span>`;
+
+    const footer = document.createElement('div');
+    footer.className = 'output-card-footer';
+
+    // Download button
+    const dlBtn = document.createElement('a');
+    dlBtn.className = 'dl-btn';
+    dlBtn.textContent = '⬇ Download';
+    dlBtn.download = `voiceofkranti-${key}-${Date.now()}.jpg`;
+    // Convert to JPEG for smaller file size
+    outCanvas.toBlob(blob => {
+        dlBtn.href = URL.createObjectURL(blob);
+    }, 'image/jpeg', 0.93);
+
+    footer.appendChild(dlBtn);
+    card.appendChild(header);
+    card.appendChild(thumb);
+    card.appendChild(footer);
+    return card;
+}
+
+// Expose for onclick attributes
+window.generate    = window.generate;
+window.generateAll = window.generateAll;
+window.resetCrop   = window.resetCrop;
+</script>
+</body>
+</html>
+
+
