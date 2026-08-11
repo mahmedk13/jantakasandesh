@@ -189,7 +189,7 @@ async function sendReport({ imported, skipped, stories, error }) {
     <tr>
       <td style="padding:6px 12px;color:#6b7280">${i + 1}</td>
       <td style="padding:6px 12px">${s.title}</td>
-      <td style="padding:6px 12px"><a href="${SITE_URL}/news-detail.html?slug=${s.slug}" style="color:#1d4ed8">${SITE_URL}/news-detail.html?slug=${s.slug}</a></td>
+      <td style="padding:6px 12px"><a href="${SITE_URL}/news/${s.slug}" style="color:#1d4ed8">${SITE_URL}/news/${s.slug}</a></td>
     </tr>`).join('');
 
     const html = `

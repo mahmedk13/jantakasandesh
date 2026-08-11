@@ -436,7 +436,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             const newsId = urlParams.get('id');
             const slugMatch = window.location.pathname.match(/^\/news\/(.+)$/);
-            const slug = slugMatch ? slugMatch[1] : null;
+            const slug = slugMatch ? slugMatch[1] : (urlParams.get('slug') || null);
 
             if (!newsId && !slug) {
                 newsDetail.innerHTML = `
