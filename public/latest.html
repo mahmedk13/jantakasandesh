@@ -193,10 +193,6 @@
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
                 <a href="/glossary.html" class="nav-link">शब्दकोश</a>
             </nav>
-            <form class="site-search-form" role="search" onsubmit="doSiteSearch(event)">
-                <input class="site-search-input" id="siteSearchInput" type="search" placeholder="खोजें..." aria-label="खबर खोजें" autocomplete="off" maxlength="100">
-                <button class="site-search-btn" type="submit" aria-label="खोज करें">&#128269;</button>
-            </form>
         </div>
     </header>
 
@@ -362,13 +358,6 @@
 
     loadFeed(false);
     startCountdown();
-
-    function doSiteSearch(e) {
-        e.preventDefault();
-        var q = (document.getElementById('siteSearchInput').value || '').trim();
-        if (!q) { window.location.href = '/'; return; }
-        window.location.href = '/?q=' + encodeURIComponent(q);
-    }
     </script>
 </body>
 </html>

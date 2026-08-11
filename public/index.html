@@ -195,10 +195,6 @@
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
                 <a href="/glossary.html" class="nav-link">शब्दकोश</a>
             </nav>
-            <form class="site-search-form" id="siteSearchForm" role="search" onsubmit="doSiteSearch(event)">
-                <input class="site-search-input" id="siteSearchInput" type="search" placeholder="खोजें..." aria-label="खबर खोजें" autocomplete="off" maxlength="100">
-                <button class="site-search-btn" type="submit" aria-label="खोज करें">&#128269;</button>
-            </form>
         </div>
     </header>
 
@@ -485,24 +481,15 @@
                 // Use server-injected data on first load to avoid a round-trip fetch
                 let newsData;
                 let response;
-                const searchQ = new URLSearchParams(window.location.search).get('q');
-                if (searchQ && reset) {
-                    // Server-side search across heading, content, category, author
-                    response = await fetch('/api/news/search?q=' + encodeURIComponent(searchQ), { credentials: 'same-origin' });
-                    newsData = response.ok ? await response.json() : [];
-                    hasMore = false; // search returns all results at once
+                const usePreloaded = reset && currentPage === 0 && currentCategory === 'all' && !writtenOnly
+                    && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0;
+                if (usePreloaded) {
+                    newsData = window.__INITIAL_NEWS__;
+                    window.__INITIAL_NEWS__ = null; // consume once
                 } else {
-                    const usePreloaded = reset && currentPage === 0 && currentCategory === 'all' && !writtenOnly
-                        && !searchQ
-                        && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0;
-                    if (usePreloaded) {
-                        newsData = window.__INITIAL_NEWS__;
-                        window.__INITIAL_NEWS__ = null; // consume once
-                    } else {
-                        const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory);
-                        response = await fetch(url, { credentials: 'same-origin' });
-                        newsData = response.ok ? await response.json() : [];
-                    }
+                    const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory);
+                    response = await fetch(url, { credentials: 'same-origin' });
+                    newsData = response.ok ? await response.json() : [];
                 }
 
                 // All view: category priority then newest-first within each; single category: newest-first
@@ -813,29 +800,6 @@
         loadNews();
         window.addEventListener('scroll', handleScroll);
         setInterval(function() { if (currentPage <= 1) loadNews(true); }, 120000);
-
-        // ── Search box ────────────────────────────────────────────────────
-        // Pre-fill the search input if ?q= is already in the URL
-        (function(){
-            var q = new URLSearchParams(window.location.search).get('q');
-            if (q) {
-                var inp = document.getElementById('siteSearchInput');
-                if (inp) inp.value = q;
-                // Insert search results banner before the newsList
-                var banner = document.createElement('div');
-                banner.className = 'search-banner';
-                banner.innerHTML = '&#128269; "<strong>' + q.replace(/</g,'&lt;') + '</strong>" के लिए परिणाम &nbsp;<a href="/">&#10005; खोज साफ़ करें</a>';
-                var container = newsList.parentNode;
-                container.insertBefore(banner, newsList);
-            }
-        })();
-
-        function doSiteSearch(e) {
-            e.preventDefault();
-            var q = (document.getElementById('siteSearchInput').value || '').trim();
-            if (!q) { window.location.href = '/'; return; }
-            window.location.href = '/?q=' + encodeURIComponent(q);
-        }
     </script>
 
     <!-- Cookie Consent -->
