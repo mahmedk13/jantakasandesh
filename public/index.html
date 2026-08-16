@@ -187,9 +187,12 @@
                 </div>
             </div>
             <nav>
+                <a href="/" class="nav-link">Home</a>
                 <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
-                <a href="/latest" class="nav-link nav-link-latest">🟢 लाइव फीड</a>
+                <a href="/latest" class="nav-link nav-link-latest">लाइव फीड</a>
+                <a href="/latest?source=pb" class="nav-link nav-link-pb">प्रसार भारती</a>
+                <a href="/latest?full=true" class="nav-link nav-link-full">पूर्ण खबरें</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -431,6 +434,21 @@
             }
         }
 
+        const breakingTickerCategories = new Set(['desh', 'videsh', 'bhopal', 'rajya', 'crime', 'khel', 'manoranjan', 'vyapar', 'rajniti']);
+        function getBreakingTickerItems(items) {
+            const cutoffMs = 12 * 60 * 60 * 1000;
+            return (items || [])
+                .filter(function(news) {
+                    if (!news || !news.heading || news.isOriginal) return false;
+                    const category = String(news.category || '').toLowerCase();
+                    if (!breakingTickerCategories.has(category)) return false;
+                    if (!news.date) return false;
+                    const ageMs = Date.now() - new Date(news.date).getTime();
+                    return ageMs >= 0 && ageMs <= cutoffMs;
+                })
+                .slice(0, 12);
+        }
+
         // ── Shorts strip ─────────────────────────────────────────────────
         const categoryNames_s = { desh: 'देश', rajniti: 'राजनीति', crime: 'अपराध', bhopal: 'भोपाल' };
         async function loadShortsStrip() {
@@ -495,6 +513,10 @@
                         allNewsData = response.ok ? await response.json() : [];
                     }
 
+                    if (!writtenOnly) {
+                        allNewsData = allNewsData.filter(function(n) { return !n.isOriginal; });
+                    }
+
                     if (!writtenOnly && currentCategory === 'all') {
                         var catOrder = { desh:1, crime:2, rajniti:3, bhopal:4, rajya:5, videsh:6, khel:7, vyapar:8, manoranjan:9, itihas:10 };
                         allNewsData.sort(function(a, b) {
@@ -520,14 +542,18 @@
                 const loadingIndicator = document.getElementById('loading-indicator');
                 if (loadingIndicator) loadingIndicator.remove();
 
-                // Update ticker on first load
+                // Update ticker on first load using recent category-relevant stories only.
                 if (!tickerLoaded && allNewsData.length > 0) {
-                    const tickerHtml = allNewsData.slice(0, 10).map(function(n) {
-                        const tickerUrl = n.slug ? '/news/' + n.slug : '/news-detail.html?id=' + n.id;
-                        return '<a href="' + tickerUrl + '" class="jks-ticker-link">' + n.heading + '</a><span class="jks-ticker-sep">◆</span>';
-                    }).join('');
-                    // Duplicate content for seamless infinite loop (animate -50% = one full copy width)
-                    document.getElementById('jksFlash').innerHTML = tickerHtml + tickerHtml;
+                    const tickerItems = getBreakingTickerItems(allNewsData);
+                    if (tickerItems.length > 0) {
+                        const tickerHtml = tickerItems.map(function(n) {
+                            const tickerUrl = n.slug ? '/news/' + n.slug : '/news-detail.html?id=' + n.id;
+                            return '<a href="' + tickerUrl + '" class="jks-ticker-link">' + n.heading + '</a><span class="jks-ticker-sep">◆</span>';
+                        }).join('');
+                        document.getElementById('jksFlash').innerHTML = tickerHtml + tickerHtml;
+                    } else {
+                        document.getElementById('jksFlash').innerHTML = '<a href="/" class="jks-ticker-link">आज की सबसे ताज़ा खबरें अपडेट हो रही हैं…</a>';
+                    }
                     tickerLoaded = true;
                 }
 
@@ -565,6 +591,13 @@
                     return m ? !MAJOR_CITY_PREFIXES.has(m[1].trim().toLowerCase()) : false;
                 }
                 function isHistoricalHeading(h) { return /\b(19\d{2}|200\d|201\d|202[0-3])\b/.test(h || ''); }
+                function isPermanentWithin24h(n) {
+                    if (!n || !n.isPermanent || !n.date) return false;
+                    var d = new Date(n.date);
+                    if (Number.isNaN(d.getTime())) return false;
+                    var ageMs = Date.now() - d.getTime();
+                    return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+                }
                 // Tier 1: full-content desh/rajniti/bhopal; Tier 2: other full-content; Tier 3: Google News (headlines only, list section); Tier 4: historical; Tier 5: minor-city
                 function articleTier(n) {
                     if (isMinorCityHeading(n.heading)) return 5;
@@ -574,14 +607,20 @@
                     return 2;
                 }
 
-                // Sort all articles by importance tier first, then recency — page 1 gets the best articles from the whole pool
-                if (startIndex === 0) {
-                    allNewsData.sort(function(a, b) {
+                function sortNewsForDisplay(list) {
+                    list.sort(function(a, b) {
+                        var pa = isPermanentWithin24h(a) ? 0 : 1;
+                        var pb = isPermanentWithin24h(b) ? 0 : 1;
+                        if (pa !== pb) return pa - pb;
                         var ta = articleTier(a), tb = articleTier(b);
                         if (ta !== tb) return ta - tb;
                         return new Date(b.date) - new Date(a.date);
                     });
+                    return list;
                 }
+
+                // Keep the homepage feed in a stable, repeatable order across the full infinite scroll.
+                allNewsData = sortNewsForDisplay(allNewsData.slice());
 
                 // Pin a Bhopal article as lead (any source mentioning Bhopal in last 5h),
                 // fallback to top national news if none found
@@ -635,6 +674,22 @@
                     return;
                 }
 
+                function stripEmbeddedMediaFromPreview(text) {
+                    if (!text) return '';
+                    return String(text)
+                        .replace(/\r/g, '')
+                        .split('\n')
+                        .filter(function(line) {
+                            return !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(line.trim());
+                        })
+                        .join('\n')
+                        .replace(/<[^>]+>/g, ' ')
+                        .replace(/https?:\/\/[^\s]+/gi, '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .slice(0, 160);
+                }
+
                 function ncImg(src, alt, eager) {
                     if (src) return '<img src="' + src + '" alt="' + alt.replace(/"/g, '\'') + '" ' + (eager ? 'fetchpriority="high"' : 'loading="lazy"') + ' style="width:100%;height:100%;object-fit:cover;">';
                     return '<div class="nc-img-placeholder"><span>NEWS</span></div>';
@@ -663,12 +718,13 @@
                     var slot = tier >= 3 ? Math.max(5, ai) : prominentFilled;
                     if (tier < 3) prominentFilled++;
                     if (slot === 0) {
+                        var leadDesc = stripEmbeddedMediaFromPreview(news.content || '');
                         leadHtml = '<article class="nc-lead" onclick="' + nav + '">' +
                             '<div class="nc-lead-img">' + ncImg(fp, news.heading, true) + '</div>' +
                             '<div class="nc-lead-body">' +
                             '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.1rem;">' + catHtml + liveHtml + pbHtml + '</div>' +
                             '<h2 class="nc-lead-title">' + news.heading + '</h2>' +
-                            (news.content ? '<p class="nc-lead-desc">' + news.content + '</p>' : '') +
+                            (leadDesc ? '<p class="nc-lead-desc">' + leadDesc + '</p>' : '') +
                             '<div class="nc-meta">' + ago + ' &bull; ' + auth +
                             ' &nbsp;<a href="' + waUrl + '" target="_blank" rel="noopener" class="share-wa-card" onclick="event.stopPropagation()">शेयर</a>' +
                             '</div></div></article>';

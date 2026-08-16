@@ -171,6 +171,46 @@
         line-height: 1.7;
         margin: 0;
     }
+    .embedded-media {
+        margin: 1.4rem 0;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+    }
+    .embedded-media img {
+        display: block;
+        width: 100%;
+        max-height: 520px;
+        object-fit: cover;
+    }
+    .embedded-media figcaption {
+        display: block;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.86rem;
+        line-height: 1.6;
+        padding: 0.75rem 1rem 1rem;
+    }
+    .video-embed {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #0f172a;
+    }
+    .video-embed iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+    }
+    .tweet-embed {
+        padding: 1rem;
+        background: #fff;
+    }
+    .tweet-embed .twitter-tweet {
+        margin: 0 auto;
+        max-width: 100%;
+    }
     </style>
 </head>
 <body>
@@ -196,6 +236,8 @@
                 <a href="/" class="nav-link">होम</a>
                 <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
+                <a href="/latest" class="nav-link nav-link-latest">🟢 लाइव फीड</a>
+                <a href="/latest?source=pb" class="nav-link nav-link-pb">📡 प्रसार भारती</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -298,6 +340,7 @@
         </div>
     </footer>
 
+    <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
     <script>
         const newsDetail = document.getElementById('newsDetail');
 
@@ -319,11 +362,11 @@
         function sanitizeHtml(html) {
             try {
                 const doc = new DOMParser().parseFromString('<div>' + html + '</div>', 'text/html');
-                // Remove dangerous elements
-                ['script','iframe','object','embed','form','input','button','link','style','noscript','meta']
+                // Remove dangerous elements, but keep safe iframes for YouTube embeds.
+                ['script','object','embed','form','input','button','link','style','noscript','meta']
                     .forEach(t => doc.querySelectorAll(t).forEach(e => e.remove()));
-                // Remove social media embeds (instagram, twitter, facebook)
-                doc.querySelectorAll('blockquote.instagram-media, blockquote.twitter-tweet, [data-instgrm-permalink], .fb-post, .instagram-media')
+                // Remove social media embeds that are not explicitly allowed.
+                doc.querySelectorAll('blockquote.instagram-media, [data-instgrm-permalink], .fb-post, .instagram-media')
                     .forEach(e => e.remove());
                 // Strip dangerous attributes (event handlers, javascript: hrefs)
                 doc.querySelectorAll('*').forEach(el => {
@@ -340,11 +383,70 @@
         }
 
         // Renders plain-text / markdown content (##, ###, -, 1., bold, italic, FAQ)
+        function buildMediaMarkupFromLine(line) {
+            const text = (line || '').trim();
+            if (!text) return '';
+
+            const extractUrl = (value) => {
+                if (!value) return '';
+                const directMatch = value.match(/https?:\/\/[^\s)]+/i);
+                if (directMatch) return directMatch[0].replace(/\)$/, '').replace(/\]$/, '');
+                const markdownMatch = value.match(/\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/i);
+                return markdownMatch ? markdownMatch[1] : '';
+            };
+
+            const standardImage = text.match(/^!\[(.*?)\]\((https?:\/\/[^\s)]+)\)$/i);
+            if (standardImage) {
+                const caption = standardImage[1].trim() || 'फोटो';
+                const imageUrl = standardImage[2];
+                return `<figure class="embedded-media"><img src="${esc(imageUrl)}" alt="${esc(caption)}"><figcaption>${esc(caption)}</figcaption></figure>`;
+            }
+
+            const photoMatch = text.match(/^(?:PHOTO|IMAGE)\s*:\s*(.+)$/i);
+            if (photoMatch) {
+                const value = photoMatch[1].trim();
+                const url = extractUrl(value.split('|')[0].trim());
+                const caption = (value.includes('|') ? value.split('|').slice(1).join('|').trim() : 'फोटो') || 'फोटो';
+                if (url) {
+                    return `<figure class="embedded-media"><img src="${esc(url)}" alt="${esc(caption || 'फोटो')}"><figcaption>${esc(caption || 'फोटो')}</figcaption></figure>`;
+                }
+            }
+
+            const videoMatch = text.match(/^(?:VIDEO|YOUTUBE)\s*:\s*(.+)$/i);
+            if (videoMatch) {
+                const value = videoMatch[1].trim();
+                const url = extractUrl(value.split('|')[0].trim());
+                const caption = (value.includes('|') ? value.split('|').slice(1).join('|').trim() : '').trim();
+                if (url) {
+                    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{11})/i);
+                    const youtubeId = ytMatch ? ytMatch[1] : null;
+                    if (youtubeId) {
+                        return `<figure class="embedded-media"><div class="video-embed"><iframe src="https://www.youtube.com/embed/${youtubeId}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
+                    }
+                    return `<figure class="embedded-media"><div class="video-embed"><iframe src="${esc(url)}" allowfullscreen></iframe></div>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
+                }
+            }
+
+            const tweetMatch = text.match(/^(?:X|TWITTER|TWEET)\s*:\s*(.+)$/i);
+            if (tweetMatch) {
+                const value = tweetMatch[1].trim();
+                const url = extractUrl(value.split('|')[0].trim());
+                const caption = (value.includes('|') ? value.split('|').slice(1).join('|').trim() : 'X पोस्ट').trim() || 'X पोस्ट';
+                if (url) {
+                    return `<figure class="embedded-media tweet-embed"><blockquote class="twitter-tweet"><a href="${esc(url)}">${esc(caption || 'X पोस्ट')}</a></blockquote></figure>`;
+                }
+            }
+
+            return '';
+        }
+
         function renderMarkdown(text) {
             let html = '', inList = false, inOList = false, inFaqItem = false;
             function fmt(s) {
-                // inline bold and italic on already-escaped text
-                return s
+                // Preserve safe inline HTML format tags from the editor, then apply markdown emphasis.
+                const withSafeInlineHtml = s
+                    .replace(/&lt;(\/?)((?:b|strong|i|em|u|a|span))\b([^&]*?)&gt;/gi, '<$1$2$3>');
+                return withSafeInlineHtml
                     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
             }
@@ -357,6 +459,14 @@
             for (let i = 0; i < lines.length; i++) {
                 const t = lines[i].trim();
                 if (!t) { closeBlocks(); continue; }
+
+                const mediaHtml = buildMediaMarkupFromLine(t);
+                if (mediaHtml) {
+                    closeBlocks();
+                    html += mediaHtml;
+                    continue;
+                }
+
                 if (t.startsWith('## ')) {
                     closeBlocks();
                     html += `<h2 class="article-h2">${fmt(esc(t.slice(3)))}</h2>`;
@@ -404,29 +514,69 @@
             return html;
         }
 
+        // Renders mixed content that can contain explicit media markers, markdown, and safe inline HTML like <b> / <i>.
+        function renderMixedContent(text) {
+            const lines = (text || '').split('\n');
+            let result = '';
+            let buffer = '';
+
+            const flushBuffer = () => {
+                if (!buffer.trim()) return;
+                const trimmed = buffer.trim();
+                if (/<\/?[A-Za-z][^>]*>/.test(trimmed)) {
+                    result += sanitizeHtml(trimmed);
+                } else {
+                    result += renderMarkdown(trimmed);
+                }
+                buffer = '';
+            };
+
+            for (const rawLine of lines) {
+                const line = rawLine.trim();
+                if (!line) {
+                    flushBuffer();
+                    continue;
+                }
+
+                const mediaHtml = buildMediaMarkupFromLine(line);
+                if (mediaHtml) {
+                    flushBuffer();
+                    result += mediaHtml;
+                    continue;
+                }
+
+                const looksLikeHtml = /<\/?[A-Za-z][^>]*>/.test(line);
+                if (looksLikeHtml) {
+                    if (buffer) {
+                        flushBuffer();
+                    }
+                    const htmlLine = sanitizeHtml(line);
+                    if (result && htmlLine) {
+                        result += '<br>';
+                    }
+                    result += htmlLine;
+                    continue;
+                }
+
+                if (buffer) buffer += '\n' + line;
+                else buffer = line;
+            }
+
+            flushBuffer();
+            return result || '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>';
+        }
+
         // Main content renderer — detects HTML (RSS articles) vs markdown (original articles)
         function renderContent(text) {
             if (!text) return '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>';
             // Strip PB SHABD metadata header lines stored in older syncs
             text = text.split('\n').filter(l => !/^(Relevance|Slug|Title|Synopsis|Category|Deadline|Priority)\s*:/i.test(l.trim())).join('\n').replace(/^\n+/, '').trim();
 
-            // If content contains HTML markup (admin toolbar <b>/<i>, RSS feeds, etc.)
-            if (/<(?:p|div|blockquote|ul|ol|li|b|i|br|strong|em|h[1-6]|a|span|table|tr|td|th|hr|figure|figcaption)\b/i.test(text)) {
-                // Split: HTML section | markdown tail (📡 source line, ## sections)
-                const mdSep = text.search(/\n\n?(?:📡|#{2,3} )/);
-                const htmlPart = mdSep > 0 ? text.slice(0, mdSep) : text;
-                const mdPart   = mdSep > 0 ? text.slice(mdSep) : '';
-                let result = sanitizeHtml(htmlPart);
-                // Also process **markdown** bold/italic in HTML-path content
-                result = result
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
-                // Add paragraph breaks if no block-level structure exists
-                if (result && !/^<(?:p|div|h[1-6]|ul|ol|blockquote)[\s>]/i.test(result.trim())) {
-                    result = '<p>' + result.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
-                }
-                if (mdPart) result += renderMarkdown(mdPart);
-                return result || '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>';
+            const hasMediaMarker = /^(?:VIDEO|YOUTUBE|PHOTO|IMAGE|X|TWITTER|TWEET)\s*:/m.test(text);
+            const hasExplicitHtml = /<(?:p|div|blockquote|ul|ol|li|b|i|br|strong|em|h[1-6]|a|span|table|tr|td|th|hr|figure|figcaption)\b/i.test(text);
+
+            if (hasMediaMarker || hasExplicitHtml) {
+                return renderMixedContent(text);
             }
 
             // Pure markdown / plain-text (original articles, generated content)
@@ -437,6 +587,12 @@
         }
 
         async function loadNewsDetail() {
+            const existingDetail = document.getElementById('newsDetail');
+            const keepSsrArticle = !!(existingDetail && existingDetail.dataset.ssrArticle === 'true');
+            if (keepSsrArticle) {
+                existingDetail.dataset.ssrArticle = 'hydrating';
+            }
+
             const urlParams = new URLSearchParams(window.location.search);
             const newsId = urlParams.get('id');
             const slugMatch = window.location.pathname.match(/^\/news\/(.+)$/);
@@ -533,6 +689,60 @@
                     'desh': 'देश', 'videsh': 'विदेश', 'rajya': 'राज्य', 'bhopal': 'भोपाल',
                     'crime': 'अपराध', 'khel': 'खेल', 'rajniti': 'राजनीति', 'manoranjan': 'मनोरंजन', 'vyapar': 'व्यापार', 'itihas': 'इतिहास'
                 };
+                const authorProfiles = await fetchAuthorProfiles();
+                const normalizeAuthorName = (value = '') => String(value || '')
+                    .normalize('NFKC')
+                    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+                    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toLowerCase();
+                const matchAuthorProfile = (value) => {
+                    const normalized = normalizeAuthorName(value);
+                    if (!normalized) return null;
+                    return authorProfiles.find(a => {
+                        if (!a || !a.name) return false;
+                        const profileName = normalizeAuthorName(a.name);
+                        const profileSlug = normalizeAuthorName((a.slug || '').replace(/-/g, ' '));
+                        return profileName === normalized || profileSlug === normalized || profileName.includes(normalized) || normalized.includes(profileName) || profileSlug.includes(normalized) || normalized.includes(profileSlug);
+                    }) || null;
+                };
+                const resolveAuthorMarkup = (authorName, fallbackLabel) => {
+                    if (!authorName) return fallbackLabel ? `<span class="news-detail-author">${fallbackLabel}</span>` : '';
+                    const match = matchAuthorProfile(authorName);
+                    if (match && match.slug) {
+                        return `<a href="/authors/${encodeURIComponent(match.slug)}" class="news-detail-author-link">${match.name}</a>`;
+                    }
+                    return `<span class="news-detail-author">${authorName}</span>`;
+                };
+                const authorMarkup = resolveAuthorMarkup(news.author, news.rssSource ? 'JKS News Desk' : '');
+                const authorCardName = news.rssSource ? 'JKS News Desk' : (news.author || 'वॉयस ऑफ क्रांति');
+                const authorCardMatch = !news.rssSource ? matchAuthorProfile(news.author) : null;
+                const authorCardMarkup = news.rssSource ? `<strong>JKS News Desk</strong>` : (authorCardMatch && authorCardMatch.slug
+                    ? `<a href="/authors/${encodeURIComponent(authorCardMatch.slug)}" class="news-detail-author-link" style="color:#1e293b;text-decoration:none;">${authorCardName}</a>`
+                    : `<strong>${authorCardName}</strong>`);
+
+                if (keepSsrArticle) {
+                    const firstPhoto = (news.photos && news.photos.length > 0) ? news.photos[0] : 'https://voiceofkranti.com/og-banner.svg';
+                    window.currentNews = {
+                        heading: news.heading,
+                        content: news.content,
+                        photos: news.photos || (news.photo ? [news.photo] : []),
+                        date: news.formattedDate,
+                        author: news.author,
+                        url: window.location.href
+                    };
+                    window.newsPhotos = news.photos || (news.photo ? [news.photo] : []);
+                    document.getElementById('page-title')?.setAttribute('content', 'वॉयस ऑफ क्रांति | ' + news.heading);
+                    document.getElementById('meta-description')?.setAttribute('content', (news.content || '').replace(/<[^>]+>/g, '').slice(0, 155).trim());
+                    document.getElementById('link-canonical')?.setAttribute('href', (news.slug ? 'https://voiceofkranti.com/news/' + news.slug : 'https://voiceofkranti.com/news-detail.html?id=' + (news.id || news._id)));
+                    document.getElementById('og-image')?.setAttribute('content', firstPhoto);
+                    document.getElementById('og-image-secure')?.setAttribute('content', firstPhoto);
+                    document.getElementById('twitter-image')?.setAttribute('content', firstPhoto);
+                    incrementViewCount(resolvedId);
+                    loadRelatedArticles(resolvedId);
+                    return;
+                }
                 
                 newsDetail.innerHTML = `
                     <article class="news-detail-article">
@@ -545,7 +755,7 @@
                         ${news.category ? `<a href="/?category=${news.category}" class="category-badge category-badge-large" style="text-decoration:none;cursor:pointer;">${categoryNames[news.category]}</a>` : ''}
                         <h1 class="news-detail-title">${news.heading}</h1>
                         <div class="news-detail-meta">
-                            ${(news.author || news.rssSource) ? `<span class="news-detail-author">${news.rssSource ? 'JKS News Desk' : news.author}</span>` : ''}
+                            ${(news.author || news.rssSource) ? `<span class="news-detail-author">${news.rssSource ? '<strong>JKS News Desk</strong>' : authorMarkup}</span>` : ''}
                             <span class="news-detail-date">${news.formattedDate} &nbsp;·&nbsp; ${timeAgo(news.date)}</span>                            ${readTimeHtml}
                         </div>
                         <a href="https://whatsapp.com/channel/0029VbDoE1QDZ4LThGXdEJ2D" target="_blank" rel="noopener noreferrer" class="wa-channel-banner">
@@ -589,7 +799,7 @@
                         </div>` : ''}
                         <div class="news-detail-content">
                             ${news.content ? `<div class="news-detail-text">${renderContent(news.content, bulletMode)}</div>` : '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>'}
-                            ${(news.rssSource && news.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: <strong>${news.rssSource}</strong></p>` : ''}
+                            ${(news.rssSource && news.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: ${news.rssLink ? `<a href="${news.rssLink}" target="_blank" rel="noopener noreferrer">${news.rssSource}</a>` : `<strong>${news.rssSource}</strong>`}</p>` : ''}
                             ${(news.rssLink && news.rssSource !== 'PB SHABD') ? `
                             <div class="read-full-article">
                                 <a href="${news.rssLink}" target="_blank" rel="noopener noreferrer" class="read-full-btn">
@@ -629,7 +839,7 @@
                         <div class="nd-author-card">
                             <div class="nd-author-avatar">${(news.rssSource ? 'J' : ((news.author||'J').charAt(0))).toUpperCase()}</div>
                             <div class="nd-author-info">
-                                <strong>${news.rssSource ? 'JKS News Desk' : (news.author || 'JKS News Desk')}</strong>
+                                ${authorCardMarkup}
                                 <p>वॉयस ऑफ क्रांति की संपादकीय टीम आपके लिए भोपाल, मध्यप्रदेश और देश की सटीक और विश्वसनीय समाचार प्रस्तुत करती है।</p>
                             </div>
                         </div>
@@ -645,6 +855,10 @@
                     author: news.author,
                     url: window.location.href
                 };
+
+                if (window.twttr && window.twttr.widgets) {
+                    window.twttr.widgets.load();
+                }
 
                 // ── Dynamic SEO tags ────────────────────────────────────────
                 const pageUrl = news.slug
@@ -729,6 +943,17 @@
                         </div>
                     </div>
                 `;
+            }
+        }
+
+        async function fetchAuthorProfiles() {
+            try {
+                const response = await fetch('/api/authors', { credentials: 'same-origin' });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return Array.isArray(data) ? data : [];
+            } catch (error) {
+                return [];
             }
         }
 

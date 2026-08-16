@@ -105,6 +105,8 @@
                 <a href="/" class="nav-link">🏠 Home</a>
                 <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
+                <a href="/latest" class="nav-link nav-link-latest">🟢 लाइव फीड</a>
+                <a href="/latest?source=pb" class="nav-link nav-link-pb">📡 प्रसार भारती</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -274,9 +276,24 @@
     let allArticles = [], shownCount = 0;
     const PAGE_SIZE = 20;
 
+    function stripEmbeddedMediaFromPreview(text) {
+        if (!text) return '';
+        return String(text)
+            .replace(/\r/g, '')
+            .split('\n')
+            .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(line.trim()))
+            .join('\n')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/https?:\/\/[^\s]+/gi, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160);
+    }
+
     function renderCard(a) {
         const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
         const img = a.photos && a.photos.length ? optimizeCloudinaryUrl(a.photos[0]) : null;
+        const previewText = stripEmbeddedMediaFromPreview(a.content || '');
         return `<a href="${url}" class="news-card">
             ${img
                 ? `<img src="${img}" alt="${a.heading}" loading="lazy">`
@@ -287,6 +304,7 @@
                     ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
                 </div>
                 <p class="news-card-title">${a.heading}</p>
+                ${previewText ? `<p class="news-card-preview">${previewText}</p>` : ''}
                 <span class="news-card-date" data-date="${a.date}">⏰ ${timeAgo(a.date)}</span>
             </div>
         </a>`;

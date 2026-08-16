@@ -184,10 +184,12 @@
                 </a>
             </div>
             <nav>
-                <a href="/" class="nav-link">🏠 Home</a>
+                <a href="/" class="nav-link">Home</a>
                 <a href="/epaper" class="nav-link nav-link-epaper">ई-पेपर</a>
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
-                <a href="/latest" class="nav-link nav-link-latest active">🟢 लाइव फीड</a>
+                <a href="/latest" class="nav-link nav-link-latest active">लाइव फीड</a>
+                <a href="/latest?source=pb" class="nav-link nav-link-pb">प्रसार भारती</a>
+                <a href="/latest?full=true" class="nav-link nav-link-full">पूर्ण खबरें</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -220,8 +222,8 @@
     </div>
 
     <div class="lf-hero">
-        <h1><span class="lf-live-dot"></span>लाइव न्यूज़ फीड</h1>
-        <p>ताज़ातरीन खबरें — आगमन समय के अनुसार &nbsp;·&nbsp; हर 60 सेकंड में ऑटो-रिफ्रेश</p>
+        <h1><span class="lf-live-dot"></span><span id="feedHeroTitle">लाइव न्यूज़ फीड</span></h1>
+        <p id="feedHeroSubtitle">ताज़ातरीन खबरें — आगमन समय के अनुसार · हर 60 सेकंड में ऑटो-रिफ्रेश</p>
     </div>
 
     <div class="lf-controls">
@@ -237,6 +239,23 @@
     </div>
 
     <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const pbOnly = urlParams.get('source') === 'pb';
+    const fullOnly = urlParams.get('full') === 'true' || urlParams.get('full') === '1';
+
+    const feedHeroTitle = document.getElementById('feedHeroTitle');
+    const feedHeroSubtitle = document.getElementById('feedHeroSubtitle');
+    if (feedHeroTitle) {
+        feedHeroTitle.textContent = pbOnly ? 'प्रसार भारती फीड' : fullOnly ? 'फुल न्यूज़ फीड' : 'लाइव न्यूज़ फीड';
+    }
+    if (feedHeroSubtitle) {
+        feedHeroSubtitle.textContent = pbOnly
+            ? 'प्रसार भारती समाचार — आगमन समय के अनुसार'
+            : fullOnly
+                ? 'केवल full-tagged लेखों की सूची — पूर्ण समाचार फीड'
+                : 'ताज़ातरीन खबरें — आगमन समय के अनुसार · हर 60 सेकंड में ऑटो-रिफ्रेश';
+    }
+
     const categoryNames = {
         desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल',
         crime:'अपराध', khel:'खेल', rajniti:'राजनीति',
@@ -268,18 +287,66 @@
     }
 
     let refreshTimer = null, countdown = 60;
+    const PAGE_SIZE = 25;
+    let currentSkip = 0;
+    let hasMore = true;
+    let isLoadingMore = false;
+    let allArticles = [];
 
     async function loadFeed(manual) {
-        if (manual) { clearInterval(refreshTimer); countdown = 60; startCountdown(); }
+        if (isLoadingMore || (!manual && !hasMore)) return;
+        if (manual) {
+            clearInterval(refreshTimer);
+            countdown = 60;
+            currentSkip = 0;
+            allArticles = [];
+            hasMore = true;
+            startCountdown();
+        }
+        isLoadingMore = true;
         try {
-            const res = await fetch('/api/news', { credentials: 'same-origin' });
+            const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(currentSkip), hours: '24' });
+            if (pbOnly) params.set('source', 'pb');
+            if (fullOnly) params.set('full', 'true');
+            const res = await fetch('/api/news?' + params.toString(), { credentials: 'same-origin' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
-            const articles = await res.json();
-            // already sorted by date desc from server
-            renderFeed(articles);
-            document.getElementById('totalCount').textContent = articles.length + ' खबरें';
+            let articles = await res.json();
+            if (!Array.isArray(articles)) articles = [];
+            const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+            articles = articles.filter(a => {
+                const when = new Date(a.date);
+                if (Number.isNaN(when.getTime())) return false;
+                if (when.getTime() < cutoff) return false;
+                if (pbOnly) {
+                    const source = String(a.rssSource || a.author || '').trim().toUpperCase();
+                    return source === 'PB SHABD' || source === 'PB SHABD ' || source === 'PBSHABD';
+                }
+                if (fullOnly) {
+                    return !!a.full;
+                }
+                return true;
+            });
+            if (manual || currentSkip === 0) {
+                allArticles = articles.slice();
+            } else {
+                allArticles = allArticles.concat(articles);
+            }
+            currentSkip += articles.length;
+            hasMore = articles.length >= PAGE_SIZE;
+            if (pbOnly) {
+                document.getElementById('refreshInfo').textContent = 'प्रसार भारती समाचार — आगमन समय के अनुसार';
+            } else if (fullOnly) {
+                document.getElementById('refreshInfo').textContent = 'पूर्ण खबरें — केवल full-tagged लेख';
+            } else {
+                document.getElementById('refreshInfo').textContent = 'लोड हो रहा है...';
+            }
+            allArticles.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+            renderFeed(allArticles);
+            document.getElementById('totalCount').textContent = allArticles.length + (pbOnly ? ' प्रसार भारती खबरें' : fullOnly ? ' पूर्ण खबरें' : ' खबरें');
         } catch(e) {
             document.getElementById('feed').innerHTML = '<div class="lf-empty">लोड करने में त्रुटि हुई। रिफ्रेश करें।</div>';
+        } finally {
+            isLoadingMore = false;
         }
     }
 
@@ -313,6 +380,7 @@
             const url = a.slug ? '/news/' + a.slug : '/news-detail.html?id=' + a.id;
             const img = optimizeImg((a.photos && a.photos[0]) || a.photo);
 
+            const filterLabel = pbOnly ? 'प्रसार भारती' : fullOnly ? 'पूर्ण खबरें' : 'लाइव';
             html += `<div class="lf-item${isFresh ? ' fresh' : ''}" onclick="location.href='${url}'">
                 <div class="lf-thumb">
                     ${img ? `<img src="${img}" alt="" loading="lazy">` : '<div class="lf-thumb-placeholder">NEWS</div>'}
@@ -321,9 +389,11 @@
                     <div class="lf-meta">
                         ${cat ? `<span class="lf-cat">${cat}</span>` : ''}
                         ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                        ${a.full ? '<span class="nc-pb-badge" style="background:#ecfdf5;color:#166534;border-color:#bbf7d0;">📘 FULL</span>' : ''}
                         ${isFresh ? '<span class="lf-new">नया</span>' : ''}
                         <span class="lf-time">${timeAgo(a.date)}</span>
                         <span class="lf-exact">(${exactTime(a.date)})</span>
+                        ${pbOnly || fullOnly ? `<span class="lf-source">${filterLabel}</span>` : ''}
                     </div>
                     <div class="lf-title">${a.heading}</div>
                     ${a.rssSource && a.rssSource !== 'PB SHABD' ? `<div class="lf-source">स्रोत: ${a.rssSource}</div>` : ''}
@@ -342,9 +412,16 @@
             if (el) el.textContent = 'अगला रिफ्रेश: ' + countdown + ' सेकंड में';
             if (countdown <= 0) {
                 clearInterval(refreshTimer);
-                loadFeed(false).then(() => startCountdown());
+                loadFeed(true).then(() => startCountdown());
             }
         }, 1000);
+    }
+
+    function handleScroll() {
+        const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 500;
+        if (nearBottom && !isLoadingMore && hasMore) {
+            loadFeed(false);
+        }
     }
 
     // Date display
@@ -357,7 +434,8 @@
         var hd = document.getElementById('headerDate'); if (hd) hd.textContent = '📅 ' + str;
     })();
 
-    loadFeed(false);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    loadFeed(true);
     startCountdown();
     </script>
 </body>

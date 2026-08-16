@@ -94,14 +94,45 @@
                         <button type="button" onclick="formatText('h3')" class="format-btn" title="Sub-heading (###)" style="font-weight:600;font-size:0.85rem;">H3</button>
                         <span style="color: #718096; font-size: 0.85rem; margin-left: 10px;">उपशीर्षक के लिए H2/H3 बटन दबाएं — या लाइन शुरू में <code>## </code> लिखें</span>
                     </div>
+                    <p style="margin: 0 0 8px; color: #4a5568; font-size: 0.82rem; line-height: 1.6;">
+                        मीडिया एम्बेड: <code>PHOTO:https://example.com/a.jpg | फोटो का छोटा विवरण</code><br>
+                        वीडियो: <code>VIDEO:https://youtu.be/xxxxx | वीडियो का शीर्षक</code><br>
+                        X पोस्ट: <code>X:https://x.com/username/status/1234567890 | पोस्ट का छोटा विवरण</code>
+                    </p>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; align-items:center;">
+                        <input id="inlineMediaUrl" type="url" placeholder="https://public-image-url.com/photo.jpg" style="flex:1; min-width:220px; padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; font-size:0.9rem;">
+                        <select id="inlineMediaType" style="padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; font-size:0.9rem;">
+                            <option value="photo">PHOTO</option>
+                            <option value="video">VIDEO</option>
+                            <option value="x">X</option>
+                        </select>
+                        <button type="button" id="insertInlineMediaBtn" class="btn btn-primary btn-small" style="background:#2b6cb0;">Insert</button>
+                    </div>
                     <textarea 
                         id="content" 
                         name="content" 
                         required 
-                        placeholder="समाचार का पूरा विवरण यहाँ लिखें...&#10;&#10;उपशीर्षक के लिए: ## उपशीर्षक यहाँ लिखें&#10;(हर उपशीर्षक अपनी अलग लाइन पर होना चाहिए)"
+                        placeholder="समाचार का पूरा विवरण यहाँ लिखें...&#10;&#10;उपशीर्षक के लिए: ## उपशीर्षक यहाँ लिखें&#10;फोटो के लिए: PHOTO:https://example.com/image.jpg | फोटो का छोटा विवरण&#10;वीडियो के लिए: VIDEO:https://youtu.be/abcd1234 | वीडियो का छोटा विवरण&#10;X पोस्ट के लिए: X:https://x.com/voiceofkranti/status/1234567890 | पोस्ट का छोटा विवरण"
                         class="form-input"
                         rows="12"
                     ></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="cloudinaryMediaInput">Cloudinary फोटो अपलोड करें</label>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
+                        <input type="file" id="cloudinaryMediaInput" accept="image/*" style="flex:1; min-width:220px; padding:0.55rem 0.7rem; border:1px solid #cbd5e0; border-radius:8px; background:#fff;">
+                        <button type="button" id="uploadCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#2f855a;">Upload to Cloudinary</button>
+                    </div>
+                    <div id="cloudinaryMediaStatus" style="font-size:0.82rem; color:#4a5568; margin-bottom:8px; min-height:18px;"></div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                        <input id="cloudinaryMediaUrl" type="text" readonly placeholder="Cloudinary URL will appear here" style="flex:1; min-width:220px; padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; background:#f8fafc; font-size:0.9rem;">
+                        <button type="button" id="copyCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#805ad5;">Copy URL</button>
+                        <button type="button" id="useCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#2b6cb0;">Use in article</button>
+                    </div>
+                    <div id="cloudinaryMediaPreview" style="display:none; margin-top:10px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; background:#fff; max-width:260px;">
+                        <img id="cloudinaryMediaPreviewImage" src="" alt="Uploaded preview" style="display:block; width:100%; height:160px; object-fit:cover;">
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -173,6 +204,28 @@
             </form>
 
             <div id="message" class="message"></div>
+        </section>
+
+        <section class="admin-section">
+            <h2 class="section-title">✍️ लेखक जोड़ें</h2>
+            <form id="authorForm" class="news-form">
+                <div class="form-group">
+                    <label for="authorName">लेखक का नाम *</label>
+                    <input type="text" id="authorName" name="authorName" required placeholder="जैसे: Maroof Ahmed Khan" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="authorPhoto">लेखक की फोटो URL</label>
+                    <input type="url" id="authorPhoto" name="authorPhoto" placeholder="https://example.com/author.jpg" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="authorDescription">लेखक का परिचय</label>
+                    <textarea id="authorDescription" name="authorDescription" rows="4" placeholder="लेखक के बारे में संक्षिप्त परिचय लिखें..." class="form-input"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <span id="authorSubmitText">लेखक जोड़ें</span>
+                </button>
+            </form>
+            <div id="authorMessage" class="message" style="display:none;"></div>
         </section>
 
         <!-- ── URL Scraper Tool ──────────────────────────────────────────── -->
@@ -322,6 +375,12 @@
             <div id="newsFilterBar" style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap; margin:0.75rem 0 0.5rem; padding:0.65rem 0.85rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
                 <input id="newsSearch" type="text" placeholder="शीर्षक खोजें…" oninput="applyNewsFilter()"
                     style="flex:1; min-width:160px; padding:0.38rem 0.7rem; border:1px solid #cbd5e0; border-radius:6px; font-size:0.88rem; font-family:inherit;">
+                <select id="newsSort" onchange="applyNewsFilter()" style="padding:0.38rem 0.55rem; border:1px solid #cbd5e0; border-radius:6px; font-size:0.88rem; font-family:inherit; background:#fff;">
+                    <option value="date-desc">नवीनतम पहले</option>
+                    <option value="date-asc">पुराने पहले</option>
+                    <option value="category">वर्ग अनुसार</option>
+                    <option value="author">लेखक अनुसार</option>
+                </select>
                 <button onclick="setAuthorFilter('all')" id="filterAll" class="btn btn-primary btn-small" style="background:#4a5568;">सभी</button>
                 <button onclick="setAuthorFilter('maroof')" id="filterMaroof" class="btn btn-primary btn-small" style="background:#1e40af;">✍️ मारूफ के लेख</button>
                 <button onclick="setAuthorFilter('others')" id="filterOthers" class="btn btn-primary btn-small" style="background:#718096;">अन्य समाचार</button>
@@ -506,21 +565,131 @@
         const passwordSubmitText = document.getElementById('passwordSubmitText');
         const passwordLoadingText = document.getElementById('passwordLoadingText');
         const contentTextarea = document.getElementById('content');
+        const cloudinaryMediaInput = document.getElementById('cloudinaryMediaInput');
+        const cloudinaryMediaUrl = document.getElementById('cloudinaryMediaUrl');
+        const cloudinaryMediaStatus = document.getElementById('cloudinaryMediaStatus');
         let allNewsData = [];
         let activeAuthorFilter = 'all';
 
-        function applyNewsFilter() {
-            const q = (document.getElementById('newsSearch').value || '').trim().toLowerCase();
-            let data = allNewsData;
+        async function uploadToCloudinaryFromAdmin() {
+            const file = cloudinaryMediaInput.files && cloudinaryMediaInput.files[0];
+            if (!file) {
+                cloudinaryMediaStatus.textContent = 'पहले फोटो चुनें।';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('mediaFile', file);
+
+            cloudinaryMediaStatus.textContent = 'Cloudinary पर अपलोड हो रहा है...';
+            try {
+                const response = await fetch('/api/media/upload-cloudinary', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    body: formData
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'Cloudinary upload failed');
+                }
+
+                cloudinaryMediaUrl.value = result.url;
+                document.getElementById('inlineMediaUrl').value = result.url;
+                document.getElementById('inlineMediaType').value = 'photo';
+                document.getElementById('cloudinaryMediaPreviewImage').src = result.url;
+                document.getElementById('cloudinaryMediaPreview').style.display = 'block';
+                cloudinaryMediaStatus.textContent = 'Cloudinary URL तैयार है।';
+                cloudinaryMediaInput.value = '';
+            } catch (error) {
+                cloudinaryMediaStatus.textContent = error.message || 'Upload failed';
+                console.error(error);
+            }
+        }
+
+        document.getElementById('uploadCloudinaryMediaBtn').addEventListener('click', uploadToCloudinaryFromAdmin);
+        document.getElementById('copyCloudinaryMediaBtn').addEventListener('click', async () => {
+            if (!cloudinaryMediaUrl.value.trim()) {
+                alert('पहले Cloudinary फोटो अपलोड करें।');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(cloudinaryMediaUrl.value.trim());
+                cloudinaryMediaStatus.textContent = 'URL copied to clipboard.';
+            } catch (error) {
+                cloudinaryMediaStatus.textContent = 'Copy failed — URL is still visible in the box.';
+            }
+        });
+        document.getElementById('useCloudinaryMediaBtn').addEventListener('click', () => {
+            if (!cloudinaryMediaUrl.value.trim()) {
+                alert('पहले Cloudinary फोटो अपलोड करें।');
+                return;
+            }
+            document.getElementById('inlineMediaUrl').value = cloudinaryMediaUrl.value.trim();
+            document.getElementById('inlineMediaType').value = 'photo';
+            insertMediaSnippet();
+        });
+
+        function sortNewsData(data) {
+            const sortKey = document.getElementById('newsSort')?.value || 'date-desc';
+            const sorted = [...data];
+
+            switch (sortKey) {
+                case 'date-asc':
+                    sorted.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+                    break;
+                case 'category':
+                    sorted.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (new Date(b.date || 0) - new Date(a.date || 0)));
+                    break;
+                case 'author':
+                    sorted.sort((a, b) => (a.author || '').localeCompare(b.author || '') || (new Date(b.date || 0) - new Date(a.date || 0)));
+                    break;
+                case 'date-desc':
+                default:
+                    sorted.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                    break;
+            }
+
+            return sorted;
+        }
+
+        async function applyNewsFilter() {
+            const q = (document.getElementById('newsSearch').value || '').trim();
+            let data = allNewsData || [];
+
             if (activeAuthorFilter === 'maroof') {
                 data = data.filter(n => (n.author || '').toLowerCase().includes('maroof'));
             } else if (activeAuthorFilter === 'others') {
                 data = data.filter(n => !(n.author || '').toLowerCase().includes('maroof'));
             }
-            if (q) {
-                data = data.filter(n => (n.heading || '').toLowerCase().includes(q));
+
+            if (!q) {
+                renderNewsList(sortNewsData(data));
+                return;
             }
-            renderNewsList(data);
+
+            const normalizedQuery = q.toLowerCase();
+            if (normalizedQuery.length < 2) {
+                renderNewsList(sortNewsData(data.filter(n => (n.heading || '').toLowerCase().includes(normalizedQuery))));
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/news/search?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+                let searchResults = await response.json();
+                if (activeAuthorFilter === 'maroof') {
+                    searchResults = searchResults.filter(n => (n.author || '').toLowerCase().includes('maroof'));
+                } else if (activeAuthorFilter === 'others') {
+                    searchResults = searchResults.filter(n => !(n.author || '').toLowerCase().includes('maroof'));
+                }
+                renderNewsList(sortNewsData(searchResults));
+            } catch (error) {
+                console.error('Full DB search failed:', error);
+                const fallback = data.filter(n => (n.heading || '').toLowerCase().includes(normalizedQuery));
+                renderNewsList(sortNewsData(fallback));
+            }
         }
 
         function setAuthorFilter(type) {
@@ -605,6 +774,32 @@
             textarea.selectionStart = start + cursorOffset;
             textarea.selectionEnd = start + cursorOffset + selectedText.length;
         }
+
+        function insertMediaSnippet() {
+            const urlField = document.getElementById('inlineMediaUrl');
+            const typeField = document.getElementById('inlineMediaType');
+            const rawValue = (urlField.value || '').trim();
+            if (!rawValue) {
+                alert('कृपया public image/video URL paste करें।');
+                urlField.focus();
+                return;
+            }
+
+            const normalizedUrl = rawValue.match(/https?:\/\/[^\s]+/i)?.[0] || rawValue;
+            const chosenType = typeField.value;
+            const caption = prompt('कैप्शन लिखें (वैकल्पिक):', '');
+            const prefix = chosenType === 'photo' ? 'PHOTO' : chosenType === 'video' ? 'VIDEO' : 'X';
+            const snippet = caption ? `${prefix}:${normalizedUrl} | ${caption}` : `${prefix}:${normalizedUrl}`;
+
+            const textarea = contentTextarea;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            textarea.setRangeText((textarea.value && !textarea.value.endsWith('\n') ? '\n' : '') + snippet + '\n', start, end, 'end');
+            urlField.value = '';
+            textarea.focus();
+        }
+
+        document.getElementById('insertInlineMediaBtn').addEventListener('click', insertMediaSnippet);
 
         // Keyboard shortcuts
         contentTextarea.addEventListener('keydown', function(e) {
@@ -691,6 +886,46 @@
                     };
                     reader.readAsDataURL(file);
                 });
+            }
+        });
+
+        // Author creation form
+        const authorForm = document.getElementById('authorForm');
+        const authorMessage = document.getElementById('authorMessage');
+
+        function showAuthorMessage(text, type) {
+            authorMessage.textContent = text;
+            authorMessage.className = `message message-${type}`;
+            authorMessage.style.display = 'block';
+            setTimeout(() => {
+                authorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        authorForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('authorName').value.trim();
+            const photo = document.getElementById('authorPhoto').value.trim();
+            const description = document.getElementById('authorDescription').value.trim();
+
+            if (!name) {
+                showAuthorMessage('लेखक का नाम आवश्यक है।', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/authors', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, photo, description })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to create author');
+                showAuthorMessage('लेखक सफलतापूर्वक जोड़ दिया गया है।', 'success');
+                authorForm.reset();
+            } catch (error) {
+                showAuthorMessage(error.message || 'लेखक जोड़ने में त्रुटि हुई।', 'error');
             }
         });
 
@@ -815,9 +1050,11 @@
                     const photos = news.photos || (news.photo ? [news.photo] : []);
                     const firstPhoto = optimizeCloudinaryUrl(photos[0]);
                     const hasMultiplePhotos = photos.length > 1;
+                    const publicUrl = news.slug ? `/news/${news.slug}` : `/news-detail.html?id=${news.id}`;
+                    const categoryHref = news.category ? `/?category=${news.category}` : '/';
                     
                     return `
-                    <div class="news-card">
+                    <div class="news-card" onclick="window.open('${publicUrl}', '_blank');" style="cursor:pointer;">
                         ${firstPhoto ? `
                             <div style="position: relative;">
                                 <img src="${firstPhoto}" alt="${news.heading}" class="news-image">
@@ -831,18 +1068,16 @@
                         `}
                         <div class="news-content">
                             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
-                                ${news.category ? `<span class="category-badge">${categoryNames[news.category] || news.category}</span>` : ''}
+                                ${news.category ? `<a href="${categoryHref}" target="_blank" onclick="event.stopPropagation();" class="category-badge" style="text-decoration:none;">${categoryNames[news.category] || news.category}</a>` : ''}
                                 ${news.isPermanent ? `<span style="background:#d97706;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">📌 स्थायी</span>` : ''}
                                 ${news.isOriginal ? `<span style="background:#16a34a;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">✍️ मूल लेख</span>` : ''}
                             </div>
-                            <h3 class="news-heading">${news.heading}</h3>
+                            <h3 class="news-heading" onclick="window.open('${publicUrl}', '_blank'); event.stopPropagation();" style="cursor:pointer;">${news.heading}</h3>
                             ${news.content ? `<p class="news-description">${news.content}</p>` : ''}
                             <p class="news-date">${news.formattedDate}${news.author ? ` | लेखक: ${news.author}` : ''}${news.views ? ` | 👁️ ${news.views} views` : ''}</p>
                             <div class="news-actions">
-                                <button onclick="editNews('${news.id}')" class="btn btn-primary btn-small">
-                                    संपादित करें
-                                </button>
-                                <button onclick="deleteNews('${news.id}')" class="btn btn-danger btn-small">हटाएं</button>
+                                <button onclick="event.stopPropagation(); editNews('${news.id}')" class="btn btn-primary btn-small">संपादित करें</button>
+                                <button onclick="event.stopPropagation(); deleteNews('${news.id}')" class="btn btn-danger btn-small">हटाएं</button>
                             </div>
                         </div>
                     </div>

@@ -10,6 +10,10 @@ const newsSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    full: {
+        type: Boolean,
+        default: false
+    },
     category: {
         type: String,
         required: true,

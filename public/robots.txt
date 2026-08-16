@@ -10,3 +10,4 @@ Disallow: /news-detail.html
 Sitemap: https://voiceofkranti.com/sitemap-index.xml
 Sitemap: https://voiceofkranti.com/sitemap.xml
 Sitemap: https://voiceofkranti.com/sitemap-news.xml
+Sitemap: https://voiceofkranti.com/news-sitemap.xml

@@ -64,7 +64,10 @@
         .epaper-card-date { font-size:.78rem; color:#ff6b00; font-weight:700; margin-bottom:.3rem; }
         .epaper-card-title { font-size:1rem; font-weight:700; color:#1a202c; line-height:1.35; margin-bottom:.4rem; }
         .epaper-card-edition { font-size:.8rem; color:#718096; }
-        .epaper-card-btn { display:block; width:100%; text-align:center; background:linear-gradient(135deg,#ff9933,#ff6b00); color:#fff; border:none; border-radius:0 0 10px 10px; padding:.65rem; font-size:.9rem; font-weight:700; cursor:pointer; }
+                .epaper-card-actions { display:flex; gap:.5rem; padding:0 .9rem .9rem; }
+        .epaper-card-btn, .epaper-share-btn { flex:1; display:block; width:100%; text-align:center; border:none; border-radius:10px; padding:.7rem .75rem; font-size:.9rem; font-weight:700; cursor:pointer; text-decoration:none; }
+        .epaper-card-btn { background:linear-gradient(135deg,#ff9933,#ff6b00); color:#fff; }
+        .epaper-share-btn { background:#eaf7ee; color:#166534; border:1px solid #9ad7b0; }
         .epaper-empty { text-align:center; padding:4rem 1rem; color:#718096; }
         .epaper-empty h3 { font-size:1.2rem; margin:0 0 .5rem; color:#4a5568; }
         /* ══ Full-screen Reader ══ */
@@ -234,6 +237,8 @@
         <span class="tb-div"></span>
         <!-- Download PDF -->
         <a id="dlPdfBtn" href="#" download class="tb-btn" title="PDF डाउनलोड करें">⬇ PDF</a>
+        <span class="tb-div"></span>
+        <button class="tb-btn" onclick="shareCurrentEPaper()" title="WhatsApp पर शेयर करें">📤 शेयर</button>
     </div>
 
     <!-- Crop action bar — appears when user selects an area -->
@@ -327,6 +332,76 @@ function getPathDateSlug() {
     return m ? m[1] : '';
 }
 
+function buildWhatsAppShareUrl(shareUrl, title) {
+    const text = `📖 ${title || 'ई-पेपर'}\n\n${shareUrl}`;
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+function setShareMeta({ title, url, imageDataUrl }) {
+    const finalTitle = title || 'ई-पेपर';
+    const finalUrl = url || `${location.origin}/epaper`;
+    const finalImage = imageDataUrl || 'https://voiceofkranti.com/favicon.ico';
+
+    const upsertMeta = (name, content, attr = 'property') => {
+        const selector = `${attr}="${name}"`;
+        let el = document.head.querySelector(`meta[${selector}]`);
+        if (!el) {
+            el = document.createElement('meta');
+            el.setAttribute(attr, name);
+            document.head.appendChild(el);
+        }
+        el.setAttribute('content', content);
+    };
+
+    upsertMeta('og:title', finalTitle);
+    upsertMeta('og:description', `वॉयस ऑफ क्रांति का ई-पेपर — ${finalTitle}`);
+    upsertMeta('og:url', finalUrl);
+    upsertMeta('og:image', finalImage);
+    upsertMeta('og:image:secure_url', finalImage);
+    upsertMeta('og:image:alt', finalTitle);
+    upsertMeta('twitter:card', 'summary_large_image');
+    upsertMeta('twitter:title', finalTitle);
+    upsertMeta('twitter:description', `वॉयस ऑफ क्रांति का ई-पेपर — ${finalTitle}`);
+    upsertMeta('twitter:image', finalImage);
+}
+
+async function captureIssuePreviewImage(pdfUrl) {
+    try {
+        const doc = await pdfjsLib.getDocument({ url: pdfUrl, withCredentials: false }).promise;
+        const page = await doc.getPage(1);
+        const viewport = page.getViewport({ scale: 1.1 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        return canvas.toDataURL('image/jpeg', 0.82);
+    } catch (err) {
+        console.warn('EPaper preview capture failed:', err.message || err);
+        return '';
+    }
+}
+
+function shareEPaper(shareUrl, title) {
+    const finalUrl = shareUrl || `${location.origin}/epaper`;
+    const finalTitle = title || 'ई-पेपर';
+    const waUrl = buildWhatsAppShareUrl(finalUrl, finalTitle);
+    if (navigator.share) {
+        navigator.share({
+            title: finalTitle,
+            text: `📖 ${finalTitle}\n${finalUrl}`,
+            url: finalUrl
+        }).catch(() => window.open(waUrl, '_blank', 'noopener,noreferrer'));
+        return;
+    }
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+}
+
+window.shareCurrentEPaper = function() {
+    const shareUrl = getPathDateSlug() ? `${location.origin}/epaper/${getPathDateSlug()}` : `${location.origin}/epaper`;
+    const title = titleEl.textContent || 'ई-पेपर';
+    shareEPaper(shareUrl, title);
+};
+
 function dateLabelFromSlug(slug) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slug || '')) return '';
     const d = new Date(`${slug}T00:00:00`);
@@ -337,6 +412,9 @@ function dateLabelFromSlug(slug) {
 // ── Open / close ──────────────────────────────────────────────────────────────
 window.openReader = async (url, title, dateSlug = '') => {
     titleEl.textContent = title || 'ई-पेपर';
+    const issueUrl = dateSlug ? `${location.origin}/epaper/${dateSlug}` : `${location.origin}/epaper`;
+    const issuePreview = await captureIssuePreviewImage(url);
+    setShareMeta({ title: title || 'ई-पेपर', url: issueUrl, imageDataUrl: issuePreview || '' });
     dlPdfBtn.href = url;
     dlPdfBtn.download = (title || 'epaper') + '.pdf';
     currentEditionDateText = dateLabelFromSlug(dateSlug) || new Date().toLocaleDateString('hi-IN', { day:'numeric', month:'long', year:'numeric' });
@@ -798,9 +876,10 @@ async function loadCards() {
         list.forEach(p => {
             const ds = new Date(p.publishDate).toLocaleDateString('hi-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
             const dateSlug = p.dateSlug || toDateSlug(p.publishDate);
+            const shareUrl = `${location.origin}/epaper/${dateSlug}`;
             const c  = document.createElement('div'); c.className='epaper-card';
             const thumbId = `thumb-${Math.random().toString(36).slice(2, 10)}`;
-            c.innerHTML=`<div class="epaper-card-thumb"><div class="epaper-thumb-loading" id="${thumbId}-loading">थंबनेल लोड हो रही है…</div><div class="page-preview" id="${thumbId}-fallback"><div class="page-preview-line bold"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div><div class="page-preview-line"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div></div><canvas class="epaper-thumb-canvas" id="${thumbId}" aria-label="ePaper thumbnail"></canvas></div><div class="epaper-card-body"><div class="epaper-card-date">📅 ${ds}</div><div class="epaper-card-title">${eH(p.title)}</div>${p.edition?`<div class="epaper-card-edition">📍 ${eH(p.edition)}</div>`:''}</div><a href="/epaper/${eA(dateSlug)}" class="epaper-card-btn" onclick="event.preventDefault();openReader('${eA(p.pdfUrl)}','${eA(p.title)}','${eA(dateSlug)}')">📖 पढ़ें</a>`;
+            c.innerHTML=`<div class="epaper-card-thumb"><div class="epaper-thumb-loading" id="${thumbId}-loading">थंबनेल लोड हो रही है…</div><div class="page-preview" id="${thumbId}-fallback"><div class="page-preview-line bold"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div><div class="page-preview-line"></div><div class="page-preview-line"></div><div class="page-preview-line short"></div></div><canvas class="epaper-thumb-canvas" id="${thumbId}" aria-label="ePaper thumbnail"></canvas></div><div class="epaper-card-body"><div class="epaper-card-date">📅 ${ds}</div><div class="epaper-card-title">${eH(p.title)}</div>${p.edition?`<div class="epaper-card-edition">📍 ${eH(p.edition)}</div>`:''}</div><div class="epaper-card-actions"><a href="/epaper/${eA(dateSlug)}" class="epaper-card-btn" onclick="event.preventDefault();openReader('${eA(p.pdfUrl)}','${eA(p.title)}','${eA(dateSlug)}')">📖 पढ़ें</a><button type="button" class="epaper-share-btn" onclick="shareEPaper('${eA(shareUrl)}','${eA(p.title)}')">📤 शेयर</button></div>`;
             grid.appendChild(c);
             renderCardThumbnailFromPdf(p.pdfUrl, thumbId).catch(() => {});
         });
