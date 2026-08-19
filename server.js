@@ -2742,7 +2742,6 @@ app.get('/authors/:slug', async (req, res) => {
           <p class="founder-designation">लेखक — वॉयस ऑफ क्रांति</p>
           <p>${description}</p>
           <div class="founder-stats">
-            <div class="founder-stat"><span class="founder-stat-num">${authorName.length}</span><span class="founder-stat-lbl">अक्षर</span></div>
             <div class="founder-stat"><span class="founder-stat-num">LIVE</span><span class="founder-stat-lbl">रिपोर्टिंग</span></div>
             <div class="founder-stat"><span class="founder-stat-num">24/7</span><span class="founder-stat-lbl">अपडेट</span></div>
           </div>
