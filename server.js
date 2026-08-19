@@ -415,6 +415,74 @@ function timeAgoLabel(dateVal) {
     return Math.floor(diff / 86400) + ' दिन पहले';
 }
 
+// Render first 20 articles as crawlable HTML for Google News discovery.
+// JS replaces this on client-side load; crawlers see real headlines + links.
+function renderHomepageSSR(articles, catId) {
+    const CAT_NAMES = { desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल', crime:'अपराध', khel:'खेल', rajniti:'राजनीति', manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास' };
+    const CAT_ORDER = { desh:1, crime:2, rajniti:3, bhopal:4, rajya:5, videsh:6, khel:7, vyapar:8, manoranjan:9, itihas:10 };
+
+    let sorted = articles.filter(a => !a.isOriginal).slice();
+    if (catId) {
+        sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+    } else {
+        sorted.sort((a, b) => {
+            const ca = CAT_ORDER[a.category] || 99, cb = CAT_ORDER[b.category] || 99;
+            return ca !== cb ? ca - cb : new Date(b.date) - new Date(a.date);
+        });
+    }
+    const items = sorted.slice(0, 20);
+    if (!items.length) return '';
+
+    const cardImg = (a, eager) => {
+        const src = a.photos && a.photos.length ? optimizeCloudinaryUrlForCard(a.photos[0]) : null;
+        if (!src) return '';
+        return `<img src="${escapeHtml(src)}" alt="${escapeHtml(a.heading || '')}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} style="width:100%;height:100%;object-fit:cover;">`;
+    };
+
+    const lead = items[0];
+    const feats = items.slice(1, 5);
+    const list  = items.slice(5);
+
+    const leadUrl = lead.slug ? `/news/${lead.slug}` : `/news-detail.html?id=${lead.id}`;
+    let html = `<div class="nc-block-label">मुख्य समाचार</div>
+<article class="nc-lead" onclick="window.location.href='${leadUrl}'">
+  <div class="nc-lead-img">${cardImg(lead, true)}</div>
+  <div class="nc-lead-body">
+    ${CAT_NAMES[lead.category] ? `<span class="nc-cat">${CAT_NAMES[lead.category]}</span>` : ''}
+    <a href="${leadUrl}" style="text-decoration:none;color:inherit;"><h2 class="nc-lead-title">${escapeHtml(lead.heading || 'समाचार')}</h2></a>
+  </div>
+</article>`;
+
+    if (feats.length) {
+        html += `<div class="nc-block-label" style="margin-top:.9rem;">प्रमुख खबरें</div><div class="nc-feat-row">`;
+        feats.forEach(a => {
+            const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
+            html += `<article class="nc-feat" onclick="window.location.href='${url}'">
+  <div class="nc-feat-img">${cardImg(a, false)}</div>
+  <div class="nc-feat-body">
+    <a href="${url}" style="text-decoration:none;color:inherit;"><h3 class="nc-feat-title">${escapeHtml(a.heading || 'समाचार')}</h3></a>
+  </div>
+</article>`;
+        });
+        html += `</div>`;
+    }
+
+    if (list.length) {
+        html += `<div class="nc-list">`;
+        list.forEach(a => {
+            const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
+            const imgSrc = a.photos && a.photos.length ? optimizeCloudinaryUrlForCard(a.photos[0]) : null;
+            html += `<article class="nc-item" onclick="window.location.href='${url}'">
+  ${imgSrc ? `<div class="nc-item-img"><img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(a.heading || '')}" loading="lazy" style="width:100%;height:100%;object-fit:cover;"></div>` : ''}
+  <div class="nc-item-body"><a href="${url}" style="text-decoration:none;color:inherit;"><h3 class="nc-item-title">${escapeHtml(a.heading || 'समाचार')}</h3></a></div>
+</article>`;
+        });
+        html += `</div>`;
+    }
+
+    return html;
+}
+
 function renderCategoryCardSSR(a, cat) {
     const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
     const img = a.photos && a.photos.length ? optimizeCloudinaryUrlForCard(a.photos[0]) : null;
@@ -2421,13 +2489,13 @@ app.get('/news/:slug', async (req, res) => {
                 : `<div class="news-detail-gallery"><div class="main-photo-container"><div class="news-img-placeholder" style="height:300px;"><span class="placeholder-word">NEWS</span><span class="placeholder-lines"><em></em><em></em><em></em></span></div></div></div>`;
 
             const categoryNames = { desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल', crime:'अपराध', khel:'खेल', rajniti:'राजनीति', manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास' };
-            const categoryMarkup = article.category ? `<a href="/?category=${article.category}" class="category-badge category-badge-large" style="text-decoration:none;cursor:pointer;">${categoryNames[article.category] || article.category}</a>` : '';
+            const categoryMarkup = article.category ? `<a href="/c/${article.category}" class="category-badge category-badge-large" style="text-decoration:none;cursor:pointer;">${categoryNames[article.category] || article.category}</a>` : '';
             const articleMarkup = `
                 <article class="news-detail-article" data-ssr-article="true">
                     <nav class="nd-breadcrumb">
                         <a href="/">होम</a>
                         <span class="nd-bc-sep">›</span>
-                        ${article.category ? `<a href="/?category=${article.category}">${categoryNames[article.category] || article.category}</a><span class="nd-bc-sep">›</span>` : ''}
+                        ${article.category ? `<a href="/c/${article.category}">${categoryNames[article.category] || article.category}</a><span class="nd-bc-sep">›</span>` : ''}
                         <span class="nd-bc-current">${esc(article.heading || 'समाचार')}</span>
                     </nav>
                     ${categoryMarkup}
@@ -2483,7 +2551,9 @@ app.get('/news/:slug', async (req, res) => {
                 "datePublished": isoPublished,
                 "dateModified": isoModified,
                 "image": [image],
-                "author": { "@type": "Person", "name": authorLabel, "url": "https://voiceofkranti.com/about.html" },
+                "author": matchedAuthor
+                    ? { "@type": "Person", "name": matchedAuthor.name, "url": `https://voiceofkranti.com/authors/${matchedAuthor.slug}` }
+                    : { "@type": "Person", "name": authorLabel, "url": "https://voiceofkranti.com/about.html" },
                 "publisher": {
                     "@type": "Organization",
                     "name": "वॉयस ऑफ क्रांति",
@@ -2492,7 +2562,8 @@ app.get('/news/:slug', async (req, res) => {
                     "logo": { "@type": "ImageObject", "url": "https://voiceofkranti.com/logo.svg", "width": 200, "height": 60 }
                 },
                 "inLanguage": "hi",
-                "isAccessibleForFree": true
+                "isAccessibleForFree": true,
+                "articleSection": categoryNames[article.category] || article.category || ''
             });
 
             // BreadcrumbList schema for search result breadcrumb display
@@ -2501,7 +2572,7 @@ app.get('/news/:slug', async (req, res) => {
             const breadcrumbItems = [
                 { "@type": "ListItem", "position": 1, "name": "होम", "item": "https://voiceofkranti.com/" }
             ];
-            if (catName) breadcrumbItems.push({ "@type": "ListItem", "position": 2, "name": catName, "item": `https://voiceofkranti.com/?category=${article.category}` });
+            if (catName) breadcrumbItems.push({ "@type": "ListItem", "position": 2, "name": catName, "item": `https://voiceofkranti.com/c/${article.category}` });
             breadcrumbItems.push({ "@type": "ListItem", "position": catName ? 3 : 2, "name": article.heading, "item": pageUrl });
             const breadcrumb = JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": breadcrumbItems });
 
@@ -2650,8 +2721,8 @@ app.put('/api/authors/:slug', requireAuth, async (req, res) => {
                 $set: {
                     name: slugBase,
                     slug: nextSlug,
-                    photo: photo || author.photo || '',
-                    description: description || author.description || '',
+                    photo: typeof photo === 'string' ? photo : (author.photo || ''),
+                    description: typeof description === 'string' ? description : (author.description || ''),
                 }
             },
             { new: true }
@@ -2669,7 +2740,7 @@ app.get('/authors/:slug', async (req, res) => {
         if (!author) return res.redirect(301, '/authors.html');
 
         const photo = author.photo || 'https://voiceofkranti.com/og-banner.svg';
-        const description = (author.description || 'वॉयस ऑफ क्रांति के साथ इस लेखक की रिपोर्टिंग जनता के लिए सटीक, निष्पक्ष और उपयोगी जानकारी उपलब्ध कराती है।').replace(/"/g, '&quot;');
+        const description = escapeHtml(author.description || 'वॉयस ऑफ क्रांति के साथ इस लेखक की रिपोर्टिंग जनता के लिए सटीक, निष्पक्ष और उपयोगी जानकारी उपलब्ध कराती है।');
         const authorName = author.name || 'Author';
         const pageTitle = `${authorName} | वॉयस ऑफ क्रांति`;
         const metaDescription = `${authorName} की प्रोफ़ाइल | वॉयस ऑफ क्रांति`;
@@ -2905,49 +2976,47 @@ app.get('/c/:category', async (req, res) => {
     const cat = CATEGORY_PAGE_INFO[catId];
     if (!cat) return res.redirect(301, '/');
 
-    const htmlPath = path.join(__dirname, 'public', 'category.html');
-    let html;
-    try { html = fs.readFileSync(htmlPath, 'utf8'); }
-    catch (_) { return res.redirect(301, '/'); }
-
-    const pageUrl = `https://voiceofkranti.com/c/${catId}`;
-
-    html = html
-        .replace(/(<title[^>]*>)[^<]*(<\/title>)/,                         `$1${cat.title}$2`)
-        .replace(/(<meta id="meta-description"[^>]*content=")[^"]*(")/,    `$1${cat.metaDesc}$2`)
-        .replace(/(<meta id="meta-canonical"[^>]*content=")[^"]*(")/,      `$1${pageUrl}$2`)
-        .replace(/(<link id="link-canonical"[^>]*href=")[^"]*(")/,         `$1${pageUrl}$2`)
-        .replace(/(<meta id="og-title"[^>]*content=")[^"]*(")/,            `$1${cat.title}$2`)
-        .replace(/(<meta id="og-description"[^>]*content=")[^"]*(")/,      `$1${cat.metaDesc}$2`)
-        .replace(/(<meta id="og-url"[^>]*content=")[^"]*(")/,              `$1${pageUrl}$2`)
-        .replace(/(<meta id="cat-id"[^>]*content=")[^"]*(")/,              `$1${catId}$2`);
-
-    // Server-render the first 10 article cards as real <a href> links so
-    // Googlebot-News sees crawlable HTML links without needing to run JS.
+    // Serve index.html (same design as homepage) with category pre-filtered news
     try {
+        let initialNews = [];
         if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, photos: 1, date: 1, slug: 1, rssSource: 1, author: 1, isPermanent: 1, full: 1 };
+            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1 };
             const docs = await News.find({ category: catId, isOriginal: { $ne: true } }, projection)
-                .sort({ date: -1 })
-                .limit(40)
-                .lean();
-            const authorNameSet = await getAuthorNameSet();
-            const ranked = enforcePbShabdCap(docs, authorNameSet, 10, 0.5).slice(0, 10);
-            if (ranked.length > 0) {
-                const cardsHtml = ranked.map(a => renderCategoryCardSSR({ ...a, id: a._id.toString() }, cat)).join('\n');
-                html = html.replace(
-                    /<div id="newsGrid" class="news-grid">[\s\S]*?<\/div>\s*(?=<div id="scrollSentinel")/,
-                    `<div id="newsGrid" class="news-grid" data-ssr-count="${ranked.length}">${cardsHtml}</div>\n        `
-                );
-            }
+                .sort({ date: -1 }).limit(200).lean();
+            initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
         }
-    } catch (err) {
-        console.error('Category SSR card render failed:', err.message);
-        // Fall through — client-side fetch in category.html still renders the grid.
-    }
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
+        const htmlPath = path.join(__dirname, 'public', 'index.html');
+        let html;
+        try { html = fs.readFileSync(htmlPath, 'utf8'); }
+        catch (_) { return res.redirect(301, '/'); }
+
+        const pageUrl = `https://voiceofkranti.com/c/${catId}`;
+        const payload = JSON.stringify(initialNews).replace(/<\/script>/gi, '<\\/script>');
+
+        // Inject pre-filtered news + active category so the page renders instantly
+        html = html.replace('</head>',
+            `<script>window.__INITIAL_NEWS__=${payload};window.__INITIAL_CATEGORY__=${JSON.stringify(catId)};</script></head>`);
+        // Inject SSR news cards so crawlers see real headlines without running JS
+        html = html.replace('<!-- filled instantly by server-injected __INITIAL_NEWS__ -->', renderHomepageSSR(initialNews, catId));
+
+        // Override meta tags for this category page
+        html = html
+            .replace(/<title>[^<]*<\/title>/, `<title>${cat.title}</title>`)
+            .replace(/(<meta name="description" content=")[^"]*(")/,         `$1${cat.metaDesc}$2`)
+            .replace(/(<link rel="canonical" href=")[^"]*(")/,               `$1${pageUrl}$2`)
+            .replace(/(<meta property="og:url" content=")[^"]*(")/,          `$1${pageUrl}$2`)
+            .replace(/(<meta property="og:title" content=")[^"]*(")/,        `$1${cat.title}$2`)
+            .replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${cat.metaDesc}$2`)
+            .replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${cat.title}$2`)
+            .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${cat.metaDesc}$2`);
+
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(html);
+    } catch (err) {
+        console.error('Category page error:', err.message);
+        res.redirect(301, '/');
+    }
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -3222,6 +3291,11 @@ function requireAuth(req, res, next) {
 
 // Routes
 app.get('/', async (req, res) => {
+    // 301 redirect legacy ?category= URLs to canonical /c/ paths
+    const qCat = req.query.category;
+    if (qCat && CATEGORY_PAGE_INFO[qCat]) {
+        return res.redirect(301, `/c/${qCat}`);
+    }
     try {
         let initialNews = [];
         if (isMongoDBConnected) {
@@ -3230,9 +3304,10 @@ app.get('/', async (req, res) => {
             initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
         }
         let html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
-        // Inject pre-fetched news so the page renders instantly without a client-side API call
         const payload = JSON.stringify(initialNews).replace(/<\/script>/gi, '<\\/script>');
         html = html.replace('</head>', `<script>window.__INITIAL_NEWS__=${payload};</script></head>`);
+        // Inject SSR news cards so crawlers see real headlines without running JS
+        html = html.replace('<!-- filled instantly by server-injected __INITIAL_NEWS__ -->', renderHomepageSSR(initialNews, null));
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
     } catch (err) {

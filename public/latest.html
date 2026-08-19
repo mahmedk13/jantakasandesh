@@ -316,18 +316,20 @@
         }
         isLoadingMore = true;
         try {
-            const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(currentSkip), hours: '24' });
+            const params = new URLSearchParams({ limit: String(PAGE_SIZE), skip: String(currentSkip) });
+            if (!fullOnly) params.set('hours', '24');  // live/pb feeds: last 24h only; full feed: no date cap
             if (pbOnly) params.set('source', 'pb');
             if (fullOnly) params.set('full', 'true');
             const res = await fetch('/api/news?' + params.toString(), { credentials: 'same-origin' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
             let articles = await res.json();
             if (!Array.isArray(articles)) articles = [];
+            const rawCount = articles.length;
             const cutoff = Date.now() - (24 * 60 * 60 * 1000);
             articles = articles.filter(a => {
                 const when = new Date(a.date);
                 if (Number.isNaN(when.getTime())) return false;
-                if (when.getTime() < cutoff) return false;
+                if (!fullOnly && when.getTime() < cutoff) return false;
                 if (pbOnly) {
                     const source = String(a.rssSource || a.author || '').trim().toUpperCase();
                     return source === 'PB SHABD' || source === 'PB SHABD ' || source === 'PBSHABD';
@@ -342,8 +344,8 @@
             } else {
                 allArticles = allArticles.concat(articles);
             }
-            currentSkip += articles.length;
-            hasMore = articles.length >= PAGE_SIZE;
+            currentSkip += rawCount;
+            hasMore = rawCount >= PAGE_SIZE;
             if (pbOnly) {
                 document.getElementById('refreshInfo').textContent = 'प्रसार भारती समाचार — आगमन समय के अनुसार';
             } else if (fullOnly) {

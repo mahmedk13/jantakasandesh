@@ -303,6 +303,13 @@ async function main() {
             const rssLink = `${PBSHABD_BASE}/download?story_id=${story.story_id}`;
             if (await News.findOne({ rssLink }).lean()) { dups++; continue; }
 
+            // Skip articles older than 24 hours — old stories should have been picked up in earlier syncs
+            const storyDate = parsePbDate(story.created_at_src) || parsePbDate(story.created_at);
+            if (storyDate && Date.now() - storyDate.getTime() > 24 * 60 * 60 * 1000) {
+                console.log(`  ⏭ Old (${storyDate.toISOString().slice(0,10)}): ${story.title.substring(0, 50)}`);
+                dups++; continue;
+            }
+
             const raw = stripHtml(story.story_intro_line);
             const content = cleanPbContent(raw, story.title) || story.description || '';
             if (!content) continue;

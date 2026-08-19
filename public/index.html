@@ -213,16 +213,16 @@
         <nav class="category-nav" id="categoryNav">
             <a href="/" class="category-link" data-category="all">मुख्य</a>
             <a href="/?written=true" class="category-link" data-category="written">एडिटर की डेस्क से</a>
-            <a href="/?category=desh" class="category-link" data-category="desh">देश</a>
-            <a href="/?category=videsh" class="category-link" data-category="videsh">विदेश</a>
-            <a href="/?category=rajniti" class="category-link" data-category="rajniti">राजनीति</a>
-            <a href="/?category=bhopal" class="category-link" data-category="bhopal">भोपाल</a>
-            <a href="/?category=rajya" class="category-link" data-category="rajya">राज्य</a>
-            <a href="/?category=crime" class="category-link" data-category="crime">अपराध</a>
-            <a href="/?category=khel" class="category-link" data-category="khel">खेल</a>
-            <a href="/?category=manoranjan" class="category-link" data-category="manoranjan">मनोरंजन</a>
-            <a href="/?category=vyapar" class="category-link" data-category="vyapar">व्यापार</a>
-            <a href="/?category=itihas" class="category-link" data-category="itihas">इतिहास</a>
+            <a href="/c/desh" class="category-link" data-category="desh">देश</a>
+            <a href="/c/videsh" class="category-link" data-category="videsh">विदेश</a>
+            <a href="/c/rajniti" class="category-link" data-category="rajniti">राजनीति</a>
+            <a href="/c/bhopal" class="category-link" data-category="bhopal">भोपाल</a>
+            <a href="/c/rajya" class="category-link" data-category="rajya">राज्य</a>
+            <a href="/c/crime" class="category-link" data-category="crime">अपराध</a>
+            <a href="/c/khel" class="category-link" data-category="khel">खेल</a>
+            <a href="/c/manoranjan" class="category-link" data-category="manoranjan">मनोरंजन</a>
+            <a href="/c/vyapar" class="category-link" data-category="vyapar">व्यापार</a>
+            <a href="/c/itihas" class="category-link" data-category="itihas">इतिहास</a>
         </nav>
         </div>
     </div>
@@ -383,9 +383,10 @@
             return url.replace('/upload/', '/upload/q_auto,f_auto,w_800/');
         }
 
-        // Current category from URL
+        // Current category from URL path (/c/xxx) or query param (?category=xxx)
         const urlParams = new URLSearchParams(window.location.search);
-        let currentCategory = urlParams.get('category') || 'all';
+        const pathCatMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
+        let currentCategory = window.__INITIAL_CATEGORY__ || (pathCatMatch ? pathCatMatch[1] : urlParams.get('category')) || 'all';
         let writtenOnly = urlParams.get('written') === 'true';
 
         // Set active nav link
@@ -403,7 +404,7 @@
                 if (writtenOnly) {
                     newUrl = '/?written=true';
                 } else {
-                    newUrl = currentCategory === 'all' ? '/' : '/?category=' + currentCategory;
+                    newUrl = currentCategory === 'all' ? '/' : '/c/' + currentCategory;
                 }
                 window.history.pushState({}, '', newUrl);
                 categoryLinks.forEach(l => l.classList.remove('active'));
@@ -502,8 +503,10 @@
                 let response;
                 // Re-fetch only on reset (category change / initial load); reuse for scroll pages
                 if (reset || allNewsData.length === 0) {
-                    const usePreloaded = reset && currentCategory === 'all' && !writtenOnly
-                        && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0;
+                    const preloadedCat = window.__INITIAL_CATEGORY__ || 'all';
+                    const usePreloaded = reset && !writtenOnly
+                        && window.__INITIAL_NEWS__ && window.__INITIAL_NEWS__.length > 0
+                        && currentCategory === preloadedCat;
                     if (usePreloaded) {
                         allNewsData = window.__INITIAL_NEWS__;
                         window.__INITIAL_NEWS__ = null;
@@ -764,7 +767,7 @@
                     if (!shownCatHeaders.has(catKey)) {
                         shownCatHeaders.add(catKey);
                         listHtml += '<div class="nc-section-divider"><span>' + catName + '</span>' +
-                            '<a href="/?category=' + catKey + '" class="nc-section-divider-more" onclick="event.stopPropagation()">और देखें →</a></div>';
+                            '<a href="/c/' + catKey + '" class="nc-section-divider-more" onclick="event.stopPropagation()">और देखें →</a></div>';
                     }
                     items.slice(0, 10).forEach(function(n2) {
                         var fp2 = optimizeCloudinaryUrl((n2.photos && n2.photos.length > 0) ? n2.photos[0] : n2.photo);

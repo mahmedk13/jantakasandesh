@@ -385,7 +385,8 @@ function shareEPaper(shareUrl, title) {
     const finalUrl = shareUrl || `${location.origin}/epaper`;
     const finalTitle = title || 'ई-पेपर';
     const waUrl = buildWhatsAppShareUrl(finalUrl, finalTitle);
-    if (navigator.share) {
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile && navigator.share) {
         navigator.share({
             title: finalTitle,
             text: `📖 ${finalTitle}\n${finalUrl}`,
