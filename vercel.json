@@ -6,10 +6,19 @@
   "routes": [
     { "src": "/(.*)", "dest": "/server.js" }
   ],
+  "regions": ["bom1"],
   "crons": [
     {
       "path": "/api/cron/fetch-rss",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/generate-daily-article",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/generate-aaj-ka-itihas",
+      "schedule": "30 6 * * *"
     }
   ]
 }

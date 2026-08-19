@@ -262,9 +262,20 @@
         manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास'
     };
 
+    // Some legacy-imported articles (e.g. old PB SHABD dates) have their IST wall-clock time
+    // mis-stored as UTC, making them look ~5.5h in the future. Correct that consistently
+    // everywhere a date is used (sort, section bucketing, relative + exact time) so they
+    // don't jump to the top of the feed while showing an inconsistent "hours ago" label.
+    function correctArticleDate(dateStr) {
+        const d = new Date(dateStr);
+        if (d.getTime() - Date.now() > 5 * 60 * 1000) {
+            return new Date(d.getTime() - 19800000);
+        }
+        return d;
+    }
+
     function timeAgo(dateStr) {
-        let diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-        if (diff < 0) diff += 19800; // correct IST stored as UTC (legacy PB SHABD articles)
+        let diff = Math.floor((Date.now() - correctArticleDate(dateStr).getTime()) / 1000);
         if (diff < 0) return '';
         if (diff < 60)  return 'अभी-अभी';
         if (diff < 3600) return Math.floor(diff/60) + ' मिनट पहले';
@@ -273,7 +284,7 @@
     }
 
     function exactTime(dateStr) {
-        const d = new Date(dateStr);
+        const d = correctArticleDate(dateStr);
         return d.toLocaleTimeString('hi-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) +
                ', ' + d.toLocaleDateString('hi-IN', { day: 'numeric', month: 'short' });
     }
@@ -340,7 +351,7 @@
             } else {
                 document.getElementById('refreshInfo').textContent = 'लोड हो रहा है...';
             }
-            allArticles.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+            allArticles.sort(function(a, b) { return correctArticleDate(b.date) - correctArticleDate(a.date); });
             renderFeed(allArticles);
             document.getElementById('totalCount').textContent = allArticles.length + (pbOnly ? ' प्रसार भारती खबरें' : fullOnly ? ' पूर्ण खबरें' : ' खबरें');
         } catch(e) {
@@ -361,7 +372,7 @@
         let lastSection = null;
 
         articles.forEach(a => {
-            const age = now - new Date(a.date);
+            const age = now - correctArticleDate(a.date).getTime();
             let section;
             if      (age < FRESH_MS) section = '🟢 पिछले 30 मिनट में';
             else if (age < HOUR_MS)  section = '🕐 पिछले 1 घंटे में';

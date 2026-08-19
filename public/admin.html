@@ -165,8 +165,10 @@
                         name="author" 
                         required 
                         placeholder="लेखक का नाम लिखें..."
+                        list="authorSuggestions"
                         class="form-input"
                     >
+                    <datalist id="authorSuggestions"></datalist>
                 </div>
 
                 <div class="form-group">
@@ -207,11 +209,12 @@
         </section>
 
         <section class="admin-section">
-            <h2 class="section-title">✍️ लेखक जोड़ें</h2>
+            <h2 class="section-title">✍️ लेखक जोड़ें / अपडेट करें</h2>
             <form id="authorForm" class="news-form">
+                <input type="hidden" id="authorEditSlug" name="authorEditSlug">
                 <div class="form-group">
                     <label for="authorName">लेखक का नाम *</label>
-                    <input type="text" id="authorName" name="authorName" required placeholder="जैसे: Maroof Ahmed Khan" class="form-input">
+                    <input type="text" id="authorName" name="authorName" required placeholder="जैसे: Shahrukh Khan" class="form-input">
                 </div>
                 <div class="form-group">
                     <label for="authorPhoto">लेखक की फोटो URL</label>
@@ -221,11 +224,20 @@
                     <label for="authorDescription">लेखक का परिचय</label>
                     <textarea id="authorDescription" name="authorDescription" rows="4" placeholder="लेखक के बारे में संक्षिप्त परिचय लिखें..." class="form-input"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <span id="authorSubmitText">लेखक जोड़ें</span>
-                </button>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+                    <button type="submit" class="btn btn-primary">
+                        <span id="authorSubmitText">लेखक जोड़ें</span>
+                    </button>
+                    <button type="button" id="cancelAuthorEdit" class="btn btn-secondary" style="display:none;">रद्द करें</button>
+                </div>
             </form>
             <div id="authorMessage" class="message" style="display:none;"></div>
+
+            <div style="margin-top:1rem;">
+                <h3 style="margin:0 0 0.5rem; font-size:1rem; color:#2d3748;">लेखक सूची</h3>
+                <div id="authorList" style="display:flex;flex-direction:column;gap:0.5rem;max-height:260px;overflow:auto;">
+                </div>
+            </div>
         </section>
 
         <!-- ── URL Scraper Tool ──────────────────────────────────────────── -->
@@ -889,9 +901,12 @@
             }
         });
 
-        // Author creation form
+        // Author creation/update form
         const authorForm = document.getElementById('authorForm');
         const authorMessage = document.getElementById('authorMessage');
+        const authorEditSlug = document.getElementById('authorEditSlug');
+        const cancelAuthorEdit = document.getElementById('cancelAuthorEdit');
+        const authorList = document.getElementById('authorList');
 
         function showAuthorMessage(text, type) {
             authorMessage.textContent = text;
@@ -901,6 +916,60 @@
                 authorMessage.style.display = 'none';
             }, 5000);
         }
+
+        async function loadAuthorsForAdmin() {
+            try {
+                const response = await fetch('/api/authors', { credentials: 'same-origin' });
+                if (!response.ok) return;
+                const authors = await response.json();
+
+                // Populate the author name autocomplete on the news form so admins pick
+                // an existing author's exact name instead of retyping (avoids mismatches).
+                const suggestions = document.getElementById('authorSuggestions');
+                if (suggestions) {
+                    suggestions.innerHTML = authors.map(author => `<option value="${(author.name || '').replace(/"/g, '&quot;')}"></option>`).join('');
+                }
+
+                if (!Array.isArray(authors) || !authors.length) {
+                    authorList.innerHTML = '<div class="message message-info">अभी कोई लेखक नहीं है।</div>';
+                    return;
+                }
+
+                authorList.innerHTML = authors.map(author => `
+                    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:0.7rem 0.8rem;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc;">
+                        <div>
+                            <strong style="display:block;">${author.name || 'Unknown'}</strong>
+                            <small style="color:#718096;">/${author.slug || 'author'}</small>
+                        </div>
+                        <button type="button" data-author-slug="${author.slug}" class="btn btn-secondary btn-small author-edit-btn">संपादित करें</button>
+                    </div>
+                `).join('');
+
+                document.querySelectorAll('.author-edit-btn').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const slug = button.dataset.authorSlug;
+                        const selected = authors.find(author => author.slug === slug);
+                        if (!selected) return;
+                        document.getElementById('authorName').value = selected.name || '';
+                        document.getElementById('authorPhoto').value = selected.photo || '';
+                        document.getElementById('authorDescription').value = selected.description || '';
+                        authorEditSlug.value = selected.slug || '';
+                        document.getElementById('authorSubmitText').textContent = 'लेखक अपडेट करें';
+                        cancelAuthorEdit.style.display = 'inline-block';
+                        window.scrollTo({ top: document.getElementById('authorForm').offsetTop - 20, behavior: 'smooth' });
+                    });
+                });
+            } catch (error) {
+                console.error('Failed to load authors list:', error);
+            }
+        }
+
+        cancelAuthorEdit.addEventListener('click', () => {
+            authorForm.reset();
+            authorEditSlug.value = '';
+            document.getElementById('authorSubmitText').textContent = 'लेखक जोड़ें';
+            cancelAuthorEdit.style.display = 'none';
+        });
 
         authorForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -914,20 +983,30 @@
             }
 
             try {
-                const response = await fetch('/api/authors', {
-                    method: 'POST',
+                const slug = authorEditSlug.value;
+                const endpoint = slug ? `/api/authors/${encodeURIComponent(slug)}` : '/api/authors';
+                const method = slug ? 'PUT' : 'POST';
+
+                const response = await fetch(endpoint, {
+                    method,
                     credentials: 'same-origin',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, photo, description })
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Failed to create author');
-                showAuthorMessage('लेखक सफलतापूर्वक जोड़ दिया गया है।', 'success');
+                if (!response.ok) throw new Error(data.error || 'Failed to save author');
+                showAuthorMessage(slug ? 'लेखक सफलतापूर्वक अपडेट हो गया है।' : 'लेखक सफलतापूर्वक जोड़ दिया गया है।', 'success');
                 authorForm.reset();
+                authorEditSlug.value = '';
+                document.getElementById('authorSubmitText').textContent = 'लेखक जोड़ें';
+                cancelAuthorEdit.style.display = 'none';
+                loadAuthorsForAdmin();
             } catch (error) {
                 showAuthorMessage(error.message || 'लेखक जोड़ने में त्रुटि हुई।', 'error');
             }
         });
+
+        loadAuthorsForAdmin();
 
         // Submit form
         newsForm.addEventListener('submit', async (e) => {
@@ -1681,6 +1760,36 @@
                 document.querySelector('form.news-form') && document.querySelector('form.news-form').appendChild(hiddenPhoto);
             }
             if (hiddenPhoto) hiddenPhoto.value = _scrapeData.image || '';
+
+            // Store scraped source name/URL so the published article shows a
+            // clickable source credit (same template used for RSS/API imports).
+            let hiddenRssSource = document.getElementById('scrapeRssSourceHidden');
+            if (!hiddenRssSource) {
+                hiddenRssSource = document.createElement('input');
+                hiddenRssSource.type = 'hidden';
+                hiddenRssSource.id = 'scrapeRssSourceHidden';
+                hiddenRssSource.name = 'rssSource';
+                document.querySelector('form.news-form') && document.querySelector('form.news-form').appendChild(hiddenRssSource);
+            }
+            if (hiddenRssSource) hiddenRssSource.value = _scrapeData.sourceName || '';
+            let hiddenRssLink = document.getElementById('scrapeRssLinkHidden');
+            if (!hiddenRssLink) {
+                hiddenRssLink = document.createElement('input');
+                hiddenRssLink.type = 'hidden';
+                hiddenRssLink.id = 'scrapeRssLinkHidden';
+                hiddenRssLink.name = 'rssLink';
+                document.querySelector('form.news-form') && document.querySelector('form.news-form').appendChild(hiddenRssLink);
+            }
+            if (hiddenRssLink) hiddenRssLink.value = _scrapeData.sourceUrl || '';
+            let hiddenIsAiScraped = document.getElementById('scrapeIsAiScrapedHidden');
+            if (!hiddenIsAiScraped) {
+                hiddenIsAiScraped = document.createElement('input');
+                hiddenIsAiScraped.type = 'hidden';
+                hiddenIsAiScraped.id = 'scrapeIsAiScrapedHidden';
+                hiddenIsAiScraped.name = 'isAiScraped';
+                document.querySelector('form.news-form') && document.querySelector('form.news-form').appendChild(hiddenIsAiScraped);
+            }
+            if (hiddenIsAiScraped) hiddenIsAiScraped.value = 'true';
             document.querySelector('.news-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
             document.getElementById('heading').focus();
         }
@@ -1706,6 +1815,9 @@
                 fd.append('isPermanent', isPermanent ? 'true' : 'false');
                 fd.append('isOriginal', isOriginal ? 'true' : 'false');
                 if (_scrapeData.image) fd.append('photoUrl', _scrapeData.image);
+                if (_scrapeData.sourceName) fd.append('rssSource', _scrapeData.sourceName);
+                if (_scrapeData.sourceUrl) fd.append('rssLink', _scrapeData.sourceUrl);
+                fd.append('isAiScraped', 'true');
                 const resp = await fetch('/api/news', { method: 'POST', credentials: 'same-origin', body: fd });
                 const data = await resp.json();
                 if (resp.ok) {

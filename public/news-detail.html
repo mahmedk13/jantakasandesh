@@ -238,6 +238,7 @@
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
                 <a href="/latest" class="nav-link nav-link-latest">🟢 लाइव फीड</a>
                 <a href="/latest?source=pb" class="nav-link nav-link-pb">📡 प्रसार भारती</a>
+                <a href="/latest?full=true" class="nav-link nav-link-full">पूर्ण खबरें</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -440,13 +441,51 @@
             return '';
         }
 
+        // Merges overly-short consecutive plain-text lines into readable paragraphs
+        // (a source with one sentence per line would otherwise render one <p> per sentence).
+        // Structural lines (headings/lists/media markers) are left untouched.
+        function mergeShortLines(rawLines) {
+            const isStructural = (l) =>
+                /^##\s|^###\s|^-\s|^\d+\.\s/.test(l) ||
+                /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(l) ||
+                /^!\[.*?\]\(https?:\/\//i.test(l) ||
+                /^\*\*(प्रश्न|उत्तर|Q|A)[:\s]/.test(l);
+            const merged = [];
+            let current = '';
+            for (const raw of rawLines) {
+                const line = raw.trim();
+                if (!line) {
+                    if (current) { merged.push(current); current = ''; }
+                    merged.push('');
+                    continue;
+                }
+                if (isStructural(line)) {
+                    if (current) { merged.push(current); current = ''; }
+                    merged.push(line);
+                    continue;
+                }
+                const candidate = current ? `${current} ${line}` : line;
+                if (candidate.length > 320 && current) {
+                    merged.push(current);
+                    current = line;
+                } else {
+                    current = candidate;
+                }
+            }
+            if (current) merged.push(current);
+            return merged;
+        }
+
         function renderMarkdown(text) {
             let html = '', inList = false, inOList = false, inFaqItem = false;
             function fmt(s) {
-                // Preserve safe inline HTML format tags from the editor, then apply markdown emphasis.
+                // Preserve safe inline HTML format tags from the editor, then convert markdown links.
                 const withSafeInlineHtml = s
                     .replace(/&lt;(\/?)((?:b|strong|i|em|u|a|span))\b([^&]*?)&gt;/gi, '<$1$2$3>');
-                return withSafeInlineHtml
+                const withLinks = withSafeInlineHtml.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/gi, function(_, label, url) {
+                    return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(label) + '</a>';
+                });
+                return withLinks
                     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                     .replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
             }
@@ -455,7 +494,7 @@
                 if (inOList)   { html += '</ol>'; inOList = false; }
                 if (inFaqItem) { html += '</div>'; inFaqItem = false; }
             }
-            const lines = text.split('\n');
+            const lines = mergeShortLines(text.split('\n'));
             for (let i = 0; i < lines.length; i++) {
                 const t = lines[i].trim();
                 if (!t) { closeBlocks(); continue; }
@@ -700,11 +739,13 @@
                 const matchAuthorProfile = (value) => {
                     const normalized = normalizeAuthorName(value);
                     if (!normalized) return null;
+                    // Exact match only — partial/substring matching could resolve a
+                    // byline to an unrelated author's profile/bio.
                     return authorProfiles.find(a => {
                         if (!a || !a.name) return false;
                         const profileName = normalizeAuthorName(a.name);
                         const profileSlug = normalizeAuthorName((a.slug || '').replace(/-/g, ' '));
-                        return profileName === normalized || profileSlug === normalized || profileName.includes(normalized) || normalized.includes(profileName) || profileSlug.includes(normalized) || normalized.includes(profileSlug);
+                        return profileName === normalized || profileSlug === normalized;
                     }) || null;
                 };
                 const resolveAuthorMarkup = (authorName, fallbackLabel) => {
@@ -716,11 +757,14 @@
                     return `<span class="news-detail-author">${authorName}</span>`;
                 };
                 const authorMarkup = resolveAuthorMarkup(news.author, news.rssSource ? 'JKS News Desk' : '');
-                const authorCardName = news.rssSource ? 'JKS News Desk' : (news.author || 'वॉयस ऑफ क्रांति');
-                const authorCardMatch = !news.rssSource ? matchAuthorProfile(news.author) : null;
-                const authorCardMarkup = news.rssSource ? `<strong>JKS News Desk</strong>` : (authorCardMatch && authorCardMatch.slug
+                // Prefer the real byline whenever one is set (e.g. AI-scraped articles have
+                // both an author AND rssSource) — only fall back to "JKS News Desk" when
+                // there's no explicit author at all (plain RSS/API imports).
+                const authorCardName = news.author || (news.rssSource ? 'JKS News Desk' : 'वॉयस ऑफ क्रांति');
+                const authorCardMatch = news.author ? matchAuthorProfile(news.author) : null;
+                const authorCardMarkup = authorCardMatch && authorCardMatch.slug
                     ? `<a href="/authors/${encodeURIComponent(authorCardMatch.slug)}" class="news-detail-author-link" style="color:#1e293b;text-decoration:none;">${authorCardName}</a>`
-                    : `<strong>${authorCardName}</strong>`);
+                    : `<strong>${authorCardName}</strong>`;
 
                 if (keepSsrArticle) {
                     const firstPhoto = (news.photos && news.photos.length > 0) ? news.photos[0] : 'https://voiceofkranti.com/og-banner.svg';
@@ -755,7 +799,7 @@
                         ${news.category ? `<a href="/?category=${news.category}" class="category-badge category-badge-large" style="text-decoration:none;cursor:pointer;">${categoryNames[news.category]}</a>` : ''}
                         <h1 class="news-detail-title">${news.heading}</h1>
                         <div class="news-detail-meta">
-                            ${(news.author || news.rssSource) ? `<span class="news-detail-author">${news.rssSource ? '<strong>JKS News Desk</strong>' : authorMarkup}</span>` : ''}
+                            ${(news.author || news.rssSource) ? `<span class="news-detail-author">${authorMarkup}</span>` : ''}
                             <span class="news-detail-date">${news.formattedDate} &nbsp;·&nbsp; ${timeAgo(news.date)}</span>                            ${readTimeHtml}
                         </div>
                         <a href="https://whatsapp.com/channel/0029VbDoE1QDZ4LThGXdEJ2D" target="_blank" rel="noopener noreferrer" class="wa-channel-banner">
@@ -800,7 +844,7 @@
                         <div class="news-detail-content">
                             ${news.content ? `<div class="news-detail-text">${renderContent(news.content, bulletMode)}</div>` : '<p class="no-content">समाचार का विवरण उपलब्ध नहीं है।</p>'}
                             ${(news.rssSource && news.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: ${news.rssLink ? `<a href="${news.rssLink}" target="_blank" rel="noopener noreferrer">${news.rssSource}</a>` : `<strong>${news.rssSource}</strong>`}</p>` : ''}
-                            ${(news.rssLink && news.rssSource !== 'PB SHABD') ? `
+                            ${(news.rssLink && news.rssSource !== 'PB SHABD' && !news.isAiScraped) ? `
                             <div class="read-full-article">
                                 <a href="${news.rssLink}" target="_blank" rel="noopener noreferrer" class="read-full-btn">
                                     📰 पूरी खबर पढ़ें (${news.rssSource || 'मूल स्रोत'} पर जाएं)
@@ -837,7 +881,7 @@
                             </div>
                         </div>
                         <div class="nd-author-card">
-                            <div class="nd-author-avatar">${(news.rssSource ? 'J' : ((news.author||'J').charAt(0))).toUpperCase()}</div>
+                            <div class="nd-author-avatar">${(authorCardName || 'V').charAt(0).toUpperCase()}</div>
                             <div class="nd-author-info">
                                 ${authorCardMarkup}
                                 <p>वॉयस ऑफ क्रांति की संपादकीय टीम आपके लिए भोपाल, मध्यप्रदेश और देश की सटीक और विश्वसनीय समाचार प्रस्तुत करती है।</p>

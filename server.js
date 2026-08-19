@@ -2,6 +2,13 @@
 // Force IPv4 DNS resolution — fixes MongoDB Atlas SRV lookup on Windows
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
+// Disable Node's "Happy Eyeballs" parallel connect (autoSelectFamily) — triggers a
+// known Windows-only ERR_INTERNAL_ASSERTION crash in node:net on Node 18/20 when
+// many outbound connections (Mongo, RSS/API fetches) race. See nodejs/node#48777.
+const net = require('net');
+if (typeof net.setDefaultAutoSelectFamily === 'function') {
+    net.setDefaultAutoSelectFamily(false);
+}
 const express = require('express');
 const compression = require('compression');
 const session = require('express-session');
@@ -24,8 +31,8 @@ const mammoth = require('mammoth');
 const AdmZip = require('adm-zip');
 
 // ── LLM helpers ───────────────────────────────────────────────────────────────
-// callMistral: used for long-form content (editorial, itihas, daily fact, weekly
-//   roundup).  Free tier: generous RPM/RPD — no shared quota issues.
+// callMistral: now only used by generateDailyFact(). Editorial/itihas/weekly-roundup
+//   moved to Groq (callGroq, openai/gpt-oss-120b) — see below.
 //   Returns the raw JSON string from the model.
 // Recursively flatten Mistral content that may arrive as nested array/object instead of a flat string
 function flattenMistralContent(val) {
@@ -35,7 +42,7 @@ function flattenMistralContent(val) {
     return String(val || '');
 }
 
-async function callMistral(prompt, maxTokens = 1800) {
+async function callMistral(prompt, maxTokens = 1800, temperature = 0.7) {
     const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -45,7 +52,7 @@ async function callMistral(prompt, maxTokens = 1800) {
         body: JSON.stringify({
             model: 'mistral-small-latest',
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.7,
+            temperature,
             max_tokens: maxTokens,
             response_format: { type: 'json_object' },
         }),
@@ -55,9 +62,9 @@ async function callMistral(prompt, maxTokens = 1800) {
     return data.choices[0]?.message?.content || '{}';
 }
 
-// callGroq: used for short-burst batch tasks (shorts 280 tokens, explainers 400 tokens).
-// Pass model='llama-3.3-70b-versatile' for tasks needing higher accuracy.
-function callGroq(prompt, maxTokens = 400, model = 'llama-3.1-8b-instant', temperature = 0.6) {
+// callGroq: used for short-burst batch tasks (shorts 400 tokens, explainers 350 tokens).
+// Pass model='openai/gpt-oss-120b' for tasks needing higher accuracy.
+function callGroq(prompt, maxTokens = 400, model = 'openai/gpt-oss-20b', temperature = 0.6) {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     return groq.chat.completions.create({
         model,
@@ -65,6 +72,10 @@ function callGroq(prompt, maxTokens = 400, model = 'llama-3.1-8b-instant', tempe
         temperature,
         max_tokens:      maxTokens,
         response_format: { type: 'json_object' },
+        // GPT-OSS models spend part of max_tokens on internal reasoning before the
+        // JSON answer — 'low' keeps that overhead small so short prompts don't get
+        // truncated mid-JSON (json_validate_failed).
+        reasoning_effort: 'low',
     }).then(c => c.choices[0]?.message?.content || '{}');
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -142,13 +153,108 @@ function isFullArticleContent(content = '') {
     const text = cleanHtml(String(content || '')).trim();
     if (!text) return false;
 
+    const normalizedText = text.replace(/\s+/g, ' ').trim();
     const paragraphs = text
         .split(/\n{2,}/)
         .map(part => part.trim())
         .filter(part => part.length > 40);
 
     const wordCount = text.split(/\s+/).filter(Boolean).length;
-    return paragraphs.length >= 2 || wordCount >= 180;
+    const charCount = normalizedText.length;
+    return paragraphs.length >= 2 || wordCount >= 180 || charCount > 800;
+}
+
+function paragraphizeLegacyImportedText(content = '') {
+    if (typeof content !== 'string') return '';
+    const cleaned = cleanHtml(content).trim();
+    if (!cleaned) return '';
+
+    const withParagraphBreaks = cleaned
+        .replace(/([。!?])\s+(?=[A-Za-z\u0900-\u097F])/g, '$1\n')
+        .replace(/([.!?])\s+(?=[A-Za-z\u0900-\u097F])/g, '$1\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .split(/\n{2,}|\n/)
+        .map(part => part.trim())
+        .filter(Boolean);
+
+    if (!withParagraphBreaks.length) return cleaned;
+
+    const paragraphs = [];
+    let current = '';
+    for (const part of withParagraphBreaks) {
+        const candidate = current ? `${current} ${part}` : part;
+        if ((candidate.length > 220 || (current && /[.!?]\s*$/.test(current) && part.length > 80)) && current) {
+            paragraphs.push(current.trim());
+            current = part;
+        } else {
+            current = candidate;
+        }
+    }
+    if (current) paragraphs.push(current.trim());
+
+    if (paragraphs.length > 1) return paragraphs.join('\n\n');
+    if (cleaned.length > 260) {
+        const sentences = cleaned.split(/(?<=[.!?])\s+/).map(part => part.trim()).filter(Boolean);
+        if (sentences.length > 1) {
+            const grouped = [];
+            let chunk = '';
+            for (const sentence of sentences) {
+                const next = chunk ? `${chunk} ${sentence}` : sentence;
+                if (next.length > 220 && chunk) {
+                    grouped.push(chunk.trim());
+                    chunk = sentence;
+                } else {
+                    chunk = next;
+                }
+            }
+            if (chunk) grouped.push(chunk.trim());
+            if (grouped.length > 1) return grouped.join('\n\n');
+        }
+    }
+
+    return cleaned;
+}
+
+async function repairLegacyImportedArticles({ dryRun = false, limit = 200 } = {}) {
+    if (!isMongoDBConnected) {
+        return { updated: 0, scanned: 0, dryRun, error: 'DB not ready' };
+    }
+
+    const docs = await News.find({
+        isOriginal: { $ne: true },
+        isPermanent: { $ne: true }
+    }, { _id: 1, content: 1, full: 1 }).limit(limit).lean();
+
+    let updated = 0;
+    let scanned = docs.length;
+
+    for (const article of docs) {
+        const originalContent = String(article.content || '');
+        const nextContent = paragraphizeLegacyImportedText(originalContent);
+        const shouldBeFull = isFullArticleContent(nextContent || originalContent);
+
+        if (!nextContent && !article.full && !shouldBeFull) continue;
+
+        const patch = {};
+        if (nextContent && nextContent !== originalContent) {
+            patch.content = nextContent;
+        }
+        if (article.full !== shouldBeFull) {
+            patch.full = shouldBeFull;
+        }
+
+        if (Object.keys(patch).length === 0) continue;
+        if (dryRun) {
+            updated += 1;
+            continue;
+        }
+
+        await News.updateOne({ _id: article._id }, { $set: patch });
+        invalidateNewsCache();
+        updated += 1;
+    }
+
+    return { updated, scanned, dryRun };
 }
 
 function extractInlineArticlePhotoUrls(content = '') {
@@ -203,17 +309,131 @@ function findAuthorMatch(authorProfiles, articleAuthor) {
     if (!articleAuthor || !Array.isArray(authorProfiles)) return null;
     const normalizedTarget = normalizeAuthorName(articleAuthor);
     if (!normalizedTarget) return null;
+    // Exact match only (name or slug) — partial/substring matching previously let a
+    // short byline accidentally resolve to an unrelated author's profile/bio.
     return authorProfiles.find((author) => {
         if (!author || !author.name) return false;
         const profileName = normalizeAuthorName(author.name);
         const slugName = normalizeAuthorName((author.slug || '').replace(/-/g, ' '));
-        return profileName === normalizedTarget ||
-            slugName === normalizedTarget ||
-            profileName.includes(normalizedTarget) ||
-            normalizedTarget.includes(profileName) ||
-            slugName.includes(normalizedTarget) ||
-            normalizedTarget.includes(slugName);
+        return profileName === normalizedTarget || slugName === normalizedTarget;
     }) || null;
+}
+
+function isPbShabdArticle(item) {
+    const src = (item.rssSource || '').trim();
+    const auth = (item.author || '').trim();
+    return src === 'PB SHABD' || auth === 'PB SHABD';
+}
+
+function isRealAuthorArticle(item, authorNameSet) {
+    if (!item || !item.author || !authorNameSet || !authorNameSet.size) return false;
+    return authorNameSet.has(normalizeAuthorName(item.author));
+}
+
+// Normalized set of real Author-profile names, for the "real author" priority tier below.
+async function getAuthorNameSet() {
+    try {
+        const authors = await Author.find({}, { name: 1 }).lean();
+        return new Set(authors.map(a => normalizeAuthorName(a.name)).filter(Boolean));
+    } catch (_) {
+        return new Set();
+    }
+}
+
+// Re-ranks a date-desc sorted article list for category "Top 10" display. Never
+// removes articles — only reorders. Priority tiers, highest first:
+//   1. isPermanent === true, and/or article.author matches a real Author profile
+//      (from `authorNameSet`) — always kept in front, in their original order.
+//   2. PB SHABD — but capped at `maxRatio` of the first `windowSize` slots; any
+//      overflow is pushed to just after the window instead of being dropped.
+//   3. Articles tagged `full: true`.
+//   4. Everything else.
+function enforcePbShabdCap(list, authorNameSet, windowSize = 10, maxRatio = 0.5) {
+    if (!Array.isArray(list) || list.length <= 1) return list;
+
+    const isProtected = (item) => item && (item.isPermanent === true || isRealAuthorArticle(item, authorNameSet));
+    const protectedQueue = list.filter(isProtected);
+    const rest = list.filter(item => !isProtected(item));
+    if (!rest.length) return list;
+
+    const pbQueue = rest.filter(isPbShabdArticle);
+    const fullQueue = rest.filter(item => !isPbShabdArticle(item) && item && item.full === true);
+    const otherQueue = rest.filter(item => !isPbShabdArticle(item) && !(item && item.full === true));
+
+    const maxPbInWindow = Math.floor(windowSize * maxRatio);
+    const result = [];
+    let pbIdx = 0, fullIdx = 0, otherIdx = 0, pbUsedInWindow = 0;
+
+    while (pbIdx < pbQueue.length || fullIdx < fullQueue.length || otherIdx < otherQueue.length) {
+        const inWindow = (protectedQueue.length + result.length) < windowSize;
+        const pbCapped = inWindow && pbUsedInWindow >= maxPbInWindow;
+
+        if (pbIdx < pbQueue.length && !pbCapped) {
+            result.push(pbQueue[pbIdx++]);
+            if (inWindow) pbUsedInWindow++;
+        } else if (fullIdx < fullQueue.length) {
+            result.push(fullQueue[fullIdx++]);
+        } else if (otherIdx < otherQueue.length) {
+            result.push(otherQueue[otherIdx++]);
+        } else if (pbIdx < pbQueue.length) {
+            result.push(pbQueue[pbIdx++]); // cap reached but nothing else left to fill with
+        }
+    }
+    return protectedQueue.concat(result);
+}
+
+// Mirrors category.html's client-side optimizeCloudinaryUrl/stripEmbeddedMediaFromPreview/timeAgo
+// so server-rendered category cards look identical once client JS hydrates.
+function optimizeCloudinaryUrlForCard(url) {
+    if (!url || !url.includes('cloudinary')) return url;
+    return url.replace('/upload/', '/upload/q_auto,f_auto,w_400/');
+}
+
+function stripEmbeddedMediaFromPreview(text) {
+    if (!text) return '';
+    return String(text)
+        .replace(/\r/g, '')
+        .split('\n')
+        .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(line.trim()))
+        .join('\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/https?:\/\/[^\s]+/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 160);
+}
+
+function timeAgoLabel(dateVal) {
+    if (!dateVal) return '';
+    let diff = Math.floor((Date.now() - new Date(dateVal).getTime()) / 1000);
+    if (diff < 0) diff += 19800; // correct IST stored as UTC (legacy PB SHABD articles)
+    if (diff < 0) return '';
+    if (diff < 60) return 'अभी-अभी';
+    if (diff < 3600) return Math.floor(diff / 60) + ' मिनट पहले';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' घंटे पहले';
+    if (diff < 172800) return 'कल';
+    return Math.floor(diff / 86400) + ' दिन पहले';
+}
+
+function renderCategoryCardSSR(a, cat) {
+    const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
+    const img = a.photos && a.photos.length ? optimizeCloudinaryUrlForCard(a.photos[0]) : null;
+    const previewText = stripEmbeddedMediaFromPreview(a.content || '');
+    const heading = escapeHtml(a.heading || 'समाचार');
+    return `<a href="${url}" class="news-card">
+            ${img
+                ? `<img src="${escapeHtml(img)}" alt="${heading}" loading="lazy">`
+                : `<div class="news-card-placeholder">NEWS</div>`}
+            <div class="news-card-body">
+                <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
+                    <span class="news-card-cat" style="color:${cat.color}">${escapeHtml(cat.name)}</span>
+                    ${isPbShabdArticle(a) ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                </div>
+                <p class="news-card-title">${heading}</p>
+                ${previewText ? `<p class="news-card-preview">${escapeHtml(previewText)}</p>` : ''}
+                <span class="news-card-date" data-date="${escapeHtml(String(a.date || ''))}">⏰ ${timeAgoLabel(a.date)}</span>
+            </div>
+        </a>`;
 }
 
 function renderArticleBodyForCrawler(text) {
@@ -326,7 +546,41 @@ function renderArticleBodyForCrawler(text) {
     for (const [token, tagValue] of tagMap.entries()) {
         restoredSource = restoredSource.replace(new RegExp(escapeRegExp(token), 'g'), tagValue);
     }
-    const lines = restoredSource.split('\n').map(line => line.trim()).filter(Boolean);
+    const paragraphized = restoredSource
+        .replace(/([।!?])\s+(?=[A-Za-z\u0900-\u097F])/g, '$1\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+    let lines = paragraphized.split(/\n{2,}|\n/).map(part => part.trim()).filter(Boolean);
+
+    // Merge overly-short consecutive plain-text lines into readable paragraphs.
+    // The sentence-boundary preprocessing above can turn one real paragraph into
+    // one line per sentence — without this merge, every sentence would render as
+    // its own <p>. Structural lines (headings/lists/media) are left untouched.
+    const isStructuralLine = (l) =>
+        /^##\s|^###\s|^-\s|^\d+\.\s/.test(l) ||
+        /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(l) ||
+        /^!\[.*?\]\(https?:\/\//i.test(l);
+
+    const mergedLines = [];
+    let currentParagraph = '';
+    for (const line of lines) {
+        if (isStructuralLine(line)) {
+            if (currentParagraph) { mergedLines.push(currentParagraph); currentParagraph = ''; }
+            mergedLines.push(line);
+            continue;
+        }
+        const candidate = currentParagraph ? `${currentParagraph} ${line}` : line;
+        if (candidate.length > 320 && currentParagraph) {
+            mergedLines.push(currentParagraph);
+            currentParagraph = line;
+        } else {
+            currentParagraph = candidate;
+        }
+    }
+    if (currentParagraph) mergedLines.push(currentParagraph);
+    lines = mergedLines;
+
     if (!lines.length) return '<p>समाचार का विवरण उपलब्ध नहीं है।</p>';
 
     let html = '';
@@ -618,7 +872,7 @@ async function fetchAndImportRSS() {
 
             const pubDate = itemDate;
             const rawContent = item.content || item.contentSnippet || item.summary || item.title || '';
-            const finalContent = cleanHtml(rawContent).slice(0, 2000);
+            const finalContent = paragraphizeLegacyImportedText(rawContent).slice(0, 2000);
             if (finalContent.length < 80) continue;
             const full = isFullArticleContent(finalContent);
 
@@ -770,11 +1024,11 @@ async function fetchFromNewsDataAPI() {
                 const itemDate = item.pubDate ? new Date(item.pubDate) : new Date();
                 const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
                 if (itemDate < threeDaysAgo) continue;
-                const pubDate = new Date(); // use import time for homepage ordering
+                const pubDate = itemDate; // use the source's real published date (avoid artificial freshening)
                 // NewsData.io free plan returns "ONLY AVAILABLE IN PAID PLANS" in content field
                 const isPaidOnly = typeof item.content === 'string' && item.content.toUpperCase().includes('ONLY AVAILABLE');
                 const rawContent = isPaidOnly ? (item.description || '') : (item.content || item.description || '');
-                const content = cleanHtml(rawContent);
+                const content = paragraphizeLegacyImportedText(rawContent);
                 const full = isFullArticleContent(content);
 
                 // Skip articles with no usable content
@@ -863,10 +1117,10 @@ async function fetchFromGNewsAPI() {
                 // Skip articles older than 3 days
                 const itemPublished = item.publishedAt ? new Date(item.publishedAt) : new Date();
                 if (itemPublished < new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) continue;
-                const pubDate = new Date(); // use import time for homepage ordering
+                const pubDate = itemPublished; // use the source's real published date (avoid artificial freshening)
                 // GNews provides full article content in item.content
                 const rawContent = item.content || item.description || '';
-                const content = cleanHtml(rawContent);
+                const content = paragraphizeLegacyImportedText(rawContent);
                 const full = isFullArticleContent(content);
 
                 const category = mapRssCategory([], item.title, req.label === 'politics' ? 'rajniti' :
@@ -948,9 +1202,9 @@ async function fetchFromCurrentsAPI() {
                 // Skip articles older than 3 days
                 const itemPub = item.published ? new Date(item.published) : new Date();
                 if (itemPub < new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) continue;
-                const pubDate = new Date(); // use import time for homepage ordering
+                const pubDate = itemPub; // use the source's real published date (avoid artificial freshening)
                 // Currents provides full article description
-                const content = cleanHtml(item.description || '');
+                const content = paragraphizeLegacyImportedText(item.description || '');
                 const full = isFullArticleContent(content);
 
                 const category = mapRssCategory(item.category || [], item.title, 'desh');
@@ -1071,8 +1325,8 @@ const DAILY_ARTICLE_TOPICS = [
 ];
 
 async function generateDailyArticle() {
-    if (!process.env.GROQ_API_KEY) {
-        console.log('⚠️ GROQ_API_KEY not set, skipping daily article generation');
+    if (!process.env.MISTRAL_API_KEY) {
+        console.log('⚠️ MISTRAL_API_KEY not set, skipping daily article generation');
         return null;
     }
     if (!isMongoDBConnected) return null;
@@ -1115,11 +1369,11 @@ async function generateDailyArticle() {
 }`;
 
     try {
-        const raw = await callGroq(prompt, 3000, 'llama-3.3-70b-versatile', 0.7);
+        const raw = await callMistral(prompt, 3000, 0.7);
         const parsed = JSON.parse(raw);
 
         if (!parsed.heading || !parsed.content) {
-            console.error('✗ Daily article: empty response from Groq');
+            console.error('✗ Daily article: empty response from Mistral');
             return null;
         }
         parsed.content = flattenMistralContent(parsed.content);
@@ -1170,8 +1424,8 @@ async function generateDailyArticle() {
 //             generic article without inventing specific events.
 // Stored with isAajKaItihas:true + isPermanent:true so it is never auto-deleted.
 async function generateAajKaItihas() {
-    if (!process.env.GROQ_API_KEY) {
-        console.log('⚠️ GROQ_API_KEY not set, skipping Aaj Ka Itihas');
+    if (!process.env.MISTRAL_API_KEY) {
+        console.log('⚠️ MISTRAL_API_KEY not set, skipping Aaj Ka Itihas');
         return null;
     }
     if (!isMongoDBConnected) return null;
@@ -1217,7 +1471,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
     let verifiedFacts = { events: [], deaths: [], births: [] };
     try {
-        const rawVerify = await callGroq(verifyPrompt, 800, 'llama-3.3-70b-versatile', 0.1);
+        const rawVerify = await callMistral(verifyPrompt, 800, 0.1);
         // Strip markdown fences if present
         const cleanVerify = rawVerify.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/,'').trim();
         const parsed = JSON.parse(cleanVerify);
@@ -1278,7 +1532,7 @@ JSON फॉर्मेट में जवाब दो। केवल JSON:
 }`;
 
     try {
-        const raw = await callGroq(writePrompt, 2000, 'llama-3.3-70b-versatile', 0.2);
+        const raw = await callMistral(writePrompt, 2000, 0.2);
         const cleanRaw = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/,'').trim();
         const parsed = JSON.parse(cleanRaw);
 
@@ -1351,7 +1605,7 @@ async function generateExplainers() {
 सरल हिंदी, 90-110 शब्द। कोई शीर्षक मत लगाओ, सीधे लिखो।
 JSON: { "explainer": "पूरा पाठ" }`;
 
-            const raw    = await callGroq(prompt, 280);
+            const raw    = await callGroq(prompt, 350);
             const parsed = JSON.parse(raw);
 
             if (parsed.explainer && parsed.explainer.length > 40) {
@@ -1404,7 +1658,7 @@ async function generateKaMat() {
 केवल JSON में जवाब दो:
 {"text": "60-80 शब्दों का संदेश"}`;
 
-            const raw = await callGroq(prompt, 200, 'llama-3.1-8b-instant', 0.5);
+            const raw = await callGroq(prompt, 200, 'openai/gpt-oss-20b', 0.5);
             const clean = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/, '').trim();
             const parsed = JSON.parse(clean);
             if (parsed.text && parsed.text.length > 20) {
@@ -1502,7 +1756,7 @@ ${contextLines}
 JSON: { "heading": "साप्ताहिक समीक्षा: ${weekStart}–${weekEnd} — [एक आकर्षक उपशीर्षक]", "content": "पूरा संरचित लेख (पैराग्राफ \\n\\n से अलग करें)" }`;
 
     try {
-        const raw    = await callGroq(prompt, 3000, 'llama-3.3-70b-versatile', 0.7);
+        const raw    = await callGroq(prompt, 3000, 'openai/gpt-oss-120b', 0.7);
         const parsed = JSON.parse(raw);
         if (!parsed.heading || !parsed.content) { console.error('✗ Weekly roundup: empty Groq response'); return null; }
         parsed.content = flattenMistralContent(parsed.content);
@@ -1688,7 +1942,7 @@ async function generateShorts() {
   "whyItMatters": "क्यों जरूरी है? 1-2 वाक्यों में (max 150 chars)"
 }`;
 
-                const raw = await callGroq(prompt, 400);
+                const raw = await callGroq(prompt, 600);
                 const parsed = JSON.parse(raw);
 
                 if (!parsed.headline || !parsed.whatHappened) continue;
@@ -1793,64 +2047,86 @@ function writeNewsData(newsArray) {
 }
 
 // Connect to MongoDB - Force MongoDB in production
+// Caches the in-flight connection promise so concurrent cold-start requests
+// (common on Vercel serverless) await the SAME connect() attempt instead of
+// each opening a brand-new connection to Atlas — avoids the connection-storm
+// pattern that leads to "Server selection timed out" for readers under load.
+let connectionPromise = null;
+
 const connectDB = async () => {
     // Already connected — skip
-    if (isMongoDBConnected) return;
+    if (isMongoDBConnected && mongoose.connection.readyState === 1) return;
 
-    console.log('=== MongoDB Connection Attempt ===');
-    console.log('Environment:', process.env.NODE_ENV || 'development');
-    console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
-    console.log('CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
-    
-    // In development, allow fallback to JSON file
-    if (isDevelopment && !process.env.MONGODB_URI) {
-        console.log('⚠️ Development mode: MongoDB URI not found, using JSON file storage');
-        console.log('✓ JSON file mode enabled for local development');
-        return;
-    }
-    
-    if (!process.env.MONGODB_URI) {
-        const errorMsg = '❌ MONGODB_URI not found in environment variables';
-        console.error(errorMsg);
-        if (process.env.NODE_ENV === 'production') {
-            console.error('⚠️ Production requires MongoDB. Set MONGODB_URI in Vercel environment variables.');
+    // A connection attempt is already in progress — reuse it.
+    if (connectionPromise) return connectionPromise;
+
+    connectionPromise = (async () => {
+        console.log('=== MongoDB Connection Attempt ===');
+        console.log('Environment:', process.env.NODE_ENV || 'development');
+        console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
+        console.log('CLOUDINARY_CLOUD_NAME exists:', !!process.env.CLOUDINARY_CLOUD_NAME);
+
+        // In development, allow fallback to JSON file
+        if (isDevelopment && !process.env.MONGODB_URI) {
+            console.log('⚠️ Development mode: MongoDB URI not found, using JSON file storage');
+            console.log('✓ JSON file mode enabled for local development');
+            return;
         }
-        throw new Error(errorMsg);
-    }
-    
-    try {
-        console.log('Connecting to MongoDB...');
-        const maskedUri = process.env.MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
-        console.log('MongoDB URI (masked):', maskedUri);
-        
-        await mongoose.connect(process.env.MONGODB_URI, {
-            serverSelectionTimeoutMS: 30000,
-            connectTimeoutMS: 30000,
-            socketTimeoutMS: 45000,
-        });
-        // Prevent unhandled 'error' events from crashing the process after initial connect
-        mongoose.connection.on('error', err => {
-            console.error('❌ MongoDB connection error:', err.message);
-            isMongoDBConnected = false;
-        });
-        mongoose.connection.on('disconnected', () => {
-            console.warn('⚠️ MongoDB disconnected');
-            isMongoDBConnected = false;
-        });
-        mongoose.connection.on('reconnected', () => {
-            console.log('✓ MongoDB reconnected');
+
+        if (!process.env.MONGODB_URI) {
+            const errorMsg = '❌ MONGODB_URI not found in environment variables';
+            console.error(errorMsg);
+            if (process.env.NODE_ENV === 'production') {
+                console.error('⚠️ Production requires MongoDB. Set MONGODB_URI in Vercel environment variables.');
+            }
+            throw new Error(errorMsg);
+        }
+
+        try {
+            console.log('Connecting to MongoDB...');
+            const maskedUri = process.env.MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//***:***@');
+            console.log('MongoDB URI (masked):', maskedUri);
+
+            await mongoose.connect(process.env.MONGODB_URI, {
+                serverSelectionTimeoutMS: 8000, // fail fast instead of blocking readers for 30s
+                connectTimeoutMS: 10000,
+                socketTimeoutMS: 45000,
+                maxPoolSize: 10,   // bound per-instance pool — many concurrent serverless
+                minPoolSize: 0,    // instances can otherwise exhaust Atlas's connection limit
+                bufferCommands: false, // fail fast instead of silently queueing queries
+            });
+            // Prevent unhandled 'error' events from crashing the process after initial connect
+            mongoose.connection.on('error', err => {
+                console.error('❌ MongoDB connection error:', err.message);
+                isMongoDBConnected = false;
+            });
+            mongoose.connection.on('disconnected', () => {
+                console.warn('⚠️ MongoDB disconnected');
+                isMongoDBConnected = false;
+            });
+            mongoose.connection.on('reconnected', () => {
+                console.log('✓ MongoDB reconnected');
+                isMongoDBConnected = true;
+            });
+            console.log('✓ Connected to MongoDB Atlas successfully');
             isMongoDBConnected = true;
-        });
-        console.log('✓ Connected to MongoDB Atlas successfully');
-        isMongoDBConnected = true;
-    } catch (err) {
-        console.error('❌ MongoDB connection failed:', err.message);
-        if (isDevelopment) {
-            console.log('⚠️ Development mode: Falling back to JSON file storage');
-        } else {
-            console.error('⚠️ Production MongoDB connection failed. Check MONGODB_URI in Vercel settings.');
+        } catch (err) {
+            console.error('❌ MongoDB connection failed:', err.message);
+            if (isDevelopment) {
+                console.log('⚠️ Development mode: Falling back to JSON file storage');
+            } else {
+                console.error('⚠️ Production MongoDB connection failed. Check MONGODB_URI and Atlas Network Access (IP allowlist) in Vercel settings.');
+            }
+            isMongoDBConnected = false;
+            throw err;
         }
-        isMongoDBConnected = false;
+    })();
+
+    try {
+        await connectionPromise;
+    } finally {
+        // Let the next call retry with a fresh attempt whether this one succeeded or failed.
+        connectionPromise = null;
     }
 };
 
@@ -1985,62 +2261,68 @@ const CATEGORY_PAGE_INFO = {
     desh: {
         name: 'देश', emoji: '🇮🇳', color: '#ff9933',
         title: 'देश की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'भारत की राष्ट्रीय राजनीति, केंद्र सरकार की नीतियों और देशव्यापी घटनाओं की विस्तृत हिंदी खबरें।',
-        intro: 'भारत की राष्ट्रीय राजनीति, केंद्र सरकार की नीतियों, सामाजिक आंदोलनों और देशव्यापी महत्वपूर्ण घटनाओं की सम्पूर्ण जानकारी के लिए "वॉयस ऑफ क्रांति" के देश खंड में आपका स्वागत है।\n\nहम संसद में उठने वाले महत्वपूर्ण विधेयकों से लेकर सुप्रीम कोर्ट के बड़े फैसलों तक, किसान आंदोलनों से लेकर शिक्षा नीतियों तक — हर उस मुद्दे को कवर करते हैं जो आम भारतीय नागरिक के जीवन को प्रभावित करता है।\n\nहमारी न्यूज़ डेस्क की टीम देश के कोने-कोने से खबरें इकट्ठा कर, उन्हें सरल और प्रामाणिक हिंदी में प्रस्तुत करती है।'
+        metaDesc: 'भारत की राष्ट्रीय राजनीति, केंद्र सरकार की नीतियों और देशव्यापी घटनाओं की ताज़ा हिंदी खबरें।',
+        intro: 'देश की ताज़ा राजनीति, सामाजिक और राष्ट्रीय घटनाओं की खबरें।'
     },
     videsh: {
         name: 'विदेश', emoji: '🌍', color: '#3b82f6',
         title: 'विदेश की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'अंतर्राष्ट्रीय समाचार — विश्व की बड़ी घटनाएं, कूटनीति और भारत के विदेशी संबंधों की ताज़ा जानकारी।',
-        intro: '"वॉयस ऑफ क्रांति" के विदेश खंड में आपको मिलेगी दुनिया की सबसे महत्वपूर्ण खबरें — अमेरिका से लेकर चीन, यूरोप से लेकर मध्य-पूर्व तक।\n\nभारत के अंतर्राष्ट्रीय संबंध, BRICS, G20, संयुक्त राष्ट्र में भारत की भूमिका, पड़ोसी देशों से संबंध और वैश्विक व्यापार पर असर डालने वाली खबरें हमारी प्राथमिकता हैं।\n\nहम विदेशी समाचारों को भारतीय दृष्टिकोण से प्रस्तुत करते हैं ताकि पाठक समझ सकें कि ये घटनाएं उनके जीवन पर क्या प्रभाव डालती हैं।'
+        metaDesc: 'अंतर्राष्ट्रीय समाचार, कूटनीति और वैश्विक घटनाओं की ताज़ा जानकारी।',
+        intro: 'दुनिया की बड़ी घटनाओं और भारत से जुड़े अंतर्राष्ट्रीय समाचार।'
     },
     rajya: {
         name: 'राज्य', emoji: '🗺️', color: '#10b981',
         title: 'राज्यों की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'मध्यप्रदेश और भारत के अन्य राज्यों की ताज़ा खबरें, राज्य सरकारों की नीतियां और स्थानीय घटनाएं।',
-        intro: '"वॉयस ऑफ क्रांति" के राज्य खंड में मध्यप्रदेश सहित देश के विभिन्न राज्यों की महत्वपूर्ण खबरें एक जगह उपलब्ध हैं।\n\nइंदौर, ग्वालियर, जबलपुर से लेकर उत्तर प्रदेश, बिहार, राजस्थान और महाराष्ट्र तक — राज्य सरकारों की नीतियां, विधानसभा कार्यवाही, स्थानीय प्रशासन और जनता की समस्याएं हमारे कवरेज में शामिल हैं।\n\nहम स्थानीय खबरों को राष्ट्रीय परिप्रेक्ष्य में देखते हैं और यह समझाने का प्रयास करते हैं कि राज्य स्तर की नीतियां आम नागरिक की जिंदगी को कैसे प्रभावित करती हैं।'
+        metaDesc: 'मध्यप्रदेश और अन्य राज्यों की ताज़ा खबरें, नीतियां और स्थानीय घटनाएं।',
+        intro: 'राज्य स्तर की खबरें, नीति और स्थानीय घटनाओं का अपडेट।'
     },
     bhopal: {
         name: 'भोपाल', emoji: '🏙️', color: '#8b5cf6',
         title: 'भोपाल की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'भोपाल की स्थानीय खबरें — नगर निगम, यातायात, विकास परियोजनाएं और भोपाली जनता की आवाज़।',
-        intro: 'मध्यप्रदेश की राजधानी भोपाल — झीलों की नगरी — की हर छोटी-बड़ी खबर "वॉयस ऑफ क्रांति" पर सबसे पहले।\n\nनगर निगम की परियोजनाओं, यातायात समस्याओं, स्मार्ट सिटी योजना, बड़े तालाब-छोटे तालाब के आसपास के विकास, शिक्षा संस्थानों, अस्पतालों और भोपाल के बाज़ारों से जुड़ी खबरें हमारी पहली प्राथमिकता हैं।\n\nभोपाल "वॉयस ऑफ क्रांति" का गृह शहर है — इसीलिए हम इस शहर की नब्ज़ को सबसे करीब से पकड़ते हैं।'
+        metaDesc: 'भोपाल की स्थानीय खबरें, विकास, यातायात और शहर की जनता से जुड़ी घटनाएं।',
+        intro: 'भोपाल की शहर की खबरें और स्थानीय विकास से जुड़ी अपडेट्स।'
     },
     crime: {
         name: 'अपराध', emoji: '🚔', color: '#ef4444',
         title: 'अपराध की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'देश और मध्यप्रदेश की अपराध खबरें — पुलिस कार्रवाई, न्यायालय के फैसले और अपराध रोकथाम।',
-        intro: '"वॉयस ऑफ क्रांति" का अपराध खंड आपको देश और प्रदेश की प्रमुख अपराध घटनाओं, पुलिस जांच, न्यायालय के फैसलों और अपराध निरोधक उपायों की जानकारी देता है।\n\nहम अपराध की खबरें इसलिए नहीं देते कि पाठकों में भय फैलाएं, बल्कि इसलिए देते हैं ताकि नागरिक जागरूक हों और अपनी सुरक्षा के प्रति सतर्क रहें। साइबर अपराध, महिला सुरक्षा और आर्थिक अपराधों पर हमारी विशेष नज़र रहती है।\n\nहम पीड़ित की गोपनीयता का सम्मान करते हुए, तथ्यों पर आधारित और संतुलित रिपोर्टिंग करते हैं।'
+        metaDesc: 'देश और मध्यप्रदेश की अपराध खबरें, पुलिस कार्रवाई और judicial updates।',
+        intro: 'अपराध, जांच और सुरक्षा से जुड़ी खबरें।'
+    },
+    apradh: {
+        name: 'अपराध', emoji: '🚔', color: '#ef4444',
+        title: 'अपराध की ताज़ा खबरें — वॉयस ऑफ क्रांति',
+        metaDesc: 'देश और मध्यप्रदेश की अपराध खबरें, पुलिस कार्रवाई और judicial updates।',
+        intro: 'अपराध, जांच और सुरक्षा से जुड़ी खबरें।'
     },
     khel: {
         name: 'खेल', emoji: '⚽', color: '#f59e0b',
         title: 'खेल की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'भारत और विश्व के खेल समाचार — क्रिकेट, फुटबॉल, कुश्ती, बैडमिंटन और ओलंपिक की ताज़ा जानकारी।',
-        intro: 'भारत का खेल जगत तेज़ी से बदल रहा है — क्रिकेट से आगे बढ़कर भारत अब फुटबॉल, कुश्ती, बैडमिंटन, हॉकी और ओलंपिक खेलों में भी नई ऊंचाइयां छू रहा है।\n\nIPL, विश्व कप, एशियाई खेल, राष्ट्रमंडल खेल से लेकर स्थानीय खिलाड़ियों की उपलब्धियों तक — हम खेल की हर बड़ी खबर आप तक पहुँचाते हैं।\n\nभारतीय खेल प्रतिभाओं की कहानियां हमें न केवल मनोरंजन देती हैं बल्कि युवा पीढ़ी को प्रेरित भी करती हैं।'
+        metaDesc: 'क्रिकेट, फुटबॉल, कुश्ती और अंतरराष्ट्रीय खेलों की ताज़ा खबरें।',
+        intro: 'खेल जगत की ताज़ा खबरें, परिणाम और खिलाड़ी अपडेट।'
     },
     rajniti: {
         name: 'राजनीति', emoji: '🏛️', color: '#6366f1',
         title: 'राजनीति की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'भारतीय राजनीति की खबरें — चुनाव, राजनीतिक दल, नेता और संसद की ताज़ा हिंदी जानकारी।',
-        intro: '"वॉयस ऑफ क्रांति" का राजनीति खंड भारतीय लोकतंत्र की जीवंत तस्वीर प्रस्तुत करता है। चुनाव आयोग की घोषणाओं, राजनीतिक दलों के घोषणापत्रों, नेताओं के बयानों और संसदीय कार्यवाही की सटीक जानकारी यहाँ मिलती है।\n\nहम राजनीति को जटिल शब्दों में नहीं, बल्कि सरल हिंदी में समझाते हैं ताकि हर नागरिक लोकतांत्रिक प्रक्रिया को समझ सके और अपने मताधिकार का सही उपयोग कर सके।\n\nहम किसी भी राजनीतिक दल के पक्षधर नहीं हैं — सभी दलों की खबरें समान रूप से और समान मानकों पर प्रकाशित होती हैं।'
+        metaDesc: 'चुनाव, नेता, नीति और संसद से जुड़ी ताज़ा हिंदी खबरें।',
+        intro: 'राजनीतिक घटनाओं, चुनाव और नीति से जुड़ी खबरें।'
     },
     manoranjan: {
         name: 'मनोरंजन', emoji: '🎬', color: '#ec4899',
         title: 'मनोरंजन की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'बॉलीवुड, टेलीविजन, संगीत और सेलेब्रिटी की ताज़ा हिंदी खबरें — फिल्म रिव्यू और OTT अपडेट।',
-        intro: 'बॉलीवुड की चमक-धमक, टेलीविजन के धारावाहिकों का रोमांच, संगीत की धुनें और देश-विदेश के सेलेब्रिटी की खबरें — सब कुछ "वॉयस ऑफ क्रांति" के मनोरंजन खंड में।\n\nनई फिल्मों के ट्रेलर और रिव्यू, पुरस्कार समारोह, संगीत रिलीज़, OTT प्लेटफॉर्म की नई सीरीज़ और कलाकारों की खबरें हम आप तक पहुँचाते हैं।\n\nमनोरंजन सिर्फ समय बिताने का साधन नहीं, यह भारतीय संस्कृति का दर्पण भी है — इसीलिए हम सकारात्मक और सम्मानजनक रिपोर्टिंग के प्रति प्रतिबद्ध हैं।'
+        metaDesc: 'बॉलीवुड, टेलीविजन, संगीत और सेलेब्रिटी की हिंदी खबरें।',
+        intro: 'फिल्म, टीवी, संगीत और सेलेब्रिटी की ताज़ा खबरें।'
     },
     vyapar: {
         name: 'व्यापार', emoji: '💼', color: '#14b8a6',
         title: 'व्यापार की ताज़ा खबरें — वॉयस ऑफ क्रांति',
-        metaDesc: 'भारत की अर्थव्यवस्था, बाज़ार, बजट, उद्योग और व्यापार की ताज़ा हिंदी खबरें।',
-        intro: '"वॉयस ऑफ क्रांति" का व्यापार खंड आपको भारतीय अर्थव्यवस्था की नब्ज़ से रूबरू कराता है। शेयर बाज़ार, बजट, GST, RBI की नीतियां, कृषि बाज़ार, निर्यात-आयात और स्टार्टअप की दुनिया की खबरें यहाँ एक जगह मिलती हैं।\n\nहम व्यापार की जटिल खबरों को आम आदमी की भाषा में समझाते हैं — क्योंकि महंगाई, रोज़गार, बचत और निवेश ये सब मुद्दे हर घर से जुड़े हैं।\n\nछोटे व्यापारी से लेकर बड़े उद्योगपति तक, किसान से लेकर नौकरीपेशा तक — सभी के लिए उपयोगी जानकारी यहाँ मिलती है।'
+        metaDesc: 'अर्थव्यवस्था, मार्केट, बजट और व्यवसाय से जुड़ी खबरें।',
+        intro: 'मार्केट, अर्थव्यवस्था और व्यापार से जुड़ी खबरें।'
     },
     itihas: {
         name: 'इतिहास', emoji: '📜', color: '#c4922a',
         title: 'इतिहास और विरासत — वॉयस ऑफ क्रांति',
-        metaDesc: 'भारतीय इतिहास, विरासत, पुरातत्व, महान व्यक्तित्व और ऐतिहासिक घटनाओं पर हिंदी में लेख।',
-        intro: '"वॉयस ऑफ क्रांति" का इतिहास खंड भारत की गौरवशाली विरासत को नई पीढ़ी तक पहुँचाने का प्रयास है। स्वतंत्रता संग्राम, वैदिक काल, मुगल साम्राज्य, मराठा शौर्य, आधुनिक भारत का निर्माण — यहाँ इतिहास के हर पन्ने की झलक मिलती है।\n\nहमारे "आज का इतिहास" स्तंभ में हर दिन उस तारीख से जुड़ी ऐतिहासिक घटनाएं प्रकाशित होती हैं। पुरातात्विक खोजें, विरासत स्थलों का संरक्षण और भारतीय संस्कृति की विविधता हमारे कवरेज के अभिन्न हिस्से हैं।\n\nइतिहास जानना हमारी जड़ों को समझना है — और जड़ें मज़बूत हों, तभी पेड़ ऊंचा उगता है।'
+        metaDesc: 'भारतीय इतिहास, विरासत और ऐतिहासिक घटनाओं की हिंदी खबरें।',
+        intro: 'इतिहास, विरासत और प्रमुख घटनाओं की छोटी-सी झलक।'
     }
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2060,9 +2342,11 @@ app.get('/news/:slug', async (req, res) => {
 
         // Always attempt DB query — on Vercel serverless, isMongoDBConnected may be
         // false on cold-start even when MongoDB is reachable. Let try/catch handle failure.
+        // Call connectDB() fresh (not the stale module-load `dbReady` promise) so a
+        // container that recovers after a cold-start hiccup doesn't keep failing forever.
         let dbError = false;
         try {
-            await dbReady;
+            await connectDB();
             article = await News.findOne({ slug }).lean();
             // Case-insensitive fallback
             if (!article) {
@@ -2160,7 +2444,7 @@ app.get('/news/:slug', async (req, res) => {
                     <div class="news-detail-content">
                         <div class="news-detail-text">${lintedBody}</div>
                         ${(article.rssSource && article.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: ${article.rssLink ? `<a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer">${esc(article.rssSource)}</a>` : `<strong>${esc(article.rssSource)}</strong>`}</p>` : ''}
-                        ${(article.rssLink && article.rssSource !== 'PB SHABD') ? `<div class="read-full-article"><a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer" class="read-full-btn">📰 पूरी खबर पढ़ें (${esc(article.rssSource || 'मूल स्रोत')} पर जाएं)</a></div>` : ''}
+                        ${(article.rssLink && article.rssSource !== 'PB SHABD' && !article.isAiScraped) ? `<div class="read-full-article"><a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer" class="read-full-btn">📰 पूरी खबर पढ़ें (${esc(article.rssSource || 'मूल स्रोत')} पर जाएं)</a></div>` : ''}
                     </div>
                     ${authorCardMarkup}
                     <div class="share-section">
@@ -2339,40 +2623,153 @@ app.post('/api/authors', requireAuth, async (req, res) => {
     }
 });
 
+app.put('/api/authors/:slug', requireAuth, async (req, res) => {
+    try {
+        const { name, photo, description } = req.body || {};
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'Author name is required' });
+        }
+
+        const author = await Author.findOne({ slug: req.params.slug }).lean();
+        if (!author) {
+            return res.status(404).json({ error: 'Author not found' });
+        }
+
+        const slugBase = name.trim();
+        const nextSlug = slugBase
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim()
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .slice(0, 80) || author.slug;
+
+        const updated = await Author.findByIdAndUpdate(
+            author._id,
+            {
+                $set: {
+                    name: slugBase,
+                    slug: nextSlug,
+                    photo: photo || author.photo || '',
+                    description: description || author.description || '',
+                }
+            },
+            { new: true }
+        ).lean();
+
+        res.json({ success: true, author: { ...updated, id: updated._id.toString() } });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.get('/authors/:slug', async (req, res) => {
     try {
         const author = await Author.findOne({ slug: req.params.slug }).lean();
         if (!author) return res.redirect(301, '/authors.html');
 
-        const htmlPath = path.join(__dirname, 'public', 'authors.html');
-        let html = fs.readFileSync(htmlPath, 'utf8');
         const photo = author.photo || 'https://voiceofkranti.com/og-banner.svg';
-        const description = (author.description || '').replace(/"/g, '&quot;');
+        const description = (author.description || 'वॉयस ऑफ क्रांति के साथ इस लेखक की रिपोर्टिंग जनता के लिए सटीक, निष्पक्ष और उपयोगी जानकारी उपलब्ध कराती है।').replace(/"/g, '&quot;');
         const authorName = author.name || 'Author';
         const pageTitle = `${authorName} | वॉयस ऑफ क्रांति`;
         const metaDescription = `${authorName} की प्रोफ़ाइल | वॉयस ऑफ क्रांति`;
 
-        html = html
-            .replace(/<title>.*?<\/title>/i, `<title>${pageTitle}</title>`)
-            .replace(/<meta name="description" content="[^"]*">/i, `<meta name="description" content="${metaDescription}">`)
-            .replace(/<meta property="og:title" content="[^"]*">/i, `<meta property="og:title" content="${pageTitle}">`)
-            .replace(/<meta property="og:description" content="[^"]*">/i, `<meta property="og:description" content="${metaDescription}">`)
-            .replace(/<meta property="og:url" content="[^"]*">/i, `<meta property="og:url" content="https://voiceofkranti.com/authors/${author.slug}">`)
-            .replace(/<meta property="og:image" content="[^"]*">/i, `<meta property="og:image" content="${photo}">`)
-            .replace(/<meta name="twitter:title" content="[^"]*">/i, `<meta name="twitter:title" content="${pageTitle}">`)
-            .replace(/<meta name="twitter:description" content="[^"]*">/i, `<meta name="twitter:description" content="${metaDescription}">`)
-            .replace(/<meta name="twitter:image" content="[^"]*">/i, `<meta name="twitter:image" content="${photo}">`)
-            .replace(/<h1>🌟 संस्थापक<\/h1>/, `<h1>🌟 प्रोफ़ाइल</h1>`)
-            .replace(/<p>वॉयस ऑफ क्रांति की नींव रखने वाले व्यक्ति<\/p>/, `<p>${authorName} की प्रोफ़ाइल</p>`)
-            .replace(/<div class="founder-avatar-svg" aria-label="M">M<\/div>/, `<img src="${photo}" alt="${authorName}" style="width:200px;height:200px;border-radius:50%;object-fit:cover;border:5px solid #ff9933;box-shadow:0 8px 30px rgba(255,153,51,0.3);display:block;margin:0 auto 1rem;">`)
-            .replace(/<span class="founder-badge">संस्थापक<\/span>/, `<span class="founder-badge">लेखक</span>`)
-            .replace(/<h2>Maroof Ahmed Khan<\/h2>/, `<h2>${authorName}</h2>`)
-            .replace(/<p class="founder-designation">प्रधान संपादक — वॉयस ऑफ क्रांति<\/p>/, `<p class="founder-designation">लेखक — वॉयस ऑफ क्रांति</p>`)
-            .replace(/<p>\s*Maroof Ahmed Khan वॉयस ऑफ क्रांति के संस्थापक एवं प्रधान संपादक हैं\.[\s\S]*?<\/p>/, `<p>${description || 'वॉयस ऑफ क्रांति के साथ इस लेखक की रिपोर्टिंग जनता के लिए सटीक, निष्पक्ष और उपयोगी जानकारी उपलब्ध कराती है।'}</p>`)
-            .replace(/<div class="founder-stats">[\s\S]*?<\/div>/, `<div class="founder-stats"><div class="founder-stat"><span class="founder-stat-num">${authorName.length}</span><span class="founder-stat-lbl">अक्षर</span></div><div class="founder-stat"><span class="founder-stat-num">LIVE</span><span class="founder-stat-lbl">रिपोर्टिंग</span></div><div class="founder-stat"><span class="founder-stat-num">24/7</span><span class="founder-stat-lbl">अपडेट</span></div></div>`)
-            .replace(/<h2>संपादकीय दृष्टिकोण<\/h2>/, `<h2>लेखक का दृष्टिकोण</h2>`)
-            .replace(/Maroof Ahmed Khan की संपादकीय नीति तीन मूल स्तंभों पर आधारित है:/, `${authorName} की रिपोर्टिंग और संपादकीय दृष्टि तीन मूल स्तंभों पर आधारित है:`)
-            .replace(/<div class="info-card founder-contact" style="margin-top:1.5rem;">[\s\S]*?<\/div>/, `<div class="info-card founder-contact" style="margin-top:1.5rem;"><h2>लेखक से जुड़ें</h2><p>📧 editor@voiceofkranti.com</p><p>🌐 <a href="/">voiceofkranti.com</a></p><p>📍 भोपाल, मध्यप्रदेश, भारत</p></div>`);
+        const html = `<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ff9933" />
+  <title>${pageTitle}</title>
+  <meta name="description" content="${metaDescription}" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://voiceofkranti.com/authors/${author.slug}" />
+  <meta property="og:type" content="profile" />
+  <meta property="og:url" content="https://voiceofkranti.com/authors/${author.slug}" />
+  <meta property="og:title" content="${pageTitle}" />
+  <meta property="og:description" content="${metaDescription}" />
+  <meta property="og:image" content="${photo}" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="${pageTitle}" />
+  <meta name="twitter:description" content="${metaDescription}" />
+  <meta name="twitter:image" content="${photo}" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
+  <link rel="stylesheet" href="/styles.css?v=21" />
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; color: #1f2937; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 1rem; }
+    .info-page { padding: 2rem 0 4rem; }
+    .info-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 2rem; box-shadow: 0 10px 35px rgba(15,23,42,0.06); }
+    .founder-section { display: flex; gap: 2.5rem; align-items: center; }
+    .founder-photo-wrap { flex: 0 0 220px; text-align: center; }
+    .founder-photo-wrap img { width: 200px; height: 200px; border-radius: 50%; object-fit: cover; object-position: center top; border: 5px solid #ff9933; box-shadow: 0 8px 30px rgba(255,153,51,0.3); }
+    .founder-badge { display: inline-block; background: linear-gradient(135deg, #ff9933, #ff6b00); color: #fff; font-size: 0.78rem; font-weight: 700; padding: 0.35rem 1rem; border-radius: 20px; margin-top: 1rem; }
+    .founder-info h2 { font-size: 2rem; margin: 0 0 0.5rem; color: #1f2937; }
+    .founder-designation { font-size: 1.08rem; color: #4f46e5; font-weight: 600; margin: 0 0 1rem; }
+    .founder-info p { color: #4a5568; line-height: 1.8; margin: 0 0 1rem; }
+    .founder-stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1.25rem; }
+    .founder-stat { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.8rem 1rem; min-width: 105px; text-align: center; }
+    .founder-stat-num { display: block; font-size: 1.4rem; font-weight: 800; color: #ff9933; }
+    .founder-stat-lbl { font-size: 0.78rem; color: #64748b; }
+    .founder-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .founder-value-item { background: #f8fafc; border-left: 4px solid #ff9933; border-radius: 8px; padding: 1rem; }
+    .founder-value-item h4 { margin: 0 0 0.35rem; }
+    .founder-value-item p { margin: 0; color: #64748b; line-height: 1.7; }
+    .founder-contact a { color: #4f46e5; text-decoration: none; }
+    .founder-contact a:hover { text-decoration: underline; }
+    @media (max-width: 640px) { .founder-section { flex-direction: column; text-align: center; } .founder-photo-wrap { flex-basis: auto; } }
+  </style>
+</head>
+<body>
+  <header class="header" style="background:linear-gradient(135deg,#ff9933,#ff6b00);padding:1rem 0;color:#fff;">
+    <div class="container" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <a href="/" style="color:#fff;text-decoration:none;font-weight:800;font-size:1.5rem;">वॉयस ऑफ क्रांति</a>
+      <nav style="display:flex;gap:1rem;flex-wrap:wrap;">
+        <a href="/" style="color:#fff;text-decoration:none;">होम</a>
+        <a href="/authors.html" style="color:#fff;text-decoration:none;">लेखक</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container info-page">
+    <div class="info-card">
+      <div class="founder-section">
+        <div class="founder-photo-wrap">
+          <img src="${photo}" alt="${authorName}" />
+          <span class="founder-badge">लेखक</span>
+        </div>
+        <div class="founder-info">
+          <h2>${authorName}</h2>
+          <p class="founder-designation">लेखक — वॉयस ऑफ क्रांति</p>
+          <p>${description}</p>
+          <div class="founder-stats">
+            <div class="founder-stat"><span class="founder-stat-num">${authorName.length}</span><span class="founder-stat-lbl">अक्षर</span></div>
+            <div class="founder-stat"><span class="founder-stat-num">LIVE</span><span class="founder-stat-lbl">रिपोर्टिंग</span></div>
+            <div class="founder-stat"><span class="founder-stat-num">24/7</span><span class="founder-stat-lbl">अपडेट</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-card" style="margin-top:1.5rem;">
+      <h2>लेखक का दृष्टिकोण</h2>
+      <p>${authorName} की रिपोर्टिंग और संपादकीय दृष्टि तीन मूल स्तंभों पर आधारित है:</p>
+      <div class="founder-values">
+        <div class="founder-value-item"><h4>⚖️ सत्यनिष्ठा</h4><p>हर खबर को प्रकाशित करने से पहले उसकी सत्यता की जाँच की जाती है।</p></div>
+        <div class="founder-value-item"><h4>🎯 निष्पक्षता</h4><p>किसी भी राजनीतिक दल या विचारधारा के प्रति पक्षपात नहीं।</p></div>
+        <div class="founder-value-item"><h4>🤝 जनसेवा</h4><p>समाचार केवल सूचना नहीं — यह जनता की आवाज़ को बुलंद करने का माध्यम है।</p></div>
+        <div class="founder-value-item"><h4>⚡ त्वरित रिपोर्टिंग</h4><p>घटनाएँ होते ही पाठकों तक पहुँचाने की प्रतिबद्धता।</p></div>
+      </div>
+    </div>
+
+    <div class="info-card founder-contact" style="margin-top:1.5rem;">
+      <h2>लेखक से जुड़ें</h2>
+      <p>📧 संपादकीय सुझाव या प्रश्न के लिए: <a href="mailto:editor@voiceofkranti.com">editor@voiceofkranti.com</a></p>
+      <p>🌐 वेबसाइट: <a href="https://voiceofkranti.com">voiceofkranti.com</a></p>
+      <p>📍 भोपाल, मध्यप्रदेश, भारत</p>
+    </div>
+  </main>
+</body>
+</html>`;
 
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
@@ -2502,9 +2899,11 @@ app.get('/api/news/related/:id', async (req, res) => {
 
 // ── Category landing pages: /c/:category ─────────────────────────────────────
 // Serves category.html with server-side injected meta tags for each category.
-app.get('/c/:category', (req, res) => {
-    const catId = req.params.category;
-    const cat   = CATEGORY_PAGE_INFO[catId];
+app.get('/c/:category', async (req, res) => {
+    const aliasMap = { apradh: 'crime' };
+    const rawCatId = req.params.category;
+    const catId = aliasMap[rawCatId] || rawCatId;
+    const cat = CATEGORY_PAGE_INFO[catId];
     if (!cat) return res.redirect(301, '/');
 
     const htmlPath = path.join(__dirname, 'public', 'category.html');
@@ -2513,7 +2912,6 @@ app.get('/c/:category', (req, res) => {
     catch (_) { return res.redirect(301, '/'); }
 
     const pageUrl = `https://voiceofkranti.com/c/${catId}`;
-    const introEscaped = cat.intro.replace(/"/g, '&quot;');
 
     html = html
         .replace(/(<title[^>]*>)[^<]*(<\/title>)/,                         `$1${cat.title}$2`)
@@ -2523,8 +2921,31 @@ app.get('/c/:category', (req, res) => {
         .replace(/(<meta id="og-title"[^>]*content=")[^"]*(")/,            `$1${cat.title}$2`)
         .replace(/(<meta id="og-description"[^>]*content=")[^"]*(")/,      `$1${cat.metaDesc}$2`)
         .replace(/(<meta id="og-url"[^>]*content=")[^"]*(")/,              `$1${pageUrl}$2`)
-        .replace(/(<meta id="cat-id"[^>]*content=")[^"]*(")/,              `$1${catId}$2`)
-        .replace(/(<meta id="cat-intro"[^>]*content=")[^"]*(")/,           `$1${introEscaped}$2`);
+        .replace(/(<meta id="cat-id"[^>]*content=")[^"]*(")/,              `$1${catId}$2`);
+
+    // Server-render the first 10 article cards as real <a href> links so
+    // Googlebot-News sees crawlable HTML links without needing to run JS.
+    try {
+        if (isMongoDBConnected) {
+            const projection = { heading: 1, content: 1, category: 1, photos: 1, date: 1, slug: 1, rssSource: 1, author: 1, isPermanent: 1, full: 1 };
+            const docs = await News.find({ category: catId, isOriginal: { $ne: true } }, projection)
+                .sort({ date: -1 })
+                .limit(40)
+                .lean();
+            const authorNameSet = await getAuthorNameSet();
+            const ranked = enforcePbShabdCap(docs, authorNameSet, 10, 0.5).slice(0, 10);
+            if (ranked.length > 0) {
+                const cardsHtml = ranked.map(a => renderCategoryCardSSR({ ...a, id: a._id.toString() }, cat)).join('\n');
+                html = html.replace(
+                    /<div id="newsGrid" class="news-grid">[\s\S]*?<\/div>\s*(?=<div id="scrollSentinel")/,
+                    `<div id="newsGrid" class="news-grid" data-ssr-count="${ranked.length}">${cardsHtml}</div>\n        `
+                );
+            }
+        }
+    } catch (err) {
+        console.error('Category SSR card render failed:', err.message);
+        // Fall through — client-side fetch in category.html still renders the grid.
+    }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
@@ -2604,13 +3025,15 @@ app.post('/api/media/upload-cloudinary', requireAuth, mediaCloudinaryUpload.sing
 });
 
 // ── Dynamic sitemap including all live news articles ──────────────────────────
+// Google News sitemap best practice: only articles published in the last 2 days,
+// capped at 1000 URLs. Older/all articles live in the general /sitemap.xml instead.
 app.get('/sitemap-news.xml', async (req, res) => {
     try {
         // Wait for DB on cold start (up to 8s)
         if (!isMongoDBConnected) {
             try {
                 await Promise.race([
-                    dbReady,
+                    connectDB(),
                     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
                 ]);
             } catch (e) {
@@ -2622,7 +3045,11 @@ app.get('/sitemap-news.xml', async (req, res) => {
         if (isMongoDBConnected) {
             // Only include articles with slugs — ?id= URLs are redirects and cause
             // "Page with redirect" warnings in Google Search Console
-            const articles = await News.find({ slug: { $exists: true, $ne: '' } }, { _id: 1, slug: 1, date: 1, heading: 1 }).sort({ date: -1 }).limit(50000).lean();
+            const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+            const articles = await News.find(
+                { slug: { $exists: true, $ne: '' }, date: { $gte: twoDaysAgo } },
+                { _id: 1, slug: 1, date: 1, heading: 1 }
+            ).sort({ date: -1 }).limit(1000).lean();
             newsUrls = articles.map(a => ({
                 loc: `https://voiceofkranti.com/news/${a.slug}`,
                 lastmod: a.date ? new Date(a.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -2662,18 +3089,69 @@ ${newsXml}
     }
 });
 
+// General sitemap: full canonical article archive (no news: tags, no age limit) —
+// this is what Google indexes for long-tail/older articles once they age out of
+// the news sitemap above.
 app.get('/sitemap.xml', async (req, res) => {
-    return app._router.handle({
-        method: 'GET',
-        url: '/sitemap-news.xml',
-        headers: req.headers,
-        query: req.query,
-        params: req.params,
-        body: req.body,
-        get: req.get.bind(req),
-        originalUrl: req.originalUrl,
-        socket: req.socket
-    }, res);
+    try {
+        if (!isMongoDBConnected) {
+            try {
+                await Promise.race([
+                    connectDB(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+                ]);
+            } catch (e) {
+                return res.status(503).set('Content-Type', 'text/plain').send('Sitemap unavailable during cold start, please retry.');
+            }
+        }
+
+        let urls = [];
+        if (isMongoDBConnected) {
+            const articles = await News.find(
+                { slug: { $exists: true, $ne: '' } },
+                { _id: 1, slug: 1, date: 1 }
+            ).sort({ date: -1 }).limit(50000).lean();
+            urls = articles.map(a => ({
+                loc: `https://voiceofkranti.com/news/${a.slug}`,
+                lastmod: a.date ? new Date(a.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            }));
+        }
+
+        const staticUrls = [
+            { loc: 'https://voiceofkranti.com/', priority: '1.0' },
+            { loc: 'https://voiceofkranti.com/latest', priority: '0.8' },
+            { loc: 'https://voiceofkranti.com/about.html', priority: '0.5' },
+        ];
+        const categoryUrls = Object.keys(CATEGORY_PAGE_INFO)
+            .filter(k => k !== 'apradh') // alias of 'crime', avoid duplicate canonical URL
+            .map(k => ({ loc: `https://voiceofkranti.com/c/${k}`, priority: '0.7' }));
+
+        const today = new Date().toISOString().split('T')[0];
+        const staticXml = [...staticUrls, ...categoryUrls].map(p => `  <url>
+    <loc>${p.loc}</loc>
+    <lastmod>${today}</lastmod>
+    <priority>${p.priority}</priority>
+  </url>`).join('\n');
+
+        const urlsXml = urls.map(p => `  <url>
+    <loc>${p.loc}</loc>
+    <lastmod>${p.lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>`).join('\n');
+
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${staticXml}
+${urlsXml}
+</urlset>`;
+
+        res.set('Content-Type', 'application/xml');
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.send(xml);
+    } catch (err) {
+        res.status(500).send('Sitemap error');
+    }
 });
 
 app.get('/news-sitemap.xml', async (req, res) => {
@@ -2884,6 +3362,19 @@ const newsCache = new Map(); // key: category|all, value: { data, expires }
 const NEWS_CACHE_TTL = 60 * 1000; // 60 seconds
 function invalidateNewsCache() { newsCache.clear(); }
 
+app.post('/api/fix-imported-content', requireAuth, async (req, res) => {
+    try {
+        const dryRun = req.body?.dryRun === true || req.query.dryRun === 'true';
+        const limit = Math.min(Math.max(parseInt(req.body?.limit || req.query.limit || '200', 10) || 200, 1), 1000);
+        const result = await repairLegacyImportedArticles({ dryRun, limit });
+        if (!dryRun) invalidateNewsCache();
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Error repairing imported content:', error);
+        res.status(500).json({ error: 'Failed to repair imported content', details: error.message });
+    }
+});
+
 // API to get all news
 app.get('/api/news', async (req, res) => {
     try {
@@ -2910,7 +3401,9 @@ app.get('/api/news', async (req, res) => {
                 return true;
             });
             const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-            return res.json(sorted.slice(skip, skip + limit));
+            const paged = sorted.slice(skip, skip + limit);
+            // No DB in this fallback mode, so the "real author" tier can't be checked here.
+            return res.json((category && !writtenOnly && skip === 0) ? enforcePbShabdCap(paged, new Set(), 10, 0.5) : paged);
         }
 
         // On cold start retry DB connection; return 503 if still not ready so client retries quickly.
@@ -2943,7 +3436,17 @@ app.get('/api/news', async (req, res) => {
             query = { isOriginal: { $ne: true } };
         }
         if (fullOnly) {
-            query.full = true;
+            query.$or = [
+                { full: true },
+                {
+                    $expr: {
+                        $gt: [
+                            { $strLenCP: { $trim: { input: { $ifNull: ['$content', ''] } } } },
+                            600
+                        ]
+                    }
+                }
+            ];
         }
         if (source === 'pb') {
             query.$or = [
@@ -2957,7 +3460,7 @@ app.get('/api/news', async (req, res) => {
             const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
             query.date = { $gte: cutoff };
         }
-        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1 };
+        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1 };
 
         const news = await News.find(query, projection)
             .sort({ date: -1 })
@@ -2967,14 +3470,22 @@ app.get('/api/news', async (req, res) => {
 
         const newsData = news.map(item => ({
             ...item,
+            full: item.full === true || isFullArticleContent(String(item.content || '')),
             id: item._id.toString()
         }));
 
-        if (cacheAllowed && newsData.length > 0) {
-            newsCache.set(cacheKey, { data: newsData, expires: Date.now() + NEWS_CACHE_TTL });
+        // Category "Top 10" priority order: isPermanent/real-author first, then PB
+        // SHABD (capped at 50%), then full-tagged, then everything else — reorders
+        // only, no article is ever removed.
+        const finalNewsData = (category && !writtenOnly && skip === 0)
+            ? enforcePbShabdCap(newsData, await getAuthorNameSet(), 10, 0.5)
+            : newsData;
+
+        if (cacheAllowed && finalNewsData.length > 0) {
+            newsCache.set(cacheKey, { data: finalNewsData, expires: Date.now() + NEWS_CACHE_TTL });
         }
         res.set('X-Cache', 'MISS');
-        res.json(newsData);
+        res.json(finalNewsData);
     } catch (error) {
         console.error('Error fetching news:', error);
         res.status(500).json({ error: 'Failed to fetch news' });
@@ -3058,6 +3569,11 @@ app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) =
             category,
             author,
             ...(cleanSlug ? { slug: cleanSlug } : {}),
+            // AI-scraper articles pass these so the source name renders as a real,
+            // clickable credit link (same template used for RSS/API imports).
+            ...(req.body.rssSource ? { rssSource: req.body.rssSource.trim() } : {}),
+            ...(req.body.rssLink ? { rssLink: req.body.rssLink.trim() } : {}),
+            isAiScraped: req.body.isAiScraped === 'true',
             photos,
             date: new Date(),
             views: 0,
@@ -3376,7 +3892,7 @@ app.get('/api/weekly-roundup', async (req, res) => {
 app.post('/api/admin/generate-aaj-ka-itihas', requireAuth, async (req, res) => {
     try {
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
-        if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'GROQ_API_KEY not set' });
+        if (!process.env.MISTRAL_API_KEY) return res.status(503).json({ error: 'MISTRAL_API_KEY not set' });
         // Force regeneration: remove today’s existing article first if force=true
         if (req.body.force === 'true') {
             const today = new Date();
@@ -3478,7 +3994,6 @@ app.post('/api/admin/scrape-url', requireAuth, async (req, res) => {
 - दसवाँ पैराग्राफ: निष्कर्ष, स्थिति, आगे की संभावना
 - अपने शब्दों में लिखो — सीधे कॉपी न करो
 - सरल, स्पष्ट, पत्रकारिता-शैली हिंदी में लिखो
-- लेख का अंत में एक पंक्ति इस तरह जोड़ो: "स्रोत: [${ogSite}](${url})"
 - किसी भी तथ्य को भ्रमित करने वाले शब्द या अनुमानित विवरण से बचो
 
 मूल पाठ:
@@ -3486,14 +4001,13 @@ ${rawText.slice(0, 4000)}
 
 JSON में जवाब दो: { "content": "पूरा हिंदी लेख (10 पैराग्राफ)" }`;
             try {
-                const raw = await callGroq(prompt, 1800, 'llama-3.3-70b-versatile', 0.3);
+                const raw = await callGroq(prompt, 1800, 'openai/gpt-oss-120b', 0.3);
                 const parsed = JSON.parse(raw);
                 if (parsed.content) content = parsed.content;
             } catch (_) { /* keep rawText on Groq failure */ }
-        } else if (!rewrite) {
-            // Append attribution even without rewrite
-            content = rawText + (rawText ? `\n\n**स्रोत:** [${ogSite}](${url})` : '');
         }
+        // Source credit is rendered separately via rssSource/rssLink (real <a> tag) —
+        // not embedded as text here, since AI-generated markdown formatting is unreliable.
 
         res.json({ heading, content, image: ogImage, sourceUrl: url, sourceName: ogSite, desc: ogDesc });
     } catch (err) {
@@ -3502,11 +4016,11 @@ JSON में जवाब दो: { "content": "पूरा हिंदी �
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Manual trigger: generate one original editorial article via Groq
+// Manual trigger: generate one original editorial article via Mistral
 app.post('/api/admin/generate-daily-article', requireAuth, async (req, res) => {
     try {
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
-        if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'GROQ_API_KEY not set' });
+        if (!process.env.MISTRAL_API_KEY) return res.status(503).json({ error: 'MISTRAL_API_KEY not set' });
         const article = await generateDailyArticle();
         if (!article) return res.status(500).json({ error: 'लेख नहीं बन सका, दोबारा कोशिश करें' });
         invalidateNewsCache();
@@ -3758,6 +4272,34 @@ function isCronAuthorized(req) {
     const isQuery   = qs.split('&').some(p => p === `secret=${cronSecret}`);
     return isVercel || isBearer || isQuery;
 }
+
+// Vercel Cron: generate one daily editorial article every 24 h
+app.get('/api/cron/generate-daily-article', async (req, res) => {
+    if (!isCronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        await connectDB();
+        await generateDailyArticle();
+        invalidateNewsCache();
+        res.json({ success: true, message: 'Daily article generation complete' });
+    } catch (err) {
+        console.error('Cron/daily-article error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Vercel Cron: generate Aaj Ka Itihas every 24 h
+app.get('/api/cron/generate-aaj-ka-itihas', async (req, res) => {
+    if (!isCronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        await connectDB();
+        await generateAajKaItihas();
+        invalidateNewsCache();
+        res.json({ success: true, message: 'Aaj Ka Itihas generation complete' });
+    } catch (err) {
+        console.error('Cron/aaj-ka-itihas error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 // Vercel Cron: generate shorts every 6 h
 app.get('/api/cron/generate-shorts', async (req, res) => {
@@ -4109,9 +4651,20 @@ function pbStripHtml(html) {
 
 function getPbStoryTimestamp(story) {
     const raw = story?.created_at_src || story?.created_at || story?.updated_at || story?.date || story?.published_at || story?.timestamp;
+    const ts = parsePbShabdTimestamp(raw);
+    return ts === null ? null : ts.getTime();
+}
+
+// PB SHABD sends naive IST wall-clock timestamps ("YYYY-MM-DD HH:mm:ss", no
+// timezone marker). On a UTC server that string gets parsed as if it were
+// already UTC, storing dates ~5.5h in the future — which broke chronological
+// sorting in the live feed. Convert to true UTC unless a timezone is present.
+function parsePbShabdTimestamp(raw) {
     if (!raw) return null;
-    const ts = new Date(raw).getTime();
-    return Number.isFinite(ts) ? ts : null;
+    const hasExplicitTz = /Z$|[+-]\d{2}:?\d{2}$/.test(String(raw).trim());
+    const naive = new Date(raw);
+    if (Number.isNaN(naive.getTime())) return null;
+    return hasExplicitTz ? naive : new Date(naive.getTime() - (5.5 * 60 * 60 * 1000));
 }
 
 function isRecentPbStory(story, maxHours = 2) {
@@ -4274,7 +4827,7 @@ app.post('/api/admin/sync-pbshabd', requireAuth, async (req, res) => {
                     rssLink,
                     isOriginal: false,
                     headingNorm:(story.title || '').toLowerCase().replace(/\s+/g, ' ').trim(),
-                    date:       new Date(story.created_at_src || story.created_at || Date.now()),
+                    date:       parsePbShabdTimestamp(story.created_at_src || story.created_at) || new Date(),
                     slug,
                 }).save();
                 imported.push(story.story_id);

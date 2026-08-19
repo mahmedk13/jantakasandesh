@@ -63,6 +63,13 @@ const newsSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // True only for articles published via the admin's AI-scraper tool — used to
+    // hide the separate "पूरी खबर पढ़ें" button since the clickable source-credit
+    // link already covers that for these (unlike plain RSS/API imports).
+    isAiScraped: {
+        type: Boolean,
+        default: false
+    },
     isDailyFact: {
         type: Boolean,
         default: false

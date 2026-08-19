@@ -32,7 +32,6 @@
     <meta name="twitter:site" content="@voiceofkranti">
     <!-- Server-injected category data (read by JS) -->
     <meta id="cat-id" content="">
-    <meta id="cat-intro" content="">
     <!-- BreadcrumbList JSON-LD -->
     <script id="json-ld-breadcrumb" type="application/ld+json">{}</script>
 
@@ -48,17 +47,17 @@
         .category-link { border-bottom: 1px solid rgba(255,255,255,0.1) !important; padding: 0.75rem 1rem !important; }
     }
     .cat-hero {
-        background: linear-gradient(135deg, var(--cat-color, #ff9933) 0%, rgba(0,0,0,0.7) 100%);
-        border-radius: 14px;
-        padding: 2.5rem 2rem;
-        margin-bottom: 2rem;
+        background: linear-gradient(135deg, var(--cat-color, #ff9933) 0%, rgba(0,0,0,0.72) 100%);
+        border-radius: 12px;
+        padding: 1rem 1.25rem 0.9rem;
+        margin-bottom: 1rem;
         color: #fff;
         text-align: center;
     }
-    .cat-hero-emoji { font-size: 3rem; display: block; margin-bottom: 0.5rem; }
-    .cat-hero h1  { font-size: 2rem; font-weight: 800; margin: 0 0 0.75rem; }
-    .cat-hero-desc { font-size: 1rem; line-height: 1.7; max-width: 700px; margin: 0 auto; opacity: 0.92; white-space: pre-line; }
-    .cat-divider { height: 3px; background: linear-gradient(90deg, var(--cat-color,#ff9933), transparent); border-radius: 2px; margin: 0 0 1.5rem; }
+    .cat-hero-emoji { font-size: 1.8rem; display: block; margin-bottom: 0.25rem; }
+    .cat-hero h1  { font-size: 1.3rem; font-weight: 800; margin: 0 0 0.35rem; }
+    .cat-hero-desc { font-size: 0.82rem; line-height: 1.5; max-width: 640px; margin: 0 auto; opacity: 0.96; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cat-divider { height: 2px; background: linear-gradient(90deg, var(--cat-color,#ff9933), transparent); border-radius: 2px; margin: 0 0 1rem; }
     .news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
     .news-card { background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; display: block; }
     .news-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.13); }
@@ -107,6 +106,7 @@
                 <a href="/shorts.html" class="nav-link nav-link-shorts"><span class="shorts-dot"></span>30 सेकंड न्यूज़</a>
                 <a href="/latest" class="nav-link nav-link-latest">🟢 लाइव फीड</a>
                 <a href="/latest?source=pb" class="nav-link nav-link-pb">📡 प्रसार भारती</a>
+                <a href="/latest?full=true" class="nav-link nav-link-full">पूर्ण खबरें</a>
                 <a href="/facts.html" class="nav-link">क्या आप जानते हैं?</a>
                 <a href="/aaj-ka-itihas.html" class="nav-link">आज का इतिहास</a>
                 <a href="/weekly-roundup.html" class="nav-link">साप्ताहिक समीक्षा</a>
@@ -140,7 +140,6 @@
         <div id="catHero" class="cat-hero" style="--cat-color:#ff9933;">
             <span class="cat-hero-emoji" id="catEmoji">📰</span>
             <h1 id="catName">समाचार</h1>
-            <p class="cat-hero-desc" id="catIntro">लोड हो रहा है...</p>
         </div>
         <div class="cat-divider" id="catDivider"></div>
 
@@ -224,10 +223,6 @@
     };
 
     const catId    = document.getElementById('cat-id').getAttribute('content');
-    const catIntroText = decodeURIComponent(
-        (document.getElementById('cat-intro').getAttribute('content') || '')
-            .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    );
     const cat    = CAT_INFO[catId] || { name: catId, emoji: '📰', color: '#ff9933' };
 
     // Apply category color to hero
@@ -238,7 +233,6 @@
         `linear-gradient(90deg, ${cat.color}, transparent)`;
     document.getElementById('catEmoji').textContent = cat.emoji;
     document.getElementById('catName').textContent  = cat.name + ' की ताज़ा खबरें';
-    document.getElementById('catIntro').textContent = catIntroText || 'खबरें लोड हो रही हैं...';
 
     // Active nav link
     document.querySelectorAll('.category-nav a').forEach(a => {
@@ -335,15 +329,26 @@
             document.getElementById('newsGrid').innerHTML = '<div class="cat-empty">श्रेणी निर्दिष्ट नहीं है।</div>';
             return;
         }
+        const grid = document.getElementById('newsGrid');
+        const ssrCount = parseInt(grid.getAttribute('data-ssr-count') || '0', 10);
         try {
             const res = await fetch('/api/news?category=' + encodeURIComponent(catId));
             allArticles = await res.json();
             if (!allArticles.length) {
-                document.getElementById('newsGrid').innerHTML = '<div class="cat-empty">इस श्रेणी में अभी कोई खबर नहीं है।</div>';
-                document.getElementById('scrollSentinel').style.display = 'none';
+                if (!ssrCount) {
+                    grid.innerHTML = '<div class="cat-empty">इस श्रेणी में अभी कोई खबर नहीं है।</div>';
+                    document.getElementById('scrollSentinel').style.display = 'none';
+                }
                 return;
             }
-            document.getElementById('newsGrid').innerHTML = '';
+            // Server already rendered the first `ssrCount` cards (same ordering as this
+            // API call) — keep them in place and continue infinite scroll from there.
+            if (ssrCount > 0) {
+                shownCount = Math.min(ssrCount, allArticles.length);
+            } else {
+                grid.innerHTML = '';
+                shownCount = 0;
+            }
             loadMore();
             const sentinel = document.getElementById('scrollSentinel');
             const observer = new IntersectionObserver(
@@ -352,7 +357,7 @@
             );
             if (sentinel) observer.observe(sentinel);
         } catch (err) {
-            document.getElementById('newsGrid').innerHTML = '<div class="cat-empty">खबरें लोड करने में त्रुटि हुई।</div>';
+            if (!ssrCount) grid.innerHTML = '<div class="cat-empty">खबरें लोड करने में त्रुटि हुई।</div>';
         }
     }
 
