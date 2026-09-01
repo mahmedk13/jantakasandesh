@@ -35,12 +35,31 @@ const CATEGORY_MAP = {
     'bollywood': 'manoranjan', 'cinema': 'manoranjan', 'film': 'manoranjan',
     'व्यापार': 'vyapar', 'बाजार': 'vyapar', 'शेयर': 'vyapar', 'अर्थव्यवस्था': 'vyapar',
     'business': 'vyapar', 'economy': 'vyapar', 'market': 'vyapar', 'budget': 'vyapar',
+    // NATIONAL - central-government/national-institution signals, checked BEFORE
+    // bhopal/rajya geo keywords so a nationally-important story (e.g. PM/Union Cabinet/
+    // Supreme Court) datelined from a state bureau isn't miscategorized as local rajya news.
+    'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
+    'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
+    'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
+    'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
+    'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
+    'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
     'भोपाल': 'bhopal', 'bhopal': 'bhopal',
     'मध्य प्रदेश': 'rajya', 'मध्यप्रदेश': 'rajya', 'madhya pradesh': 'rajya',
     'इंदौर': 'rajya', 'ग्वालियर': 'rajya', 'जबलपुर': 'rajya', 'उज्जैन': 'rajya',
     'indore': 'rajya', 'gwalior': 'rajya', 'jabalpur': 'rajya',
     'उत्तर प्रदेश': 'rajya', 'बिहार': 'rajya', 'राजस्थान': 'rajya', 'महाराष्ट्र': 'rajya',
     'uttar pradesh': 'rajya', 'bihar': 'rajya', 'rajasthan': 'rajya', 'maharashtra': 'rajya',
+    // Remaining states — must stay in sync with the fuller rajya keyword list in
+    // server.js (used for RSS/API imports) so PB SHABD doesn't miscategorize these as 'desh'.
+    'पंजाब': 'rajya', 'हरियाणा': 'rajya', 'गुजरात': 'rajya', 'छत्तीसगढ़': 'rajya',
+    'झारखंड': 'rajya', 'उत्तराखंड': 'rajya', 'हिमाचल': 'rajya', 'केरल': 'rajya',
+    'तेलंगाना': 'rajya', 'आंध्र प्रदेश': 'rajya', 'कर्नाटक': 'rajya', 'पश्चिम बंगाल': 'rajya',
+    'देहरादून': 'rajya', 'हरिद्वार': 'rajya',
+    'punjab': 'rajya', 'haryana': 'rajya', 'gujarat': 'rajya', 'chhattisgarh': 'rajya',
+    'jharkhand': 'rajya', 'uttarakhand': 'rajya', 'himachal': 'rajya', 'kerala': 'rajya',
+    'telangana': 'rajya', 'andhra pradesh': 'rajya', 'karnataka': 'rajya', 'west bengal': 'rajya',
+    'dehradun': 'rajya', 'haridwar': 'rajya',
     'राजनीति': 'rajniti', 'चुनाव': 'rajniti', 'संसद': 'rajniti', 'भाजपा': 'rajniti', 'कांग्रेस': 'rajniti',
     'politics': 'rajniti', 'election': 'rajniti', 'parliament': 'rajniti', 'bjp': 'rajniti', 'modi': 'rajniti',
     'विदेश': 'videsh', 'अमेरिका': 'videsh', 'चीन': 'videsh', 'पाकिस्तान': 'videsh',

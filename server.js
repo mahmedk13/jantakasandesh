@@ -785,6 +785,15 @@ const CATEGORY_MAP = {
     'business': 'vyapar', 'economy': 'vyapar', 'finance': 'vyapar', 'market': 'vyapar',
     'sensex': 'vyapar', 'nifty': 'vyapar', 'stock': 'vyapar', 'share market': 'vyapar',
     'rbi': 'vyapar', 'budget': 'vyapar', 'gdp': 'vyapar', 'inflation': 'vyapar',
+    // NATIONAL - central-government/national-institution signals, checked BEFORE
+    // bhopal/rajya geo keywords so a nationally-important story datelined from a
+    // state doesn't get miscategorized as local rajya news.
+    'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
+    'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
+    'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
+    'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
+    'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
+    'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
     // BHOPAL - Bhopal city (checked BEFORE rajniti/crime so local Bhopal news isn't stolen by topic keywords)
     'भोपाल': 'bhopal', 'bhopal': 'bhopal',
     // RAJYA - MP districts/cities + other states (checked BEFORE rajniti/crime for same reason)
@@ -864,6 +873,43 @@ function mapRssCategory(rssCategories, title, defaultCategory) {
     return defaultCategory;
 }
 
+// Maps title/content keywords to our internal 'rajya' sub-category values, for any
+// automated importer (RSS/NewsData/GNews/Currents/PB SHABD admin endpoints) that
+// tags an article 'rajya'. Keep in sync with STATE_MAP in sync-pbshabd.js and
+// STATE_LIST in public/admin.html / public/category.html if states are added/removed.
+const STATE_MAP = {
+    'madhya pradesh': 'mp', 'मध्य प्रदेश': 'mp', 'मध्यप्रदेश': 'mp',
+    'indore': 'mp', 'इंदौर': 'mp', 'gwalior': 'mp', 'ग्वालियर': 'mp',
+    'jabalpur': 'mp', 'जबलपुर': 'mp', 'ujjain': 'mp', 'उज्जैन': 'mp',
+    'bhopal': 'mp', 'भोपाल': 'mp',
+    'uttar pradesh': 'up', 'उत्तर प्रदेश': 'up',
+    'bihar': 'bihar', 'बिहार': 'bihar',
+    'rajasthan': 'rajasthan', 'राजस्थान': 'rajasthan',
+    'maharashtra': 'maharashtra', 'महाराष्ट्र': 'maharashtra',
+    'punjab': 'punjab', 'पंजाब': 'punjab',
+    'haryana': 'haryana', 'हरियाणा': 'haryana',
+    'gujarat': 'gujarat', 'गुजरात': 'gujarat',
+    'chhattisgarh': 'chhattisgarh', 'छत्तीसगढ़': 'chhattisgarh',
+    'jharkhand': 'jharkhand', 'झारखंड': 'jharkhand',
+    'uttarakhand': 'uttarakhand', 'उत्तराखंड': 'uttarakhand', 'देहरादून': 'uttarakhand', 'dehradun': 'uttarakhand',
+    'himachal': 'himachal', 'हिमाचल': 'himachal',
+    'kerala': 'kerala', 'केरल': 'kerala',
+    'telangana': 'telangana',
+    'andhra pradesh': 'andhra_pradesh',
+    'karnataka': 'karnataka',
+    'west bengal': 'west_bengal',
+};
+
+function detectState(title, content) {
+    const checks = [(title || '').toLowerCase(), (content || '').toLowerCase()];
+    for (const text of checks) {
+        for (const [key, val] of Object.entries(STATE_MAP)) {
+            if (text.includes(key)) return val;
+        }
+    }
+    return 'other';
+}
+
 // Delete all Cloudinary images for an article's photos array
 async function deleteCloudinaryPhotos(photos) {
     if (!photos || !photos.length) return;
@@ -923,12 +969,14 @@ async function fetchAndImportRSS() {
             if (plainBodyCharCount(finalContent) < MIN_IMPORTED_BODY_CHARS) continue;
             const full = isFullArticleContent(finalContent);
 
+            const category = mapRssCategory(item.categories, item.title, source.defaultCategory);
             candidates.push({
                 heading:       item.title.trim(),
                 headingNorm:   normalizeHeading(item.title),
                 content:       finalContent,
                 full,
-                category:      mapRssCategory(item.categories, item.title, source.defaultCategory),
+                category,
+                state:         category === 'rajya' ? detectState(item.title, finalContent) : null,
                 author:        'JKS News Desk',
                 photos:        photo ? [photo] : [],
                 date:          pubDate,
@@ -1092,6 +1140,7 @@ async function fetchFromNewsDataAPI() {
                     content:       content,
                     full,
                     category:      category,
+                    state:         category === 'rajya' ? detectState(item.title, content) : null,
                     author:        'JKS News Desk',
                     photos:        photo ? [photo] : [],
                     date:          pubDate,
@@ -1180,6 +1229,7 @@ async function fetchFromGNewsAPI() {
                     content,
                     full,
                     category,
+                    state:         category === 'rajya' ? detectState(item.title, content) : null,
                     author:        'JKS News Desk',
                     photos:        photo ? [photo] : [],
                     date:          pubDate,
@@ -1263,6 +1313,7 @@ async function fetchFromCurrentsAPI() {
                     content,
                     full,
                     category,
+                    state:         category === 'rajya' ? detectState(item.title, content) : null,
                     author:        'JKS News Desk',
                     photos:        photo ? [photo] : [],
                     date:          pubDate,
@@ -4703,6 +4754,7 @@ app.post('/api/admin/import-pbshabd', requireAuth, pbShabdUpload.array('zips', 5
                 heading,
                 content: content || heading,
                 category,
+                state: category === 'rajya' ? detectState(heading, city) : null,
                 author: 'PB SHABD',
                 photos: photoUrl ? [photoUrl] : [],
                 rssSource: 'PB SHABD',
@@ -4917,7 +4969,8 @@ app.post('/api/admin/sync-pbshabd', requireAuth, async (req, res) => {
                     heading:    story.title,
                     content,
                     category,
-                    author:     story.rnu_name || 'PB SHABD',
+                    state:      category === 'rajya' ? detectState(story.title, story.state || '') : null,
+                    author:     'Maroof Ahmed Khan',
                     photos:     photoUrl ? [photoUrl] : [],
                     rssSource:  'PB SHABD',
                     rssLink,

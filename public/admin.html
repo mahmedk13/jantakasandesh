@@ -428,6 +428,12 @@
                 <span id="filterCount" style="font-size:0.8rem; color:#718096; margin-left:auto;"></span>
             </div>
 
+            <div id="bulkShareBar" style="display:none; align-items:center; gap:0.6rem; flex-wrap:wrap; margin:0 0 0.75rem; padding:0.6rem 0.85rem; background:#dcfce7; border:1px solid #86efac; border-radius:8px;">
+                <span id="bulkShareCount" style="font-weight:700; color:#166534; font-size:0.9rem;"></span>
+                <button onclick="shareSelectedOnWhatsApp()" class="btn btn-primary btn-small" style="background:#25D366;">📲 WhatsApp पर शेयर करें</button>
+                <button onclick="clearNewsSelection()" class="btn btn-primary btn-small" style="background:#718096;">चयन हटाएं</button>
+            </div>
+
             <div id="newsList" class="news-grid"></div>
         </section>
 
@@ -620,6 +626,8 @@
         const cloudinaryMediaStatus = document.getElementById('cloudinaryMediaStatus');
         let allNewsData = [];
         let activeAuthorFilter = 'all';
+        let selectedNewsMap = new Map(); // id -> { heading, url }
+        let lastRenderedNewsById = new Map(); // id -> news object, for safe lookup from checkbox handlers
 
         async function uploadToCloudinaryFromAdmin() {
             const file = cloudinaryMediaInput.files && cloudinaryMediaInput.files[0];
@@ -1168,14 +1176,19 @@
             }
             if (countEl) countEl.textContent = `${data.length} खबरें`;
             newsList.innerHTML = data.map(news => {
+                    lastRenderedNewsById.set(news.id, news);
                     const photos = news.photos || (news.photo ? [news.photo] : []);
                     const firstPhoto = optimizeCloudinaryUrl(photos[0]);
                     const hasMultiplePhotos = photos.length > 1;
                     const publicUrl = news.slug ? `/news/${news.slug}` : `/news-detail.html?id=${news.id}`;
                     const categoryHref = news.category ? `/?category=${news.category}` : '/';
                     
+                    const fullUrl = window.location.origin + publicUrl;
                     return `
-                    <div class="news-card" onclick="window.open('${publicUrl}', '_blank');" style="cursor:pointer;">
+                    <div class="news-card" onclick="window.open('${publicUrl}', '_blank');" style="cursor:pointer;position:relative;">
+                        <label onclick="event.stopPropagation();" style="position:absolute;top:8px;left:8px;z-index:5;background:rgba(255,255,255,0.92);border-radius:6px;padding:4px 6px;line-height:0;">
+                            <input type="checkbox" ${selectedNewsMap.has(news.id) ? 'checked' : ''} onchange="toggleNewsSelection('${news.id}', this.checked)" style="width:18px;height:18px;cursor:pointer;">
+                        </label>
                         ${firstPhoto ? `
                             <div style="position: relative;">
                                 <img src="${firstPhoto}" alt="${news.heading}" class="news-image">
@@ -1205,6 +1218,43 @@
                     </div>
                 `;
             }).join('');
+        }
+
+        function toggleNewsSelection(id, checked) {
+            if (checked) {
+                const news = lastRenderedNewsById.get(id);
+                if (!news) return;
+                const publicUrl = news.slug ? `/news/${news.slug}` : `/news-detail.html?id=${news.id}`;
+                selectedNewsMap.set(id, { heading: news.heading || '', url: window.location.origin + publicUrl });
+            } else {
+                selectedNewsMap.delete(id);
+            }
+            updateBulkShareBar();
+        }
+
+        function updateBulkShareBar() {
+            const bar = document.getElementById('bulkShareBar');
+            const count = selectedNewsMap.size;
+            bar.style.display = count ? 'flex' : 'none';
+            document.getElementById('bulkShareCount').textContent = `${count} खबर${count === 1 ? '' : 'ें'} चुनी गईं`;
+        }
+
+        function clearNewsSelection() {
+            selectedNewsMap.clear();
+            updateBulkShareBar();
+            applyNewsFilter();
+        }
+
+        function shareSelectedOnWhatsApp() {
+            if (!selectedNewsMap.size) return;
+            const lines = ['वॉयस ऑफ क्रांति'];
+            let i = 1;
+            for (const { heading, url } of selectedNewsMap.values()) {
+                lines.push(`\n${i}. ${heading}\n${url}`);
+                i++;
+            }
+            const waUrl = 'https://wa.me/?text=' + encodeURIComponent(lines.join('\n'));
+            window.open(waUrl, '_blank');
         }
 
         async function loadTopNews() {
