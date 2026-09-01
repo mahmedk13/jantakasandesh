@@ -264,7 +264,46 @@ nav::-webkit-scrollbar { display: none; }
 .category-menu {
     background: #2d3748;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
 }
+
+/* Rajya state dropdown panel */
+.cat-rajya-toggle { cursor: pointer; user-select: none; }
+.rajya-state-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 300;
+    background: #1a202c;
+    border-top: 2px solid #dc2626;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.rajya-state-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+}
+.rajya-state-grid a {
+    color: #e2e8f0;
+    text-decoration: none;
+    padding: 0.35rem 0.9rem;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+.rajya-state-grid a:hover { background: #dc2626; color: #fff; }
+.rajya-state-grid a.rajya-state-all {
+    background: rgba(220, 38, 38, 0.25);
+    font-weight: 700;
+}
+.rajya-state-grid a.rajya-state-all:hover { background: #dc2626; }
 
 /* Hamburger toggle button — hidden on desktop, shown on mobile via inline style */
 .cat-toggle {

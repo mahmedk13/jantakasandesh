@@ -397,6 +397,8 @@ function shareEPaper(shareUrl, title) {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
 }
 
+window.shareEPaper = shareEPaper;
+
 window.shareCurrentEPaper = function() {
     const shareUrl = getPathDateSlug() ? `${location.origin}/epaper/${getPathDateSlug()}` : `${location.origin}/epaper`;
     const title = titleEl.textContent || 'ई-पेपर';

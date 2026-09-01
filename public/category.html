@@ -126,13 +126,36 @@
             <a href="/c/videsh" class="category-link">विदेश</a>
             <a href="/c/rajniti" class="category-link">राजनीति</a>
             <a href="/c/bhopal" class="category-link">भोपाल</a>
-            <a href="/c/rajya" class="category-link">राज्य</a>
+            <a href="/c/rajya" class="category-link cat-rajya-toggle" id="rajyaNavBtn" aria-haspopup="true" aria-expanded="false">राज्य ▾</a>
             <a href="/c/crime" class="category-link">अपराध</a>
             <a href="/c/khel" class="category-link">खेल</a>
             <a href="/c/manoranjan" class="category-link">मनोरंजन</a>
             <a href="/c/vyapar" class="category-link">व्यापार</a>
             <a href="/c/itihas" class="category-link">इतिहास</a>
         </nav>
+        </div>
+        <!-- राज्य state dropdown panel -->
+        <div id="rajyaStatePanel" class="rajya-state-panel" style="display:none;" role="menu" aria-label="राज्य उप-श्रेणियाँ">
+            <div class="rajya-state-grid">
+                <a href="/c/rajya" class="rajya-state-all" role="menuitem">📋 सभी राज्य</a>
+                <a href="/c/rajya?state=mp" role="menuitem">मध्य प्रदेश</a>
+                <a href="/c/rajya?state=up" role="menuitem">उत्तर प्रदेश</a>
+                <a href="/c/rajya?state=bihar" role="menuitem">बिहार</a>
+                <a href="/c/rajya?state=rajasthan" role="menuitem">राजस्थान</a>
+                <a href="/c/rajya?state=maharashtra" role="menuitem">महाराष्ट्र</a>
+                <a href="/c/rajya?state=gujarat" role="menuitem">गुजरात</a>
+                <a href="/c/rajya?state=haryana" role="menuitem">हरियाणा</a>
+                <a href="/c/rajya?state=punjab" role="menuitem">पंजाब</a>
+                <a href="/c/rajya?state=chhattisgarh" role="menuitem">छत्तीसगढ़</a>
+                <a href="/c/rajya?state=jharkhand" role="menuitem">झारखंड</a>
+                <a href="/c/rajya?state=uttarakhand" role="menuitem">उत्तराखंड</a>
+                <a href="/c/rajya?state=himachal" role="menuitem">हिमाचल प्रदेश</a>
+                <a href="/c/rajya?state=kerala" role="menuitem">केरल</a>
+                <a href="/c/rajya?state=telangana" role="menuitem">तेलंगाना</a>
+                <a href="/c/rajya?state=andhra_pradesh" role="menuitem">आंध्र प्रदेश</a>
+                <a href="/c/rajya?state=karnataka" role="menuitem">कर्नाटक</a>
+                <a href="/c/rajya?state=west_bengal" role="menuitem">पश्चिम बंगाल</a>
+            </div>
         </div>
     </div>
 
@@ -284,6 +307,11 @@
         { value: 'west_bengal', label: 'पश्चिम बंगाल' }, { value: 'other', label: 'अन्य राज्य' }
     ];
     let activeStateFilter = '';
+    // Pre-select state from ?state= URL param (set by nav dropdown links)
+    if (catId === 'rajya') {
+        const _preState = new URLSearchParams(location.search).get('state');
+        if (_preState) activeStateFilter = _preState;
+    }
 
     function renderStateFilters() {
         if (catId !== 'rajya') return;
@@ -424,6 +452,30 @@
         btn.addEventListener('click', function(){
             var open = nav.classList.toggle('open');
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    })();
+    // Rajya state dropdown toggle
+    (function(){
+        var rajyaBtn = document.getElementById('rajyaNavBtn');
+        var panel = document.getElementById('rajyaStatePanel');
+        if (!rajyaBtn || !panel) return;
+        rajyaBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            var isOpen = panel.style.display !== 'none';
+            panel.style.display = isOpen ? 'none' : 'block';
+            rajyaBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        });
+        document.addEventListener('click', function(e){
+            if (!rajyaBtn.contains(e.target) && !panel.contains(e.target)) {
+                panel.style.display = 'none';
+                rajyaBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        panel.querySelectorAll('a').forEach(function(a){
+            a.addEventListener('click', function(){
+                panel.style.display = 'none';
+                rajyaBtn.setAttribute('aria-expanded', 'false');
+            });
         });
     })();
     </script>

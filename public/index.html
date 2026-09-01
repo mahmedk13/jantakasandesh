@@ -217,13 +217,36 @@
             <a href="/c/videsh" class="category-link" data-category="videsh">विदेश</a>
             <a href="/c/rajniti" class="category-link" data-category="rajniti">राजनीति</a>
             <a href="/c/bhopal" class="category-link" data-category="bhopal">भोपाल</a>
-            <a href="/c/rajya" class="category-link" data-category="rajya">राज्य</a>
+            <a href="/c/rajya" class="category-link cat-rajya-toggle" data-category="rajya" id="rajyaNavBtn" aria-haspopup="true" aria-expanded="false">राज्य ▾</a>
             <a href="/c/crime" class="category-link" data-category="crime">अपराध</a>
             <a href="/c/khel" class="category-link" data-category="khel">खेल</a>
             <a href="/c/manoranjan" class="category-link" data-category="manoranjan">मनोरंजन</a>
             <a href="/c/vyapar" class="category-link" data-category="vyapar">व्यापार</a>
             <a href="/c/itihas" class="category-link" data-category="itihas">इतिहास</a>
         </nav>
+        </div>
+        <!-- राज्य state dropdown panel -->
+        <div id="rajyaStatePanel" class="rajya-state-panel" style="display:none;" role="menu" aria-label="राज्य उप-श्रेणियाँ">
+            <div class="rajya-state-grid">
+                <a href="/c/rajya" class="rajya-state-all" role="menuitem">📋 सभी राज्य</a>
+                <a href="/c/rajya?state=mp" role="menuitem">मध्य प्रदेश</a>
+                <a href="/c/rajya?state=up" role="menuitem">उत्तर प्रदेश</a>
+                <a href="/c/rajya?state=bihar" role="menuitem">बिहार</a>
+                <a href="/c/rajya?state=rajasthan" role="menuitem">राजस्थान</a>
+                <a href="/c/rajya?state=maharashtra" role="menuitem">महाराष्ट्र</a>
+                <a href="/c/rajya?state=gujarat" role="menuitem">गुजरात</a>
+                <a href="/c/rajya?state=haryana" role="menuitem">हरियाणा</a>
+                <a href="/c/rajya?state=punjab" role="menuitem">पंजाब</a>
+                <a href="/c/rajya?state=chhattisgarh" role="menuitem">छत्तीसगढ़</a>
+                <a href="/c/rajya?state=jharkhand" role="menuitem">झारखंड</a>
+                <a href="/c/rajya?state=uttarakhand" role="menuitem">उत्तराखंड</a>
+                <a href="/c/rajya?state=himachal" role="menuitem">हिमाचल प्रदेश</a>
+                <a href="/c/rajya?state=kerala" role="menuitem">केरल</a>
+                <a href="/c/rajya?state=telangana" role="menuitem">तेलंगाना</a>
+                <a href="/c/rajya?state=andhra_pradesh" role="menuitem">आंध्र प्रदेश</a>
+                <a href="/c/rajya?state=karnataka" role="menuitem">कर्नाटक</a>
+                <a href="/c/rajya?state=west_bengal" role="menuitem">पश्चिम बंगाल</a>
+            </div>
         </div>
     </div>
 
@@ -397,6 +420,8 @@
                 link.classList.add('active');
             }
             link.addEventListener('click', (e) => {
+                // Rajya toggle is handled by the dropdown script; skip SPA nav for it
+                if (link.classList.contains('cat-rajya-toggle')) return;
                 e.preventDefault();
                 currentCategory = link.dataset.category;
                 writtenOnly = currentCategory === 'written';
@@ -876,7 +901,7 @@
     <!-- Cookie Consent -->
     <div id="cookieBanner" style="display:none;"><p>हम आपके अनुभव को बेहतर बनाने के लिए कुकीज़ का उपयोग करते हैं। अधिक जानकारी के लिए हमारी <a href="/privacy-policy.html">गोपनीयता नीति</a> देखें।</p><button id="cookieAcceptBtn" onclick="acceptCookies()">स्वीकार करें</button></div>
     <script>(function(){if(!localStorage.getItem('cookieConsent')){document.getElementById('cookieBanner').style.display='flex';}})();function acceptCookies(){localStorage.setItem('cookieConsent','1');document.getElementById('cookieBanner').style.display='none';}</script>
-    <!-- Category hamburger toggle -->
+    <!-- Category hamburger toggle + Rajya dropdown -->
     <script>
     (function(){
         var btn = document.getElementById('catToggle');
@@ -886,11 +911,37 @@
             var open = nav.classList.toggle('open');
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         });
-        // Close when a category link is clicked
-        nav.querySelectorAll('.category-link').forEach(function(a){
+        // Close when a category link is clicked (except the rajya toggle)
+        nav.querySelectorAll('.category-link:not(.cat-rajya-toggle)').forEach(function(a){
             a.addEventListener('click', function(){
                 nav.classList.remove('open');
                 btn.setAttribute('aria-expanded', 'false');
+            });
+        });
+    })();
+    // Rajya state dropdown toggle
+    (function(){
+        var rajyaBtn = document.getElementById('rajyaNavBtn');
+        var panel = document.getElementById('rajyaStatePanel');
+        if (!rajyaBtn || !panel) return;
+        rajyaBtn.addEventListener('click', function(e){
+            e.preventDefault();
+            var isOpen = panel.style.display !== 'none';
+            panel.style.display = isOpen ? 'none' : 'block';
+            rajyaBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+        });
+        // Close panel when clicking outside
+        document.addEventListener('click', function(e){
+            if (!rajyaBtn.contains(e.target) && !panel.contains(e.target)) {
+                panel.style.display = 'none';
+                rajyaBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        // Close panel when a state link is clicked
+        panel.querySelectorAll('a').forEach(function(a){
+            a.addEventListener('click', function(){
+                panel.style.display = 'none';
+                rajyaBtn.setAttribute('aria-expanded', 'false');
             });
         });
     })();
