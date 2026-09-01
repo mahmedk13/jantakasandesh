@@ -64,6 +64,43 @@ function categorize(title, stateHint, desc) {
     return 'desh';
 }
 
+// Maps PB SHABD's own `story.state` field (most reliable) and title/description
+// keywords to our internal 'rajya' sub-category values. Keep this list in sync with
+// STATE_LIST in public/admin.html and public/category.html if states are added/removed.
+const STATE_MAP = {
+    'madhya pradesh': 'mp', 'मध्य प्रदेश': 'mp', 'मध्यप्रदेश': 'mp',
+    'indore': 'mp', 'इंदौर': 'mp', 'gwalior': 'mp', 'ग्वालियर': 'mp',
+    'jabalpur': 'mp', 'जबलपुर': 'mp', 'ujjain': 'mp', 'उज्जैन': 'mp',
+    'uttar pradesh': 'up', 'उत्तर प्रदेश': 'up',
+    'bihar': 'bihar', 'बिहार': 'bihar',
+    'rajasthan': 'rajasthan', 'राजस्थान': 'rajasthan',
+    'maharashtra': 'maharashtra', 'महाराष्ट्र': 'maharashtra',
+    'punjab': 'punjab', 'पंजाब': 'punjab',
+    'haryana': 'haryana', 'हरियाणा': 'haryana',
+    'gujarat': 'gujarat', 'गुजरात': 'gujarat',
+    'chhattisgarh': 'chhattisgarh', 'छत्तीसगढ़': 'chhattisgarh',
+    'jharkhand': 'jharkhand', 'झारखंड': 'jharkhand',
+    'uttarakhand': 'uttarakhand', 'उत्तराखंड': 'uttarakhand',
+    'himachal': 'himachal', 'हिमाचल': 'himachal',
+    'kerala': 'kerala', 'केरल': 'kerala',
+    'telangana': 'telangana',
+    'andhra pradesh': 'andhra_pradesh',
+    'karnataka': 'karnataka',
+    'west bengal': 'west_bengal',
+};
+
+function detectState(title, stateHint, desc) {
+    // stateHint checked first — PB SHABD's own state field (used for the state-specific
+    // fetch passes) is more reliable than keyword-guessing from free text.
+    const checks = [(stateHint || '').toLowerCase(), (title || '').toLowerCase(), (desc || '').toLowerCase()];
+    for (const text of checks) {
+        for (const [key, val] of Object.entries(STATE_MAP)) {
+            if (text.includes(key)) return val;
+        }
+    }
+    return 'other';
+}
+
 // ── Cookie helpers ───────────────────────────────────────────────────────────
 function extractCookies(headers) {
     const out = {};
@@ -333,7 +370,8 @@ async function main() {
                 heading:    story.title,
                 content,
                 category,
-                author:     story.rnu_name || 'PB SHABD',
+                state:      category === 'rajya' ? detectState(story.title, story.state || '', story.description || '') : null,
+                author:     'Maroof Ahmed Khan',
                 photos:     photoUrl ? [photoUrl] : [],
                 rssSource:  'PB SHABD',
                 rssLink,

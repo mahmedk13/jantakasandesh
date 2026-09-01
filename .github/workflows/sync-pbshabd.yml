@@ -2,7 +2,10 @@ name: Sync PB SHABD News
 
 on:
   schedule:
-    - cron: '0 * * * *'       # every hour (GitHub may delay 15-60 min on low-activity repos)
+    # Every hour, but skip 12am-6am IST (no new PB SHABD stories overnight).
+    # Cron is UTC; IST = UTC+5:30, so running at minute :30 lines runs up exactly
+    # on IST hour marks. Hours 0-17 UTC = IST 06:00-23:00; 18-23 UTC (IST 00:00-05:00) skipped.
+    - cron: '30 0-17 * * *'
   workflow_dispatch:           # manual trigger
 
 concurrency:

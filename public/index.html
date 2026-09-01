@@ -24,7 +24,7 @@
     <meta property="og:url" content="https://voiceofkranti.com/">
     <meta property="og:title" content="वॉयस ऑफ क्रांति | वॉयस ऑफ क्रांति - ताज़ा हिंदी समाचार">
     <meta property="og:description" content="वॉयस ऑफ क्रांति - ताज़ा हिंदी समाचार, भोपाल और मध्य प्रदेश की खबरें। देश, राजनीति, अपराध और व्यापार की अपडेट।">
-    <meta property="og:image" content="https://voiceofkranti.com/og-banner.svg">
+    <meta property="og:image" content="https://res.cloudinary.com/dri3u7hon/image/fetch/f_jpg,q_auto,w_1200,h_630,c_fill/https%3A%2F%2Fvoiceofkranti.com%2Fog-banner.svg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="वॉयस ऑफ क्रांति">
@@ -33,7 +33,7 @@
     <meta name="twitter:site" content="@voiceofkranti">
     <meta name="twitter:title" content="वॉयस ऑफ क्रांति | वॉयस ऑफ क्रांति - ताज़ा हिंदी समाचार">
     <meta name="twitter:description" content="वॉयस ऑफ क्रांति - ताज़ा हिंदी समाचार, भोपाल और मध्य प्रदेश की खबरें।">
-    <meta name="twitter:image" content="https://voiceofkranti.com/og-banner.svg">
+    <meta name="twitter:image" content="https://res.cloudinary.com/dri3u7hon/image/fetch/f_jpg,q_auto,w_1200,h_630,c_fill/https%3A%2F%2Fvoiceofkranti.com%2Fog-banner.svg">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -41,7 +41,7 @@
       "name": "वॉयस ऑफ क्रांति",
       "alternateName": "वॉयस ऑफ क्रांति",
       "url": "https://voiceofkranti.com",
-      "logo": { "@type": "ImageObject", "url": "https://voiceofkranti.com/og-banner.svg" },
+      "logo": { "@type": "ImageObject", "url": "https://res.cloudinary.com/dri3u7hon/image/fetch/f_jpg,q_auto,w_1200,h_630,c_fill/https%3A%2F%2Fvoiceofkranti.com%2Fog-banner.svg" },
       "sameAs": [
         "https://voiceofkranti.com",
         "https://www.voiceofkranti.com",
@@ -327,16 +327,16 @@
                 <div>
                     <p class="footer-col-title">श्रेणियाँ</p>
                     <ul class="footer-links">
-                        <li><a href="/?category=desh">देश</a></li>
-                        <li><a href="/?category=videsh">विदेश</a></li>
-                        <li><a href="/?category=rajniti">राजनीति</a></li>
-                        <li><a href="/?category=rajya">राज्य</a></li>
-                        <li><a href="/?category=bhopal">भोपाल</a></li>
-                        <li><a href="/?category=crime">अपराध</a></li>
-                        <li><a href="/?category=khel">खेल</a></li>
-                        <li><a href="/?category=manoranjan">मनोरंजन</a></li>
-                        <li><a href="/?category=vyapar">व्यापार</a></li>
-                        <li><a href="/?category=itihas">इतिहास</a></li>
+                        <li><a href="/c/desh">देश</a></li>
+                        <li><a href="/c/videsh">विदेश</a></li>
+                        <li><a href="/c/rajniti">राजनीति</a></li>
+                        <li><a href="/c/rajya">राज्य</a></li>
+                        <li><a href="/c/bhopal">भोपाल</a></li>
+                        <li><a href="/c/crime">अपराध</a></li>
+                        <li><a href="/c/khel">खेल</a></li>
+                        <li><a href="/c/manoranjan">मनोरंजन</a></li>
+                        <li><a href="/c/vyapar">व्यापार</a></li>
+                        <li><a href="/c/itihas">इतिहास</a></li>
                     </ul>
                 </div>
             </div>
@@ -601,6 +601,13 @@
                     var ageMs = Date.now() - d.getTime();
                     return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
                 }
+                function isImportantWithin24h(n) {
+                    if (!n || !n.isImportant || !n.date) return false;
+                    var d = new Date(n.date);
+                    if (Number.isNaN(d.getTime())) return false;
+                    var ageMs = Date.now() - d.getTime();
+                    return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+                }
                 // Tier 1: full-content desh/rajniti/bhopal; Tier 2: other full-content; Tier 3: Google News (headlines only, list section); Tier 4: historical; Tier 5: minor-city
                 function articleTier(n) {
                     if (isMinorCityHeading(n.heading)) return 5;
@@ -612,8 +619,8 @@
 
                 function sortNewsForDisplay(list) {
                     list.sort(function(a, b) {
-                        var pa = isPermanentWithin24h(a) ? 0 : 1;
-                        var pb = isPermanentWithin24h(b) ? 0 : 1;
+                        var pa = (isPermanentWithin24h(a) || isImportantWithin24h(a)) ? 0 : 1;
+                        var pb = (isPermanentWithin24h(b) || isImportantWithin24h(b)) ? 0 : 1;
                         if (pa !== pb) return pa - pb;
                         var ta = articleTier(a), tb = articleTier(b);
                         if (ta !== tb) return ta - tb;
@@ -716,6 +723,7 @@
                     var isLive = news.date && (Date.now() - new Date(news.date)) < 900000;
                     var liveHtml = isLive ? '<span class="nc-live">LIVE</span>' : '';
                     var pbHtml = news.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : '';
+                    var impHtml = isImportantWithin24h(news) ? '<span class="nc-important-badge">🔥 महत्वपूर्ण</span>' : '';
                     // Slot assignment: tier 1-2 (full-content) fill prominent slots; tier 3+ (Google News, historical, minor-city) go to list
                     var tier = articleTier(news);
                     var slot = tier >= 3 ? Math.max(5, ai) : prominentFilled;
@@ -725,7 +733,7 @@
                         leadHtml = '<article class="nc-lead" onclick="' + nav + '">' +
                             '<div class="nc-lead-img">' + ncImg(fp, news.heading, true) + '</div>' +
                             '<div class="nc-lead-body">' +
-                            '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.1rem;">' + catHtml + liveHtml + pbHtml + '</div>' +
+                            '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.1rem;">' + catHtml + liveHtml + pbHtml + impHtml + '</div>' +
                             '<h2 class="nc-lead-title">' + news.heading + '</h2>' +
                             (leadDesc ? '<p class="nc-lead-desc">' + leadDesc + '</p>' : '') +
                             '<div class="nc-meta">' + ago + ' &bull; ' + auth +
@@ -734,7 +742,7 @@
                     } else if (slot <= 4) {
                         featHtml += '<article class="nc-feat" onclick="' + nav + '">' +
                             '<div class="nc-feat-img">' + ncImg(fp, news.heading, false) + '</div>' +
-                            '<div class="nc-feat-body"><div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;">' + catHtml + liveHtml + pbHtml + '</div>' +
+                            '<div class="nc-feat-body"><div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;">' + catHtml + liveHtml + pbHtml + impHtml + '</div>' +
                             '<h3 class="nc-feat-title">' + news.heading + '</h3>' +
                             '<div class="nc-meta">' + ago + '</div>' +
                             '</div></article>';
@@ -773,10 +781,11 @@
                         var fp2 = optimizeCloudinaryUrl((n2.photos && n2.photos.length > 0) ? n2.photos[0] : n2.photo);
                         var url2 = n2.slug ? '/news/' + n2.slug : '/news-detail.html?id=' + n2.id;
                         var pb2 = n2.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : '';
+                        var imp2 = isImportantWithin24h(n2) ? '<span class="nc-important-badge">🔥 महत्वपूर्ण</span>' : '';
                         listHtml += '<article class="nc-item" onclick="window.location.href=\'' + url2 + '\'">' +
                             '<div class="nc-item-img">' + ncImg(fp2, n2.heading, false) + '</div>' +
                             '<div class="nc-item-body">' +
-                            '<div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;margin-bottom:.15rem;">' + pb2 + '</div>' +
+                            '<div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;margin-bottom:.15rem;">' + pb2 + imp2 + '</div>' +
                             '<h3 class="nc-item-title">' + n2.heading + '</h3>' +
                             '<div class="nc-meta">' + formatNewsDate(n2.date) + '</div>' +
                             '</div></article>';

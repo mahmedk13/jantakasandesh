@@ -157,6 +157,31 @@
                     </select>
                 </div>
 
+                <div class="form-group" id="stateGroup" style="display:none;">
+                    <label for="state">राज्य चुनें (उप-श्रेणी)</label>
+                    <select id="state" name="state" class="form-input">
+                        <option value="">राज्य चुनें</option>
+                        <option value="mp">मध्य प्रदेश</option>
+                        <option value="up">उत्तर प्रदेश</option>
+                        <option value="bihar">बिहार</option>
+                        <option value="rajasthan">राजस्थान</option>
+                        <option value="maharashtra">महाराष्ट्र</option>
+                        <option value="punjab">पंजाब</option>
+                        <option value="haryana">हरियाणा</option>
+                        <option value="gujarat">गुजरात</option>
+                        <option value="chhattisgarh">छत्तीसगढ़</option>
+                        <option value="jharkhand">झारखंड</option>
+                        <option value="uttarakhand">उत्तराखंड</option>
+                        <option value="himachal">हिमाचल प्रदेश</option>
+                        <option value="kerala">केरल</option>
+                        <option value="telangana">तेलंगाना</option>
+                        <option value="andhra_pradesh">आंध्र प्रदेश</option>
+                        <option value="karnataka">कर्नाटक</option>
+                        <option value="west_bengal">पश्चिम बंगाल</option>
+                        <option value="other">अन्य राज्य</option>
+                    </select>
+                </div>
+
                 <div class="form-group">
                     <label for="author">लेखक का नाम *</label>
                     <input 
@@ -193,6 +218,10 @@
                     <div style="display:flex; align-items:center; gap:10px;">
                         <input type="checkbox" id="isOriginal" name="isOriginal" value="true" style="width:18px;height:18px;cursor:pointer;">
                         <label for="isOriginal" style="margin:0; cursor:pointer; font-weight:600;">✍️ मूल लेख (एडिटर की डेस्क से में दिखेगा)</label>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" id="isImportant" name="isImportant" value="true" style="width:18px;height:18px;cursor:pointer;">
+                        <label for="isImportant" style="margin:0; cursor:pointer; font-weight:600;">🔥 महत्वपूर्ण (24 घंटे तक टॉप पर रहेगी)</label>
                     </div>
                 </div>
 
@@ -573,6 +602,15 @@
         const cancelEditBtn = document.getElementById('cancelEdit');
         const logoutBtn = document.getElementById('logoutBtn');
         const passwordForm = document.getElementById('passwordForm');
+
+        // Show the "राज्य चुनें" sub-category dropdown only when category === rajya
+        const categorySelect = document.getElementById('category');
+        const stateGroup = document.getElementById('stateGroup');
+        function toggleStateGroup() {
+            stateGroup.style.display = categorySelect.value === 'rajya' ? 'block' : 'none';
+            if (categorySelect.value !== 'rajya') document.getElementById('state').value = '';
+        }
+        categorySelect.addEventListener('change', toggleStateGroup);
         const passwordMessage = document.getElementById('passwordMessage');
         const passwordSubmitText = document.getElementById('passwordSubmitText');
         const passwordLoadingText = document.getElementById('passwordLoadingText');
@@ -1053,6 +1091,7 @@
             newsForm.reset();
             editingNewsId.value = '';
             document.getElementById('manualSlug').value = '';
+            toggleStateGroup();
             imagePreview.style.display = 'none';
             submitText.textContent = 'समाचार प्रकाशित करें';
             loadingText.textContent = 'प्रकाशित हो रहा है...';
@@ -1082,6 +1121,9 @@
             document.getElementById('author').value = news.author || '';
             document.getElementById('isPermanent').checked = !!news.isPermanent;
             document.getElementById('isOriginal').checked = !!news.isOriginal;
+            document.getElementById('isImportant').checked = !!news.isImportant;
+            document.getElementById('state').value = news.state || '';
+            toggleStateGroup();
             document.getElementById('manualSlug').value = news.slug || '';
             editingNewsId.value = news.id;
             
@@ -1150,6 +1192,7 @@
                                 ${news.category ? `<a href="${categoryHref}" target="_blank" onclick="event.stopPropagation();" class="category-badge" style="text-decoration:none;">${categoryNames[news.category] || news.category}</a>` : ''}
                                 ${news.isPermanent ? `<span style="background:#d97706;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">📌 स्थायी</span>` : ''}
                                 ${news.isOriginal ? `<span style="background:#16a34a;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">✍️ मूल लेख</span>` : ''}
+                                ${news.isImportant ? `<span style="background:#dc2626;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">🔥 महत्वपूर्ण</span>` : ''}
                             </div>
                             <h3 class="news-heading" onclick="window.open('${publicUrl}', '_blank'); event.stopPropagation();" style="cursor:pointer;">${news.heading}</h3>
                             ${news.content ? `<p class="news-description">${news.content}</p>` : ''}

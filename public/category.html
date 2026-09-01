@@ -26,7 +26,7 @@
     <meta property="og:site_name" content="वॉयस ऑफ क्रांति">
     <meta property="og:locale" content="hi_IN">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="https://voiceofkranti.com/og-banner.svg">
+    <meta property="og:image" content="https://res.cloudinary.com/dri3u7hon/image/fetch/f_jpg,q_auto,w_1200,h_630,c_fill/https%3A%2F%2Fvoiceofkranti.com%2Fog-banner.svg">
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:site" content="@voiceofkranti">
@@ -149,6 +149,7 @@
             <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
         </div>
 
+        <div id="stateFilters" style="display:none;flex-wrap:wrap;margin-bottom:1rem;"></div>
         <div id="newsGrid" class="news-grid">
             <div class="cat-loading">खबरें लोड हो रही हैं...</div>
         </div>
@@ -270,6 +271,42 @@
     let allArticles = [], shownCount = 0;
     const PAGE_SIZE = 20;
 
+    // राज्य उप-श्रेणी फ़िल्टर — only shown on the rajya category page
+    const STATE_LIST = [
+        { value: 'mp', label: 'मध्य प्रदेश' }, { value: 'up', label: 'उत्तर प्रदेश' },
+        { value: 'bihar', label: 'बिहार' }, { value: 'rajasthan', label: 'राजस्थान' },
+        { value: 'maharashtra', label: 'महाराष्ट्र' }, { value: 'punjab', label: 'पंजाब' },
+        { value: 'haryana', label: 'हरियाणा' }, { value: 'gujarat', label: 'गुजरात' },
+        { value: 'chhattisgarh', label: 'छत्तीसगढ़' }, { value: 'jharkhand', label: 'झारखंड' },
+        { value: 'uttarakhand', label: 'उत्तराखंड' }, { value: 'himachal', label: 'हिमाचल प्रदेश' },
+        { value: 'kerala', label: 'केरल' }, { value: 'telangana', label: 'तेलंगाना' },
+        { value: 'andhra_pradesh', label: 'आंध्र प्रदेश' }, { value: 'karnataka', label: 'कर्नाटक' },
+        { value: 'west_bengal', label: 'पश्चिम बंगाल' }, { value: 'other', label: 'अन्य राज्य' }
+    ];
+    let activeStateFilter = '';
+
+    function renderStateFilters() {
+        if (catId !== 'rajya') return;
+        const present = new Set(allArticles.map(a => a.state).filter(Boolean));
+        if (!present.size) return;
+        const box = document.getElementById('stateFilters');
+        const chip = (value, label) => `<button type="button" class="state-filter-chip${activeStateFilter === value ? ' active' : ''}" data-state="${value}">${label}</button>`;
+        box.innerHTML = chip('', 'सभी') + STATE_LIST.filter(s => present.has(s.value)).map(s => chip(s.value, s.label)).join('');
+        box.style.display = 'flex';
+        box.querySelectorAll('.state-filter-chip').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activeStateFilter = btn.getAttribute('data-state');
+                renderStateFilters();
+                const grid = document.getElementById('newsGrid');
+                grid.innerHTML = '';
+                shownCount = 0;
+                const sentinel = document.getElementById('scrollSentinel');
+                if (sentinel) sentinel.style.display = '';
+                loadMore();
+            });
+        });
+    }
+
     function stripEmbeddedMediaFromPreview(text) {
         if (!text) return '';
         return String(text)
@@ -284,6 +321,12 @@
             .slice(0, 160);
     }
 
+    function isImportantWithin24h(a) {
+        if (!a || !a.isImportant || !a.date) return false;
+        const ageMs = Date.now() - new Date(a.date).getTime();
+        return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+    }
+
     function renderCard(a) {
         const url = a.slug ? `/news/${a.slug}` : `/news-detail.html?id=${a.id}`;
         const img = a.photos && a.photos.length ? optimizeCloudinaryUrl(a.photos[0]) : null;
@@ -296,6 +339,7 @@
                 <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
                     <span class="news-card-cat" style="color:${cat.color}">${cat.name}</span>
                     ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                    ${isImportantWithin24h(a) ? '<span class="nc-important-badge">🔥 महत्वपूर्ण</span>' : ''}
                 </div>
                 <p class="news-card-title">${a.heading}</p>
                 ${previewText ? `<p class="news-card-preview">${previewText}</p>` : ''}
@@ -306,7 +350,8 @@
 
     function loadMore() {
         const grid = document.getElementById('newsGrid');
-        const next = allArticles.slice(shownCount, shownCount + PAGE_SIZE);
+        const source = activeStateFilter ? allArticles.filter(a => a.state === activeStateFilter) : allArticles;
+        const next = source.slice(shownCount, shownCount + PAGE_SIZE);
         if (!next.length) {
             const sentinel = document.getElementById('scrollSentinel');
             if (sentinel) sentinel.style.display = 'none';
@@ -318,7 +363,7 @@
             grid.appendChild(el.firstElementChild);
         });
         shownCount += next.length;
-        if (shownCount >= allArticles.length) {
+        if (shownCount >= source.length) {
             const sentinel = document.getElementById('scrollSentinel');
             if (sentinel) sentinel.style.display = 'none';
         }
@@ -349,6 +394,7 @@
                 grid.innerHTML = '';
                 shownCount = 0;
             }
+            renderStateFilters();
             loadMore();
             const sentinel = document.getElementById('scrollSentinel');
             const observer = new IntersectionObserver(

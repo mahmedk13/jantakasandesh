@@ -22,7 +22,6 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const News = require('./models/News').News;
 const { generateSlug } = require('./models/News');
-const Redirect = require('./models/Redirect');
 const EPaper = require('./models/EPaper');
 const Author = require('./models/Author');
 const RSSParser = require('rss-parser');
@@ -163,6 +162,16 @@ function isFullArticleContent(content = '') {
     const charCount = normalizedText.length;
     return paragraphs.length >= 2 || wordCount >= 180 || charCount > 800;
 }
+
+// Plain-text character count (with spaces, tags/whitespace normalized) of a content body,
+// excluding the heading. Used to gate RSS/API imports on minimum body length.
+function plainBodyCharCount(content = '') {
+    return cleanHtml(String(content || '')).replace(/\s+/g, ' ').trim().length;
+}
+
+// RSS/API-imported articles (not PB SHABD, not admin-written originals) are only
+// worth publishing once their body has real substance — gate at 1400 chars.
+const MIN_IMPORTED_BODY_CHARS = 1400;
 
 function paragraphizeLegacyImportedText(content = '') {
     if (typeof content !== 'string') return '';
@@ -344,14 +353,21 @@ async function getAuthorNameSet() {
 // removes articles — only reorders. Priority tiers, highest first:
 //   1. isPermanent === true, and/or article.author matches a real Author profile
 //      (from `authorNameSet`) — always kept in front, in their original order.
+//      Also includes isImportant articles still within their 24h pin window.
 //   2. PB SHABD — but capped at `maxRatio` of the first `windowSize` slots; any
 //      overflow is pushed to just after the window instead of being dropped.
 //   3. Articles tagged `full: true`.
 //   4. Everything else.
+function isImportantWithin24h(item) {
+    if (!item || item.isImportant !== true || !item.date) return false;
+    const ageMs = Date.now() - new Date(item.date).getTime();
+    return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+}
+
 function enforcePbShabdCap(list, authorNameSet, windowSize = 10, maxRatio = 0.5) {
     if (!Array.isArray(list) || list.length <= 1) return list;
 
-    const isProtected = (item) => item && (item.isPermanent === true || isRealAuthorArticle(item, authorNameSet));
+    const isProtected = (item) => item && (item.isPermanent === true || isRealAuthorArticle(item, authorNameSet) || isImportantWithin24h(item));
     const protectedQueue = list.filter(isProtected);
     const rest = list.filter(item => !isProtected(item));
     if (!rest.length) return list;
@@ -865,43 +881,6 @@ async function deleteCloudinaryPhotos(photos) {
     }
 }
 
-async function deleteOldNews() {
-    if (!isMongoDBConnected) return;
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    try {
-        // Fetch articles to delete so we can clean up their Cloudinary images
-        const toDelete = await News.find(
-            { date: { $lt: threeDaysAgo }, isPermanent: { $ne: true } },
-            { _id: 1, photos: 1, slug: 1 }
-        ).lean();
-
-        if (!toDelete.length) return;
-
-        // Delete Cloudinary images first
-        for (const article of toDelete) {
-            await deleteCloudinaryPhotos(article.photos);
-        }
-
-        // Save slugs to Redirect collection before deleting so 301 redirects work
-        const slugsToSave = toDelete.map(a => a.slug).filter(Boolean);
-        if (slugsToSave.length) {
-            await Redirect.bulkWrite(
-                slugsToSave.map(slug => ({
-                    updateOne: { filter: { from: slug }, update: { $setOnInsert: { from: slug, to: '/' } }, upsert: true }
-                }))
-            ).catch(() => {});  // non-fatal
-        }
-
-        const ids = toDelete.map(a => a._id);
-        const result = await News.deleteMany({ _id: { $in: ids } });
-        if (result.deletedCount > 0) {
-            console.log(`🗑️ Deleted ${result.deletedCount} articles older than 3 days (+ Cloudinary images)`);
-        }
-    } catch (err) {
-        console.error('Error deleting old news:', err.message);
-    }
-}
-
 async function fetchAndImportRSS() {
     console.log('=== Fetching RSS feeds (parallel + batch) ===');
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
@@ -941,7 +920,7 @@ async function fetchAndImportRSS() {
             const pubDate = itemDate;
             const rawContent = item.content || item.contentSnippet || item.summary || item.title || '';
             const finalContent = paragraphizeLegacyImportedText(rawContent).slice(0, 2000);
-            if (finalContent.length < 80) continue;
+            if (plainBodyCharCount(finalContent) < MIN_IMPORTED_BODY_CHARS) continue;
             const full = isFullArticleContent(finalContent);
 
             candidates.push({
@@ -961,7 +940,7 @@ async function fetchAndImportRSS() {
         }
     }
 
-    if (!candidates.length) { console.log('=== RSS import done: 0 candidates ==='); await deleteOldNews(); return 0; }
+    if (!candidates.length) { console.log('=== RSS import done: 0 candidates ==='); return 0; }
 
     // 3a. Deduplicate within this batch (same story from multiple sources in same run)
     const seenNorms = new Set(), seenLinks = new Set();
@@ -986,7 +965,7 @@ async function fetchAndImportRSS() {
     }
 
     const newDocs = dedupedCandidates.filter(c => !existingLinks.has(c.rssLink) && !existingNorms.has(c.headingNorm));
-    if (!newDocs.length) { console.log('=== RSS import done: 0 new (all duplicates) ==='); await deleteOldNews(); return 0; }
+    if (!newDocs.length) { console.log('=== RSS import done: 0 new (all duplicates) ==='); return 0; }
 
     // 4a. Upload images to Cloudinary in parallel (bypass CDN hotlink 401 for OG tags)
     await Promise.allSettled(
@@ -1022,7 +1001,6 @@ async function fetchAndImportRSS() {
     }
 
     console.log(`=== RSS import done: ${newDocs.length} new articles ===`);
-    await deleteOldNews();
     return newDocs.length;
 }
 
@@ -1099,8 +1077,8 @@ async function fetchFromNewsDataAPI() {
                 const content = paragraphizeLegacyImportedText(rawContent);
                 const full = isFullArticleContent(content);
 
-                // Skip articles with no usable content
-                if (!content.trim()) continue;
+                // Skip articles with no usable content, or bodies too short to be worth publishing
+                if (!content.trim() || plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
 
                 // Map category
                 const apiCat = (item.category && item.category[0]) ? item.category[0].toLowerCase() : 'top';
@@ -1189,6 +1167,7 @@ async function fetchFromGNewsAPI() {
                 // GNews provides full article content in item.content
                 const rawContent = item.content || item.description || '';
                 const content = paragraphizeLegacyImportedText(rawContent);
+                if (plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
                 const full = isFullArticleContent(content);
 
                 const category = mapRssCategory([], item.title, req.label === 'politics' ? 'rajniti' :
@@ -1273,6 +1252,7 @@ async function fetchFromCurrentsAPI() {
                 const pubDate = itemPub; // use the source's real published date (avoid artificial freshening)
                 // Currents provides full article description
                 const content = paragraphizeLegacyImportedText(item.description || '');
+                if (plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
                 const full = isFullArticleContent(content);
 
                 const category = mapRssCategory(item.category || [], item.title, 'desh');
@@ -2433,16 +2413,10 @@ app.get('/news/:slug', async (req, res) => {
             dbError = true;
         }
 
-        // DB was reachable but article genuinely doesn't exist → check redirect table
-        // before returning 404, so deleted article slugs 301-redirect to homepage
+        // DB was reachable but article genuinely doesn't exist (never existed, or was
+        // deleted) → serve a real 404 instead of redirecting anywhere
         if (!dbError && !article) {
-            try {
-                const redirect = await Redirect.findOne({ from: slug }).lean();
-                if (redirect) {
-                    return res.redirect(301, redirect.to || '/');
-                }
-            } catch (_) {}
-            return res.redirect(301, '/');
+            return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
         }
 
         // Read the static HTML template
@@ -2490,6 +2464,24 @@ app.get('/news/:slug', async (req, res) => {
 
             const categoryNames = { desh:'देश', videsh:'विदेश', rajya:'राज्य', bhopal:'भोपाल', crime:'अपराध', khel:'खेल', rajniti:'राजनीति', manoranjan:'मनोरंजन', vyapar:'व्यापार', itihas:'इतिहास' };
             const categoryMarkup = article.category ? `<a href="/c/${article.category}" class="category-badge category-badge-large" style="text-decoration:none;cursor:pointer;">${categoryNames[article.category] || article.category}</a>` : '';
+
+            // Tag pills — category + top heading words (mirrors news-detail.html client render)
+            const tagItemsSsr = [];
+            if (article.category) tagItemsSsr.push({ label: categoryNames[article.category] || article.category, href: '/?category=' + article.category });
+            const headWordsSsr = (article.heading || '').split(/[\s,।\-–]+/).filter(w => w.length >= 4 && /[\u0900-\u097F]/.test(w)).slice(0, 4);
+            headWordsSsr.forEach(w => tagItemsSsr.push({ label: w, href: '/?q=' + encodeURIComponent(w) }));
+            const tagsHtmlSsr = tagItemsSsr.length ? `<div class="nd-tags"><span class="nd-tags-label">Tags:</span>${tagItemsSsr.slice(0, 6).map(t => `<a href="${esc(t.href)}" class="nd-tag">${esc(t.label)}</a>`).join('')}</div>` : '';
+
+            const waChannelBannerSsr = `<a href="https://whatsapp.com/channel/0029VbDoE1QDZ4LThGXdEJ2D" target="_blank" rel="noopener noreferrer" class="wa-channel-banner"><span class="wa-icon"><svg viewBox="0 0 24 24" width="30" height="30" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span><span class="wa-text">ताज़ा खबरों से अपडेट रहने के लिए हमारे <strong>WhatsApp चैनल</strong> से जुड़ें</span><span class="wa-join-pill">Join करें →</span></a>`;
+
+            // पृष्ठभूमि (Background) + वॉयस ऑफ क्रांति का मत — mirrors news-detail.html client render
+            const explainerBoxSsr = (article.explainer && article.explainer.text)
+                ? `<div class="explainer-box"><h3>💡 पृष्ठभूमि (Background)</h3><p>${esc(article.explainer.text)}</p></div>`
+                : '';
+            const kaMatBoxSsr = (article.category === 'crime' && article.kaMat && article.kaMat.text)
+                ? `<div class="ka-mat-box"><h3>🎙️ वॉयस ऑफ क्रांति का मत</h3><p>${esc(article.kaMat.text)}</p></div>`
+                : '';
+
             const articleMarkup = `
                 <article class="news-detail-article" data-ssr-article="true">
                     <nav class="nd-breadcrumb">
@@ -2508,12 +2500,16 @@ app.get('/news/:slug', async (req, res) => {
                     <div class="news-detail-meta" style="margin-top:0.5rem;">
                         <span class="news-detail-author">प्रकाशक: <strong>वॉयस ऑफ क्रांति</strong></span>
                     </div>
+                    ${waChannelBannerSsr}
                     ${photoMarkup}
                     <div class="news-detail-content">
                         <div class="news-detail-text">${lintedBody}</div>
                         ${(article.rssSource && article.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: ${article.rssLink ? `<a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer">${esc(article.rssSource)}</a>` : `<strong>${esc(article.rssSource)}</strong>`}</p>` : ''}
                         ${(article.rssLink && article.rssSource !== 'PB SHABD' && !article.isAiScraped) ? `<div class="read-full-article"><a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer" class="read-full-btn">📰 पूरी खबर पढ़ें (${esc(article.rssSource || 'मूल स्रोत')} पर जाएं)</a></div>` : ''}
                     </div>
+                    ${explainerBoxSsr}
+                    ${kaMatBoxSsr}
+                    ${tagsHtmlSsr}
                     ${authorCardMarkup}
                     <div class="share-section">
                         <h3 class="share-title">📢 इस खबर को शेयर करें</h3>
@@ -2978,9 +2974,19 @@ app.get('/c/:category', async (req, res) => {
 
     // Serve index.html (same design as homepage) with category pre-filtered news
     try {
+        // Wait for DB on cold start (up to 8s) so this container doesn't render an
+        // empty shell — mirrors the retry pattern already used by /news/:slug and /api/news
+        if (!isMongoDBConnected) {
+            try {
+                await Promise.race([
+                    connectDB(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+                ]);
+            } catch (_) { /* timeout — fall through and render with whatever we have */ }
+        }
         let initialNews = [];
         if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1 };
+            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, state: 1 };
             const docs = await News.find({ category: catId, isOriginal: { $ne: true } }, projection)
                 .sort({ date: -1 }).limit(200).lean();
             initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
@@ -3297,9 +3303,19 @@ app.get('/', async (req, res) => {
         return res.redirect(301, `/c/${qCat}`);
     }
     try {
+        // Wait for DB on cold start (up to 8s) so this container doesn't render an
+        // empty shell — mirrors the retry pattern already used by /news/:slug and /api/news
+        if (!isMongoDBConnected) {
+            try {
+                await Promise.race([
+                    connectDB(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+                ]);
+            } catch (_) { /* timeout — fall through and render with whatever we have */ }
+        }
         let initialNews = [];
         if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1 };
+            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, state: 1 };
             const docs = await News.find({ isOriginal: { $ne: true } }, projection).sort({ date: -1 }).limit(200).lean();
             initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
         }
@@ -3534,7 +3550,7 @@ app.get('/api/news', async (req, res) => {
             const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
             query.date = { $gte: cutoff };
         }
-        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1 };
+        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, state: 1 };
 
         const news = await News.find(query, projection)
             .sort({ date: -1 })
@@ -3653,6 +3669,8 @@ app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) =
             views: 0,
             isPermanent: req.body.isPermanent === 'true',
             isOriginal: req.body.isOriginal === 'true',
+            isImportant: req.body.isImportant === 'true',
+            state: category === 'rajya' ? (req.body.state || null) : null,
             formattedDate: new Date().toLocaleDateString('hi-IN', { 
                 year: 'numeric', 
                 month: 'long', 
@@ -3739,6 +3757,8 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
         news.author = author;
         news.isPermanent = req.body.isPermanent === 'true';
         news.isOriginal = req.body.isOriginal === 'true';
+        news.isImportant = req.body.isImportant === 'true';
+        news.state = category === 'rajya' ? (req.body.state || null) : null;
         news.formattedDate = new Date().toLocaleDateString('hi-IN', { 
             year: 'numeric', 
             month: 'long', 
@@ -3856,15 +3876,6 @@ app.delete('/api/news/:id', requireAuth, async (req, res) => {
         
         // Delete photos from Cloudinary if exist
         await deleteCloudinaryPhotos(news.photos);
-
-        // Save slug to Redirect so the old URL 301-redirects to homepage
-        if (news.slug) {
-            await Redirect.updateOne(
-                { from: news.slug },
-                { $setOnInsert: { from: news.slug, to: '/' } },
-                { upsert: true }
-            ).catch(() => {});  // non-fatal
-        }
 
         await News.findByIdAndDelete(req.params.id);
         invalidateNewsCache();
@@ -4250,9 +4261,20 @@ app.post('/api/admin/delete-old-articles', requireAuth, async (req, res) => {
         const cutoff = new Date();
         cutoff.setMonth(cutoff.getMonth() - 1);
         cutoff.setHours(0, 0, 0, 0);
-        const result = await News.deleteMany({ date: { $lt: cutoff }, isPermanent: { $ne: true } });
+
+        // Fetch matching articles first so we can clean up their Cloudinary images
+        const toDelete = await News.find(
+            { date: { $lt: cutoff }, isPermanent: { $ne: true } },
+            { _id: 1, photos: 1 }
+        ).lean();
+
+        for (const article of toDelete) {
+            await deleteCloudinaryPhotos(article.photos);
+        }
+
+        const result = await News.deleteMany({ _id: { $in: toDelete.map(a => a._id) } });
         invalidateNewsCache();
-        console.log(`🗑️ Admin deleted ${result.deletedCount} articles older than 1 month (cutoff: ${cutoff.toISOString()})`);
+        console.log(`🗑️ Admin deleted ${result.deletedCount} articles older than 1 month (cutoff: ${cutoff.toISOString()}) + Cloudinary images`);
         res.json({ success: true, deleted: result.deletedCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
