@@ -129,6 +129,9 @@
         .category-nav.open { display: flex !important; flex-direction: column !important; }
         .category-menu .container { padding: 0 !important; max-width: 100% !important; }
         .category-link { border-bottom: 1px solid rgba(255,255,255,0.1) !important; padding: 0.75rem 1rem !important; }
+        .rajya-state-panel { position: static !important; padding: 0.75rem !important; }
+        .rajya-state-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        .rajya-state-grid a { text-align: center; white-space: normal !important; }
         /* Shorts strip: hide arrows, let user swipe */
         .shorts-strip-arrow { display: none !important; }
         .shorts-strip-header {
@@ -410,6 +413,7 @@
         const urlParams = new URLSearchParams(window.location.search);
         const pathCatMatch = window.location.pathname.match(/^\/c\/([^\/]+)/);
         let currentCategory = window.__INITIAL_CATEGORY__ || (pathCatMatch ? pathCatMatch[1] : urlParams.get('category')) || 'all';
+        let currentState = currentCategory === 'rajya' ? (urlParams.get('state') || '') : '';
         let writtenOnly = urlParams.get('written') === 'true';
 
         // Set active nav link
@@ -424,6 +428,7 @@
                 if (link.classList.contains('cat-rajya-toggle')) return;
                 e.preventDefault();
                 currentCategory = link.dataset.category;
+                currentState = '';
                 writtenOnly = currentCategory === 'written';
                 let newUrl;
                 if (writtenOnly) {
@@ -536,7 +541,7 @@
                         allNewsData = window.__INITIAL_NEWS__;
                         window.__INITIAL_NEWS__ = null;
                     } else {
-                        const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory);
+                        const url = writtenOnly ? '/api/news?written=true' : (currentCategory === 'all' ? '/api/news' : '/api/news?category=' + currentCategory + (currentState ? '&state=' + encodeURIComponent(currentState) : ''));
                         response = await fetch(url, { credentials: 'same-origin' });
                         allNewsData = response.ok ? await response.json() : [];
                     }

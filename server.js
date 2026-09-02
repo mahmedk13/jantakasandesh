@@ -882,6 +882,14 @@ const STATE_MAP = {
     'indore': 'mp', 'इंदौर': 'mp', 'gwalior': 'mp', 'ग्वालियर': 'mp',
     'jabalpur': 'mp', 'जबलपुर': 'mp', 'ujjain': 'mp', 'उज्जैन': 'mp',
     'bhopal': 'mp', 'भोपाल': 'mp',
+    'रीवा': 'mp', 'rewa': 'mp', 'सागर': 'mp', 'sagar': 'mp', 'सतना': 'mp', 'satna': 'mp',
+    'रतलाम': 'mp', 'ratlam': 'mp', 'खंडवा': 'mp', 'khandwa': 'mp', 'खरगोन': 'mp', 'khargone': 'mp',
+    'बालाघाट': 'mp', 'balaghat': 'mp', 'छिंदवाड़ा': 'mp', 'chhindwara': 'mp',
+    'होशंगाबाद': 'mp', 'नर्मदापुरम': 'mp', 'विदिशा': 'mp', 'रायसेन': 'mp', 'सीहोर': 'mp',
+    'गुना': 'mp', 'शिवपुरी': 'mp', 'भिंड': 'mp', 'मुरैना': 'mp', 'दतिया': 'mp', 'देवास': 'mp',
+    'मंदसौर': 'mp', 'नीमच': 'mp', 'पन्ना': 'mp', 'मंडला': 'mp', 'छतरपुर': 'mp', 'टीकमगढ़': 'mp',
+    'दमोह': 'mp', 'सीधी': 'mp', 'सिंगरौली': 'mp', 'शहडोल': 'mp', 'अनूपुर': 'mp', 'उमरिया': 'mp',
+    'बुरहानपुर': 'mp', 'झाबुआ': 'mp', 'अलीराजपुर': 'mp', 'बड़वानी': 'mp', 'धार': 'mp',
     'uttar pradesh': 'up', 'उत्तर प्रदेश': 'up',
     'bihar': 'bihar', 'बिहार': 'bihar',
     'rajasthan': 'rajasthan', 'राजस्थान': 'rajasthan',
@@ -894,10 +902,10 @@ const STATE_MAP = {
     'uttarakhand': 'uttarakhand', 'उत्तराखंड': 'uttarakhand', 'देहरादून': 'uttarakhand', 'dehradun': 'uttarakhand',
     'himachal': 'himachal', 'हिमाचल': 'himachal',
     'kerala': 'kerala', 'केरल': 'kerala',
-    'telangana': 'telangana',
-    'andhra pradesh': 'andhra_pradesh',
-    'karnataka': 'karnataka',
-    'west bengal': 'west_bengal',
+    'telangana': 'telangana', 'तेलंगाना': 'telangana',
+    'andhra pradesh': 'andhra_pradesh', 'आंध्र प्रदेश': 'andhra_pradesh',
+    'karnataka': 'karnataka', 'कर्नाटक': 'karnataka',
+    'west bengal': 'west_bengal', 'पश्चिम बंगाल': 'west_bengal',
 };
 
 function detectState(title, content) {
@@ -908,6 +916,35 @@ function detectState(title, content) {
         }
     }
     return 'other';
+}
+
+let stateBackfillPromise = null;
+
+async function backfillRajyaStates() {
+    if (stateBackfillPromise) return stateBackfillPromise;
+
+    stateBackfillPromise = (async () => {
+        const articles = await News.find({
+            category: 'rajya',
+            $or: [{ state: null }, { state: '' }, { state: 'other' }]
+        }, { heading: 1, content: 1 }).lean();
+        const updates = articles.map(article => ({
+            updateOne: {
+                filter: { _id: article._id },
+                update: { $set: { state: detectState(article.heading, article.content) } }
+            }
+        }));
+        if (updates.length) {
+            const result = await News.bulkWrite(updates, { ordered: false });
+            console.log(`✓ State backfill updated ${result.modifiedCount} Rajya articles`);
+        }
+    })();
+
+    try {
+        await stateBackfillPromise;
+    } finally {
+        stateBackfillPromise = null;
+    }
 }
 
 // Delete all Cloudinary images for an article's photos array
@@ -2209,6 +2246,7 @@ const connectDB = async () => {
             });
             console.log('✓ Connected to MongoDB Atlas successfully');
             isMongoDBConnected = true;
+            backfillRajyaStates().catch(err => console.error('Rajya state backfill failed:', err.message));
         } catch (err) {
             console.error('❌ MongoDB connection failed:', err.message);
             if (isDevelopment) {
@@ -3021,6 +3059,7 @@ app.get('/c/:category', async (req, res) => {
     const rawCatId = req.params.category;
     const catId = aliasMap[rawCatId] || rawCatId;
     const cat = CATEGORY_PAGE_INFO[catId];
+    const state = catId === 'rajya' ? req.query.state : null;
     if (!cat) return res.redirect(301, '/');
 
     // Serve index.html (same design as homepage) with category pre-filtered news
@@ -3038,7 +3077,9 @@ app.get('/c/:category', async (req, res) => {
         let initialNews = [];
         if (isMongoDBConnected) {
             const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, state: 1 };
-            const docs = await News.find({ category: catId, isOriginal: { $ne: true } }, projection)
+            const query = { category: catId, isOriginal: { $ne: true } };
+            if (state) query.state = state;
+            const docs = await News.find(query, projection)
                 .sort({ date: -1 }).limit(200).lean();
             initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
         }
@@ -3048,7 +3089,7 @@ app.get('/c/:category', async (req, res) => {
         try { html = fs.readFileSync(htmlPath, 'utf8'); }
         catch (_) { return res.redirect(301, '/'); }
 
-        const pageUrl = `https://voiceofkranti.com/c/${catId}`;
+        const pageUrl = `https://voiceofkranti.com/c/${catId}${state ? `?state=${encodeURIComponent(state)}` : ''}`;
         const payload = JSON.stringify(initialNews).replace(/<\/script>/gi, '<\\/script>');
 
         // Inject pre-filtered news + active category so the page renders instantly
@@ -3520,13 +3561,14 @@ app.post('/api/fix-imported-content', requireAuth, async (req, res) => {
 app.get('/api/news', async (req, res) => {
     try {
         const category = req.query.category;
+        const state = category === 'rajya' ? req.query.state : null;
         const writtenOnly = req.query.written === 'true';
         const source = req.query.source;
         const fullOnly = req.query.full === 'true' || req.query.full === '1';
         const hours = parseFloat(req.query.hours) || null;
         const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
         const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
-        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours;
+        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours && !state;
         const cacheKey = source === 'pb' ? 'pb' : (fullOnly ? 'full' : (writtenOnly ? 'written' : (category || 'all')));
 
         // Use JSON file in development if MongoDB is not connected
@@ -3538,6 +3580,7 @@ app.get('/api/news', async (req, res) => {
                 if (fullOnly && news.full !== true) return false;
                 if (source === 'pb' && news.rssSource !== 'PB SHABD') return false;
                 if (category && news.category !== category) return false;
+                if (state && news.state !== state) return false;
                 if (hours && new Date(news.date) < new Date(Date.now() - hours * 60 * 60 * 1000)) return false;
                 return true;
             });
@@ -3576,6 +3619,7 @@ app.get('/api/news', async (req, res) => {
         } else {
             query = { isOriginal: { $ne: true } };
         }
+        if (state) query.state = state;
         if (fullOnly) {
             query.$or = [
                 { full: true },

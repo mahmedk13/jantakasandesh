@@ -55,9 +55,9 @@
     /* Desktop: normal horizontal bar */
     .cat-toggle { display: none; }
     @media (max-width: 768px) {
-        .cat-toggle { display: flex !important; }
-        .category-nav { display: none !important; }
-        .category-nav.open { display: flex !important; flex-direction: column !important; }
+        .category-menu .cat-toggle { display: flex !important; }
+        .category-menu .category-nav { display: none !important; }
+        .category-menu .category-nav.open { display: flex !important; flex-direction: column !important; }
         .category-menu .container { padding: 0 !important; max-width: 100% !important; }
         .category-link { border-bottom: 1px solid rgba(255,255,255,0.1) !important; padding: 0.75rem 1rem !important; }
     }
@@ -248,7 +248,7 @@
     </header>
 
     <div class="category-menu" id="categoryMenu">
-        <button class="cat-toggle" id="catToggle" aria-expanded="false" aria-label="श्रेणियाँ">
+        <button type="button" class="cat-toggle" id="catToggle" aria-controls="categoryNav" aria-expanded="false" aria-label="श्रेणियाँ">
             <span class="cat-toggle-icon">
                 <span></span><span></span><span></span>
             </span>
