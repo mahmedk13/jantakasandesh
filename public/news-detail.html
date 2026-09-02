@@ -1237,9 +1237,11 @@
     (function(){
         var rajyaBtn = document.getElementById('rajyaNavBtn');
         var panel = document.getElementById('rajyaStatePanel');
+        var nav = document.getElementById('categoryNav');
         if (!rajyaBtn || !panel) return;
         rajyaBtn.addEventListener('click', function(e){
             e.preventDefault();
+            if (nav && panel.parentElement !== nav) nav.insertBefore(panel, rajyaBtn.nextSibling);
             var isOpen = panel.style.display !== 'none';
             panel.style.display = isOpen ? 'none' : 'block';
             rajyaBtn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
