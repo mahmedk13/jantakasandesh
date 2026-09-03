@@ -56,10 +56,14 @@ const newsSchema = new mongoose.Schema({
         default: false
     },
     // True for admin-flagged breaking/important news — kept pinned near the top of
-    // listings for 24h from `date`, then behaves like any other article.
+    // listings for 24h from `importantAt`, then behaves like any other article.
     isImportant: {
         type: Boolean,
         default: false
+    },
+    importantAt: {
+        type: Date,
+        default: null
     },
     // Sub-category for category === 'rajya' (which state the news belongs to).
     // Free-form string, no enum, so new states can be added from the admin panel

@@ -359,8 +359,10 @@ async function getAuthorNameSet() {
 //   3. Articles tagged `full: true`.
 //   4. Everything else.
 function isImportantWithin24h(item) {
-    if (!item || item.isImportant !== true || !item.date) return false;
-    const ageMs = Date.now() - new Date(item.date).getTime();
+    if (!item || item.isImportant !== true) return false;
+    const importantAt = item.importantAt || item.updatedAt || item.date;
+    if (!importantAt) return false;
+    const ageMs = Date.now() - new Date(importantAt).getTime();
     return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
 }
 
@@ -945,6 +947,14 @@ async function backfillRajyaStates() {
     } finally {
         stateBackfillPromise = null;
     }
+}
+
+async function backfillImportantTimestamps() {
+    const result = await News.updateMany(
+        { isImportant: true, importantAt: null },
+        [{ $set: { importantAt: { $ifNull: ['$updatedAt', '$date'] } } }]
+    );
+    if (result.modifiedCount) console.log(`✓ Important timestamp backfill updated ${result.modifiedCount} articles`);
 }
 
 // Delete all Cloudinary images for an article's photos array
@@ -2247,6 +2257,7 @@ const connectDB = async () => {
             console.log('✓ Connected to MongoDB Atlas successfully');
             isMongoDBConnected = true;
             backfillRajyaStates().catch(err => console.error('Rajya state backfill failed:', err.message));
+            backfillImportantTimestamps().catch(err => console.error('Important timestamp backfill failed:', err.message));
         } catch (err) {
             console.error('❌ MongoDB connection failed:', err.message);
             if (isDevelopment) {
@@ -3076,7 +3087,7 @@ app.get('/c/:category', async (req, res) => {
         }
         let initialNews = [];
         if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, state: 1 };
+            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
             const query = { category: catId, isOriginal: { $ne: true } };
             if (state) query.state = state;
             const docs = await News.find(query, projection)
@@ -3407,7 +3418,7 @@ app.get('/', async (req, res) => {
         }
         let initialNews = [];
         if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, state: 1 };
+            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
             const docs = await News.find({ isOriginal: { $ne: true } }, projection).sort({ date: -1 }).limit(200).lean();
             initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
         }
@@ -3645,7 +3656,7 @@ app.get('/api/news', async (req, res) => {
             const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
             query.date = { $gte: cutoff };
         }
-        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, state: 1 };
+        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, importantAt: 1, state: 1 };
 
         const news = await News.find(query, projection)
             .sort({ date: -1 })
@@ -3765,6 +3776,7 @@ app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) =
             isPermanent: req.body.isPermanent === 'true',
             isOriginal: req.body.isOriginal === 'true',
             isImportant: req.body.isImportant === 'true',
+            importantAt: req.body.isImportant === 'true' ? new Date() : null,
             state: category === 'rajya' ? (req.body.state || null) : null,
             formattedDate: new Date().toLocaleDateString('hi-IN', { 
                 year: 'numeric', 
@@ -3828,6 +3840,13 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
                 content,
                 category,
                 author,
+                isPermanent: req.body.isPermanent === 'true',
+                isOriginal: req.body.isOriginal === 'true',
+                isImportant: req.body.isImportant === 'true',
+                importantAt: req.body.isImportant === 'true'
+                    ? (allNews[newsIndex].isImportant && allNews[newsIndex].importantAt ? allNews[newsIndex].importantAt : new Date().toISOString())
+                    : null,
+                state: category === 'rajya' ? (req.body.state || null) : null,
                 photos: nextPhotos.length > 0 ? nextPhotos : allNews[newsIndex].photos,
                 formattedDate: new Date().toLocaleDateString('hi-IN', { 
                     year: 'numeric', 
@@ -3852,7 +3871,9 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
         news.author = author;
         news.isPermanent = req.body.isPermanent === 'true';
         news.isOriginal = req.body.isOriginal === 'true';
+        const wasImportant = news.isImportant === true;
         news.isImportant = req.body.isImportant === 'true';
+        news.importantAt = news.isImportant ? (wasImportant && news.importantAt ? news.importantAt : new Date()) : null;
         news.state = category === 'rajya' ? (req.body.state || null) : null;
         news.formattedDate = new Date().toLocaleDateString('hi-IN', { 
             year: 'numeric', 
