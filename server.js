@@ -446,11 +446,16 @@ function renderHomepageSSR(articles, catId) {
 
     let sorted = articles.filter(a => !a.isOriginal).slice();
     if (catId) {
-        sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+        sorted.sort((a, b) => {
+            const sourceA = a.rssSource ? 1 : 0, sourceB = b.rssSource ? 1 : 0;
+            return sourceA !== sourceB ? sourceA - sourceB : new Date(b.date) - new Date(a.date);
+        });
     } else {
         sorted.sort((a, b) => {
             const ca = CAT_ORDER[a.category] || 99, cb = CAT_ORDER[b.category] || 99;
-            return ca !== cb ? ca - cb : new Date(b.date) - new Date(a.date);
+            if (ca !== cb) return ca - cb;
+            const sourceA = a.rssSource ? 1 : 0, sourceB = b.rssSource ? 1 : 0;
+            return sourceA !== sourceB ? sourceA - sourceB : new Date(b.date) - new Date(a.date);
         });
     }
     const items = sorted.slice(0, 20);
@@ -472,6 +477,7 @@ function renderHomepageSSR(articles, catId) {
   <div class="nc-lead-img">${cardImg(lead, true)}</div>
   <div class="nc-lead-body">
     ${CAT_NAMES[lead.category] ? `<span class="nc-cat">${CAT_NAMES[lead.category]}</span>` : ''}
+        ${lead.rssSource ? `<span class="nc-source-badge">स्रोत: ${escapeHtml(lead.rssSource)}</span>` : '<span class="nc-original-badge">वॉयस ऑफ क्रांति रिपोर्ट</span>'}
     <a href="${leadUrl}" style="text-decoration:none;color:inherit;"><h2 class="nc-lead-title">${escapeHtml(lead.heading || 'समाचार')}</h2></a>
   </div>
 </article>`;
@@ -519,6 +525,7 @@ function renderCategoryCardSSR(a, cat) {
                 <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
                     <span class="news-card-cat" style="color:${cat.color}">${escapeHtml(cat.name)}</span>
                     ${isPbShabdArticle(a) ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                    ${a.rssSource && !isPbShabdArticle(a) ? `<span class="nc-source-badge">स्रोत: ${escapeHtml(a.rssSource)}</span>` : ''}
                 </div>
                 <p class="news-card-title">${heading}</p>
                 ${previewText ? `<p class="news-card-preview">${escapeHtml(previewText)}</p>` : ''}

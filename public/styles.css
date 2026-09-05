@@ -27,6 +27,26 @@ body {
     padding: 0 20px;
 }
 
+.nc-source-badge,
+.nc-original-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.nc-source-badge {
+    color: #475569;
+    background: #e2e8f0;
+}
+
+.nc-original-badge {
+    color: #166534;
+    background: #dcfce7;
+}
+
 /* Header Styles */
 .header {
     background: #0f172a;

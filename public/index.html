@@ -555,10 +555,15 @@
                         allNewsData.sort(function(a, b) {
                             var ca = catOrder[a.category] || 99, cb = catOrder[b.category] || 99;
                             if (ca !== cb) return ca - cb;
+                            var aSource = a.rssSource ? 1 : 0, bSource = b.rssSource ? 1 : 0;
+                            if (aSource !== bSource) return aSource - bSource;
                             return new Date(b.date) - new Date(a.date);
                         });
                     } else if (!writtenOnly) {
-                        allNewsData.sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
+                        allNewsData.sort(function(a, b) {
+                            var aSource = a.rssSource ? 1 : 0, bSource = b.rssSource ? 1 : 0;
+                            return aSource !== bSource ? aSource - bSource : new Date(b.date) - new Date(a.date);
+                        });
                     }
                 }
 
@@ -653,6 +658,8 @@
                         var pa = (isPermanentWithin24h(a) || isImportantWithin24h(a)) ? 0 : 1;
                         var pb = (isPermanentWithin24h(b) || isImportantWithin24h(b)) ? 0 : 1;
                         if (pa !== pb) return pa - pb;
+                        var sa = a.rssSource ? 1 : 0, sb = b.rssSource ? 1 : 0;
+                        if (sa !== sb) return sa - sb;
                         var ta = articleTier(a), tb = articleTier(b);
                         if (ta !== tb) return ta - tb;
                         return new Date(b.date) - new Date(a.date);
@@ -754,6 +761,7 @@
                     var isLive = news.date && (Date.now() - new Date(news.date)) < 900000;
                     var liveHtml = isLive ? '<span class="nc-live">LIVE</span>' : '';
                     var pbHtml = news.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : '';
+                    var sourceHtml = news.rssSource && news.rssSource !== 'PB SHABD' ? '<span class="nc-source-badge">स्रोत: ' + news.rssSource + '</span>' : '';
                     // Slot assignment: tier 1-2 (full-content) fill prominent slots; tier 3+ (Google News, historical, minor-city) go to list
                     var tier = articleTier(news);
                     var slot = tier >= 3 ? Math.max(5, ai) : prominentFilled;
@@ -763,7 +771,7 @@
                         leadHtml = '<article class="nc-lead" onclick="' + nav + '">' +
                             '<div class="nc-lead-img">' + ncImg(fp, news.heading, true) + '</div>' +
                             '<div class="nc-lead-body">' +
-                            '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.1rem;">' + catHtml + liveHtml + pbHtml + '</div>' +
+                            '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.1rem;">' + catHtml + liveHtml + pbHtml + sourceHtml + '</div>' +
                             '<h2 class="nc-lead-title">' + news.heading + '</h2>' +
                             (leadDesc ? '<p class="nc-lead-desc">' + leadDesc + '</p>' : '') +
                             '<div class="nc-meta">' + ago + ' &bull; ' + auth +
@@ -772,7 +780,7 @@
                     } else if (slot <= 4) {
                         featHtml += '<article class="nc-feat" onclick="' + nav + '">' +
                             '<div class="nc-feat-img">' + ncImg(fp, news.heading, false) + '</div>' +
-                            '<div class="nc-feat-body"><div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;">' + catHtml + liveHtml + pbHtml + '</div>' +
+                            '<div class="nc-feat-body"><div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;">' + catHtml + liveHtml + pbHtml + sourceHtml + '</div>' +
                             '<h3 class="nc-feat-title">' + news.heading + '</h3>' +
                             '<div class="nc-meta">' + ago + '</div>' +
                             '</div></article>';
@@ -795,10 +803,10 @@
                 orderedCats.forEach(function(catKey) {
                     var items = catGroups[catKey];
                     if (!items || !items.length) return;
-                    // RSS articles first, editorial (no rssSource) last within each category
+                    // Original reporting first; curated source-based items follow.
                     items.sort(function(a, b) {
                         var aRss = a.rssSource ? 1 : 0, bRss = b.rssSource ? 1 : 0;
-                        if (aRss !== bRss) return bRss - aRss;
+                        if (aRss !== bRss) return aRss - bRss;
                         return new Date(b.date) - new Date(a.date);
                     });
                     var catName = categoryNames[catKey] || catKey;
@@ -811,10 +819,11 @@
                         var fp2 = optimizeCloudinaryUrl((n2.photos && n2.photos.length > 0) ? n2.photos[0] : n2.photo);
                         var url2 = n2.slug ? '/news/' + n2.slug : '/news-detail.html?id=' + n2.id;
                         var pb2 = n2.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : '';
+                        var source2 = n2.rssSource && n2.rssSource !== 'PB SHABD' ? '<span class="nc-source-badge">स्रोत: ' + n2.rssSource + '</span>' : '';
                         listHtml += '<article class="nc-item" onclick="window.location.href=\'' + url2 + '\'">' +
                             '<div class="nc-item-img">' + ncImg(fp2, n2.heading, false) + '</div>' +
                             '<div class="nc-item-body">' +
-                            '<div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;margin-bottom:.15rem;">' + pb2 + '</div>' +
+                            '<div style="display:flex;gap:.3rem;align-items:center;flex-wrap:wrap;margin-bottom:.15rem;">' + pb2 + source2 + '</div>' +
                             '<h3 class="nc-item-title">' + n2.heading + '</h3>' +
                             '<div class="nc-meta">' + formatNewsDate(n2.date) + '</div>' +
                             '</div></article>';

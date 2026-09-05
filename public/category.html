@@ -372,6 +372,7 @@
                 <div style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin-bottom:.2rem;">
                     <span class="news-card-cat" style="color:${cat.color}">${cat.name}</span>
                     ${a.rssSource === 'PB SHABD' ? '<span class="nc-pb-badge">📡 PB</span>' : ''}
+                    ${a.rssSource && a.rssSource !== 'PB SHABD' ? `<span class="nc-source-badge">स्रोत: ${a.rssSource}</span>` : ''}
                 </div>
                 <p class="news-card-title">${a.heading}</p>
                 ${previewText ? `<p class="news-card-preview">${previewText}</p>` : ''}
@@ -382,7 +383,13 @@
 
     function loadMore() {
         const grid = document.getElementById('newsGrid');
-        const source = activeStateFilter ? allArticles.filter(a => a.state === activeStateFilter) : allArticles;
+        const source = (activeStateFilter ? allArticles.filter(a => a.state === activeStateFilter) : allArticles)
+            .slice()
+            .sort((a, b) => {
+                const sourceA = a.rssSource ? 1 : 0;
+                const sourceB = b.rssSource ? 1 : 0;
+                return sourceA !== sourceB ? sourceA - sourceB : new Date(b.date) - new Date(a.date);
+            });
         const next = source.slice(shownCount, shownCount + PAGE_SIZE);
         if (!next.length) {
             const sentinel = document.getElementById('scrollSentinel');
