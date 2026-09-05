@@ -30,35 +30,40 @@ const mammoth = require('mammoth');
 const AdmZip = require('adm-zip');
 
 // ── LLM helpers ───────────────────────────────────────────────────────────────
-// callMistral: now only used by generateDailyFact(). Editorial/itihas/weekly-roundup
-//   moved to Groq (callGroq, openai/gpt-oss-120b) — see below.
+// callGemini is used for the three daily long-form features so they do not
+// consume the Groq request budget used by real-time content workflows.
 //   Returns the raw JSON string from the model.
-// Recursively flatten Mistral content that may arrive as nested array/object instead of a flat string
-function flattenMistralContent(val) {
+function flattenAiContent(val) {
     if (typeof val === 'string') return val;
-    if (Array.isArray(val)) return val.map(flattenMistralContent).filter(Boolean).join('\n\n');
-    if (val && typeof val === 'object') return Object.values(val).map(flattenMistralContent).filter(Boolean).join('\n\n');
+    if (Array.isArray(val)) return val.map(flattenAiContent).filter(Boolean).join('\n\n');
+    if (val && typeof val === 'object') return Object.values(val).map(flattenAiContent).filter(Boolean).join('\n\n');
     return String(val || '');
 }
 
-async function callMistral(prompt, maxTokens = 1800, temperature = 0.7) {
-    const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+async function callGemini(prompt, maxTokens = 1800, temperature = 0.7) {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.MISTRAL_API_KEY}`,
+            'X-goog-api-key': process.env.GEMINI_API_KEY
         },
         body: JSON.stringify({
-            model: 'mistral-small-latest',
-            messages: [{ role: 'user', content: prompt }],
-            temperature,
-            max_tokens: maxTokens,
-            response_format: { type: 'json_object' },
-        }),
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: 'application/json',
+                maxOutputTokens: maxTokens,
+                temperature,
+                thinkingConfig: { thinkingBudget: 0 }
+            }
+        })
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || JSON.stringify(data));
-    return data.choices[0]?.message?.content || '{}';
+    const data = await response.json();
+    if (!response.ok) {
+        throw new Error(data.error?.message || `Gemini request failed with HTTP ${response.status}`);
+    }
+    return data.candidates?.[0]?.content?.parts
+        ?.map(part => part.text || '')
+        .join('') || '{}';
 }
 
 // callGroq: used for short-burst batch tasks (shorts 400 tokens, explainers 350 tokens).
@@ -1471,8 +1476,8 @@ const DAILY_ARTICLE_TOPICS = [
 ];
 
 async function generateDailyArticle() {
-    if (!process.env.MISTRAL_API_KEY) {
-        console.log('⚠️ MISTRAL_API_KEY not set, skipping daily article generation');
+    if (!process.env.GEMINI_API_KEY) {
+        console.log('⚠️ GEMINI_API_KEY not set, skipping daily article generation');
         return null;
     }
     if (!isMongoDBConnected) return null;
@@ -1515,14 +1520,14 @@ async function generateDailyArticle() {
 }`;
 
     try {
-        const raw = await callMistral(prompt, 3000, 0.7);
+        const raw = await callGemini(prompt, 3000, 0.7);
         const parsed = JSON.parse(raw);
 
         if (!parsed.heading || !parsed.content) {
-            console.error('✗ Daily article: empty response from Mistral');
+            console.error('✗ Daily article: empty response from Gemini');
             return null;
         }
-        parsed.content = flattenMistralContent(parsed.content);
+        parsed.content = flattenAiContent(parsed.content);
 
         const safetyBlocklist = ['sex', 'porn', 'nude', 'bomb', 'terror', 'kill', 'rape', 'jihad'];
         const combined = (parsed.heading + ' ' + parsed.content).toLowerCase();
@@ -1570,8 +1575,8 @@ async function generateDailyArticle() {
 //             generic article without inventing specific events.
 // Stored with isAajKaItihas:true + isPermanent:true so it is never auto-deleted.
 async function generateAajKaItihas() {
-    if (!process.env.MISTRAL_API_KEY) {
-        console.log('⚠️ MISTRAL_API_KEY not set, skipping Aaj Ka Itihas');
+    if (!process.env.GEMINI_API_KEY) {
+        console.log('⚠️ GEMINI_API_KEY not set, skipping Aaj Ka Itihas');
         return null;
     }
     if (!isMongoDBConnected) return null;
@@ -1617,7 +1622,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
     let verifiedFacts = { events: [], deaths: [], births: [] };
     try {
-        const rawVerify = await callMistral(verifyPrompt, 800, 0.1);
+        const rawVerify = await callGemini(verifyPrompt, 800, 0.1);
         // Strip markdown fences if present
         const cleanVerify = rawVerify.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/,'').trim();
         const parsed = JSON.parse(cleanVerify);
@@ -1678,7 +1683,7 @@ JSON फॉर्मेट में जवाब दो। केवल JSON:
 }`;
 
     try {
-        const raw = await callMistral(writePrompt, 2000, 0.2);
+        const raw = await callGemini(writePrompt, 2000, 0.2);
         const cleanRaw = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/,'').trim();
         const parsed = JSON.parse(cleanRaw);
 
@@ -1960,7 +1965,7 @@ const DAILY_FACT_TOPICS = [
 ];
 
 async function generateDailyFact() {
-    if (!process.env.MISTRAL_API_KEY) return null;
+    if (!process.env.GEMINI_API_KEY) return null;
     if (!isMongoDBConnected) return null;
 
     // Deduplicate: skip if a "क्या आप जानते हैं:" article already published today
@@ -2011,7 +2016,7 @@ async function generateDailyFact() {
 JSON: { "heading": "क्या आप जानते हैं: [आकर्षक उपशीर्षक]", "content": "पूरा संरचित लेख (पैराग्राफ \\n\\n से अलग करें)" }`;
 
     try {
-        const raw = await callMistral(prompt, 2500);
+        const raw = await callGemini(prompt, 2500);
         const parsed = JSON.parse(raw);
         if (!parsed.heading || !parsed.content) { console.error('✗ Daily fact: empty response'); return null; }
         if (Array.isArray(parsed.content)) parsed.content = parsed.content.join('\n\n');
@@ -3220,14 +3225,23 @@ app.get('/sitemap-news.xml', async (req, res) => {
 
         let newsUrls = [];
         if (isMongoDBConnected) {
-            // Only include articles with slugs — ?id= URLs are redirects and cause
-            // "Page with redirect" warnings in Google Search Console
+            // Only include canonical, unsyndicated reporting. Syndicated articles stay
+            // in the general sitemap but should not dilute the Google News feed.
             const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
             const articles = await News.find(
-                { slug: { $exists: true, $ne: '' }, date: { $gte: twoDaysAgo } },
+                {
+                    slug: { $exists: true, $ne: '' },
+                    date: { $gte: twoDaysAgo },
+                    $or: [{ rssSource: null }, { rssSource: { $exists: false } }]
+                },
                 { _id: 1, slug: 1, date: 1, heading: 1 }
             ).sort({ date: -1 }).limit(1000).lean();
-            newsUrls = articles.map(a => ({
+            const seenSlugs = new Set();
+            newsUrls = articles.filter(a => {
+                if (seenSlugs.has(a.slug)) return false;
+                seenSlugs.add(a.slug);
+                return true;
+            }).map(a => ({
                 loc: `https://voiceofkranti.com/news/${a.slug}`,
                 lastmod: a.date ? new Date(a.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                 pubDate: a.date ? new Date(a.date).toISOString() : new Date().toISOString(),
@@ -3345,14 +3359,23 @@ app.get('/news-sitemap.xml', async (req, res) => {
     }, res);
 });
 
-app.get('/sitemap-index.xml', (req, res) => {
-    const today = new Date().toISOString().split('T')[0];
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+app.get('/sitemap-index.xml', async (req, res) => {
+        try {
+                if (!isMongoDBConnected) await connectDB();
+                const articleCount = await News.countDocuments({ slug: { $exists: true, $ne: '' } });
+                const pageCount = Math.ceil(articleCount / 50000);
+                const today = new Date().toISOString().split('T')[0];
+                const archiveSitemaps = Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => `  <sitemap>
+        <loc>https://voiceofkranti.com/sitemap-articles-${index + 2}.xml</loc>
+        <lastmod>${today}</lastmod>
+    </sitemap>`).join('\n');
+                const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>https://voiceofkranti.com/sitemap.xml</loc>
     <lastmod>${today}</lastmod>
   </sitemap>
+${archiveSitemaps}
   <sitemap>
     <loc>https://voiceofkranti.com/sitemap-news.xml</loc>
     <lastmod>${today}</lastmod>
@@ -3361,6 +3384,40 @@ app.get('/sitemap-index.xml', (req, res) => {
     res.set('Content-Type', 'application/xml');
     res.set('Cache-Control', 'public, max-age=3600');
     res.send(xml);
+    } catch (err) {
+        res.status(500).send('Sitemap index error');
+    }
+});
+
+app.get('/sitemap-articles-:page.xml', async (req, res) => {
+    try {
+        const page = Number.parseInt(req.params.page, 10);
+        if (!Number.isInteger(page) || page < 2) return res.status(404).send('Sitemap not found');
+        if (!isMongoDBConnected) await connectDB();
+
+        const articles = await News.find(
+            { slug: { $exists: true, $ne: '' } },
+            { slug: 1, date: 1 }
+        ).sort({ date: -1 }).skip((page - 1) * 50000).limit(50000).lean();
+        if (!articles.length) return res.status(404).send('Sitemap not found');
+
+        const urls = articles.map(article => `  <url>
+    <loc>https://voiceofkranti.com/news/${article.slug}</loc>
+    <lastmod>${article.date ? new Date(article.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>`).join('\n');
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>`;
+
+        res.set('Content-Type', 'application/xml');
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.send(xml);
+    } catch (err) {
+        res.status(500).send('Sitemap error');
+    }
 });
 
 // Configure multer for Cloudinary uploads
@@ -4092,8 +4149,9 @@ app.get('/api/weekly-roundup', async (req, res) => {
 // Admin: manually trigger Aaj Ka Itihas generation
 app.post('/api/admin/generate-aaj-ka-itihas', requireAuth, async (req, res) => {
     try {
+        if (!isMongoDBConnected) await connectDB();
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
-        if (!process.env.MISTRAL_API_KEY) return res.status(503).json({ error: 'MISTRAL_API_KEY not set' });
+        if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'GEMINI_API_KEY not set' });
         // Force regeneration: remove today’s existing article first if force=true
         if (req.body.force === 'true') {
             const today = new Date();
@@ -4217,11 +4275,12 @@ JSON में जवाब दो: { "content": "पूरा हिंदी �
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Manual trigger: generate one original editorial article via Mistral
+// Manual trigger: generate one original editorial article via Gemini
 app.post('/api/admin/generate-daily-article', requireAuth, async (req, res) => {
     try {
+        if (!isMongoDBConnected) await connectDB();
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
-        if (!process.env.MISTRAL_API_KEY) return res.status(503).json({ error: 'MISTRAL_API_KEY not set' });
+        if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'GEMINI_API_KEY not set' });
         const article = await generateDailyArticle();
         if (!article) return res.status(500).json({ error: 'लेख नहीं बन सका, दोबारा कोशिश करें' });
         invalidateNewsCache();
@@ -4306,8 +4365,9 @@ app.post('/api/admin/generate-weekly-roundup', requireAuth, async (req, res) => 
 // Admin: manually trigger daily fact generation
 app.post('/api/admin/generate-daily-fact', requireAuth, async (req, res) => {
     try {
+        if (!isMongoDBConnected) await connectDB();
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
-        if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'GROQ_API_KEY not set' });
+        if (!process.env.GEMINI_API_KEY) return res.status(503).json({ error: 'GEMINI_API_KEY not set' });
         if (req.body.force === 'true') {
             const today = new Date();
             const s = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -4490,7 +4550,8 @@ app.get('/api/cron/generate-daily-article', async (req, res) => {
     if (!isCronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' });
     try {
         await connectDB();
-        await generateDailyArticle();
+        const article = await generateDailyArticle();
+        if (!article) return res.status(500).json({ success: false, error: 'Daily article was not generated' });
         invalidateNewsCache();
         res.json({ success: true, message: 'Daily article generation complete' });
     } catch (err) {
@@ -4504,11 +4565,27 @@ app.get('/api/cron/generate-aaj-ka-itihas', async (req, res) => {
     if (!isCronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' });
     try {
         await connectDB();
-        await generateAajKaItihas();
+        const article = await generateAajKaItihas();
+        if (!article) return res.status(500).json({ success: false, error: 'Aaj Ka Itihas was not generated' });
         invalidateNewsCache();
         res.json({ success: true, message: 'Aaj Ka Itihas generation complete' });
     } catch (err) {
         console.error('Cron/aaj-ka-itihas error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Vercel Cron: generate the daily educational fact article
+app.get('/api/cron/generate-daily-fact', async (req, res) => {
+    if (!isCronAuthorized(req)) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        await connectDB();
+        const article = await generateDailyFact();
+        if (!article) return res.status(500).json({ success: false, error: 'Daily fact was not generated' });
+        invalidateNewsCache();
+        res.json({ success: true, message: 'Daily fact generation complete' });
+    } catch (err) {
+        console.error('Cron/daily-fact error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
