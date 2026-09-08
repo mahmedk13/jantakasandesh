@@ -383,13 +383,9 @@
 
     function loadMore() {
         const grid = document.getElementById('newsGrid');
-        const source = (activeStateFilter ? allArticles.filter(a => a.state === activeStateFilter) : allArticles)
-            .slice()
-            .sort((a, b) => {
-                const sourceA = a.rssSource ? 1 : 0;
-                const sourceB = b.rssSource ? 1 : 0;
-                return sourceA !== sourceB ? sourceA - sourceB : new Date(b.date) - new Date(a.date);
-            });
+        // Articles arrive already curated (PB/author/RSS ratio) by curateNewsFeed() server-side —
+        // only filter by state, never re-sort, so this stays consistent with the SSR'd lead/featured cards.
+        const source = activeStateFilter ? allArticles.filter(a => a.state === activeStateFilter) : allArticles;
         const next = source.slice(shownCount, shownCount + PAGE_SIZE);
         if (!next.length) {
             const sentinel = document.getElementById('scrollSentinel');

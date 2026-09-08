@@ -551,20 +551,15 @@
                     }
 
                     if (!writtenOnly && currentCategory === 'all') {
+                        // Group by category only (stable sort keeps curateNewsFeed()'s server-side
+                        // PB/author/RSS ratio order intact within each category bucket).
                         var catOrder = { desh:1, crime:2, rajniti:3, bhopal:4, rajya:5, videsh:6, khel:7, vyapar:8, manoranjan:9, itihas:10 };
                         allNewsData.sort(function(a, b) {
                             var ca = catOrder[a.category] || 99, cb = catOrder[b.category] || 99;
-                            if (ca !== cb) return ca - cb;
-                            var aSource = a.rssSource ? 1 : 0, bSource = b.rssSource ? 1 : 0;
-                            if (aSource !== bSource) return aSource - bSource;
-                            return new Date(b.date) - new Date(a.date);
-                        });
-                    } else if (!writtenOnly) {
-                        allNewsData.sort(function(a, b) {
-                            var aSource = a.rssSource ? 1 : 0, bSource = b.rssSource ? 1 : 0;
-                            return aSource !== bSource ? aSource - bSource : new Date(b.date) - new Date(a.date);
+                            return ca - cb;
                         });
                     }
+                    // Specific category views are left as-is: curateNewsFeed() already ordered them server-side.
                 }
 
                 if (reset) {
@@ -629,13 +624,6 @@
                     return m ? !MAJOR_CITY_PREFIXES.has(m[1].trim().toLowerCase()) : false;
                 }
                 function isHistoricalHeading(h) { return /\b(19\d{2}|200\d|201\d|202[0-3])\b/.test(h || ''); }
-                function isPermanentWithin24h(n) {
-                    if (!n || !n.isPermanent || !n.date) return false;
-                    var d = new Date(n.date);
-                    if (Number.isNaN(d.getTime())) return false;
-                    var ageMs = Date.now() - d.getTime();
-                    return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
-                }
                 function isImportantWithin24h(n) {
                     if (!n || !n.isImportant) return false;
                     var d = new Date(n.importantAt || n.updatedAt || n.date);
@@ -655,11 +643,9 @@
 
                 function sortNewsForDisplay(list) {
                     list.sort(function(a, b) {
-                        var pa = (isPermanentWithin24h(a) || isImportantWithin24h(a)) ? 0 : 1;
-                        var pb = (isPermanentWithin24h(b) || isImportantWithin24h(b)) ? 0 : 1;
+                        var pa = isImportantWithin24h(a) ? 0 : 1;
+                        var pb = isImportantWithin24h(b) ? 0 : 1;
                         if (pa !== pb) return pa - pb;
-                        var sa = a.rssSource ? 1 : 0, sb = b.rssSource ? 1 : 0;
-                        if (sa !== sb) return sa - sb;
                         var ta = articleTier(a), tb = articleTier(b);
                         if (ta !== tb) return ta - tb;
                         return new Date(b.date) - new Date(a.date);
@@ -667,8 +653,12 @@
                     return list;
                 }
 
-                // Keep the homepage feed in a stable, repeatable order across the full infinite scroll.
-                allNewsData = sortNewsForDisplay(allNewsData.slice());
+                // Mixed 'all' feed still gets the quality-tier sort (deprioritize Google-News-headline-only/
+                // historical/minor-city items); single-category views already come pre-curated by
+                // curateNewsFeed() server-side (PB/author/RSS ratio) and must not be re-sorted here.
+                if (!writtenOnly && currentCategory === 'all') {
+                    allNewsData = sortNewsForDisplay(allNewsData.slice());
+                }
 
                 // Pin a Bhopal article as lead (any source mentioning Bhopal in last 5h),
                 // fallback to top national news if none found
