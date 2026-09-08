@@ -62,14 +62,16 @@ const CATEGORY_MAP = {
     'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
 };
 
-function categorize(title, stateHint, desc) {
+function categorize(title, stateHint, desc, sourceHint) {
     const checks = [title.toLowerCase(), stateHint.toLowerCase(), (desc || '').toLowerCase()];
     for (const text of checks) {
         for (const [key, val] of Object.entries(CATEGORY_MAP)) {
             if (text.includes(key)) return val;
         }
     }
-    return 'rajya';
+    // No keyword matched — trust PB SHABD's own crime-category/Bhopal-search fetch pass
+    // (if this story came from one) before falling back to 'rajya'.
+    return sourceHint || 'rajya';
 }
 
 // Maps PB SHABD's own `story.state` field (most reliable) and title/description
@@ -331,6 +333,9 @@ async function main() {
         const json = await fetchPage(cookies, page, state, pbCatId, search);
         const stories = json.data || [];
         if (!stories.length) { console.log(`  No stories for [${label}]`); continue; }
+        // This pass's own category signal — used only when no keyword in the story matches
+        // anything more specific (see categorize()'s sourceHint fallback).
+        const sourceHint = pbCatId === CRIME_CATEGORY_ID ? 'crime' : (search === 'भोपाल' ? 'bhopal' : null);
 
         let importable = 0, dups = 0;
         for (const story of stories) {
@@ -369,7 +374,7 @@ async function main() {
                 }
             }
 
-            const category = categorize(story.title, story.state || '', story.description || '');
+            const category = categorize(story.title, story.state || '', content, sourceHint);
             const base = generateSlug(story.title);
             let slug = base, ctr = 1;
             while (await News.findOne({ slug }).lean()) { ctr++; slug = `${base}-${ctr}`; }
@@ -378,7 +383,7 @@ async function main() {
                 heading:    story.title,
                 content,
                 category,
-                state:      category === 'rajya' ? detectState(story.title, story.state || '', story.description || '') : null,
+                state:      category === 'rajya' ? detectState(story.title, story.state || '', content) : null,
                 author:     'Maroof Ahmed Khan',
                 photos:     photoUrl ? [photoUrl] : [],
                 rssSource:  'PB SHABD',

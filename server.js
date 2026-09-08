@@ -877,7 +877,7 @@ const CATEGORY_MAP = {
     // only the residual bucket once every other specific category has been ruled out.
 };
 
-function mapRssCategory(rssCategories, title, defaultCategory) {
+function mapRssCategory(rssCategories, title, defaultCategory, content) {
     // 1. Scan title first — title keywords are more specific than feed category tags
     if (title) {
         const lowerTitle = title.toLowerCase();
@@ -885,7 +885,15 @@ function mapRssCategory(rssCategories, title, defaultCategory) {
             if (lowerTitle.includes(key)) return value;
         }
     }
-    // 2. Check RSS category tags as fallback
+    // 2. Scan the article body — location/topic cues (e.g. "भोपाल") often only show up
+    // in the content, not the headline or a thin feed-provided description
+    if (content) {
+        const lowerContent = content.toLowerCase();
+        for (const [key, value] of Object.entries(CATEGORY_MAP)) {
+            if (lowerContent.includes(key)) return value;
+        }
+    }
+    // 3. Check RSS category tags as fallback
     for (const cat of (rssCategories || [])) {
         const lower = (cat || '').toLowerCase().trim();
         for (const [key, value] of Object.entries(CATEGORY_MAP)) {
@@ -1038,7 +1046,7 @@ async function fetchAndImportRSS() {
             if (plainBodyCharCount(finalContent) < MIN_IMPORTED_BODY_CHARS) continue;
             const full = isFullArticleContent(finalContent);
 
-            const category = mapRssCategory(item.categories, item.title, source.defaultCategory);
+            const category = mapRssCategory(item.categories, item.title, source.defaultCategory, finalContent);
             candidates.push({
                 heading:       item.title.trim(),
                 headingNorm:   normalizeHeading(item.title),
@@ -1200,8 +1208,8 @@ async function fetchFromNewsDataAPI() {
                 // Map category
                 const apiCat = (item.category && item.category[0]) ? item.category[0].toLowerCase() : 'top';
                 let category = NEWSDATA_CATEGORY_MAP[apiCat] || 'desh';
-                // Also run title scan to refine category
-                category = mapRssCategory(item.category || [], item.title, category);
+                // Also run title/content scan to refine category
+                category = mapRssCategory(item.category || [], item.title, category, content);
 
                 const newsData = {
                     heading:       item.title.trim(),
@@ -1290,7 +1298,7 @@ async function fetchFromGNewsAPI() {
 
                 const category = mapRssCategory([], item.title, req.label === 'politics' ? 'rajniti' :
                     req.label === 'sports' ? 'khel' : req.label === 'entertainment' ? 'manoranjan' :
-                    req.label === 'business' ? 'vyapar' : req.label === 'world' ? 'videsh' : 'desh');
+                    req.label === 'business' ? 'vyapar' : req.label === 'world' ? 'videsh' : 'desh', content);
 
                 const newsData = {
                     heading:       item.title.trim(),
@@ -1374,7 +1382,7 @@ async function fetchFromCurrentsAPI() {
                 if (plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
                 const full = isFullArticleContent(content);
 
-                const category = mapRssCategory(item.category || [], item.title, 'desh');
+                const category = mapRssCategory(item.category || [], item.title, 'desh', content);
 
                 const newsData = {
                     heading:       item.title.trim(),
@@ -4405,10 +4413,10 @@ app.post('/api/admin/recategorize-rss', requireAuth, async (req, res) => {
     try {
         if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
         // Re-run mapRssCategory on all RSS articles whose category might be wrong
-        const articles = await News.find({ rssLink: { $ne: null }, heading: { $ne: null } }, { heading: 1, category: 1, rssSource: 1 }).lean();
+        const articles = await News.find({ rssLink: { $ne: null }, heading: { $ne: null } }, { heading: 1, category: 1, rssSource: 1, content: 1 }).lean();
         let fixed = 0;
         for (const a of articles) {
-            const correct = mapRssCategory([], a.heading, a.category);
+            const correct = mapRssCategory([], a.heading, a.category, a.content);
             if (correct !== a.category) {
                 await News.updateOne({ _id: a._id }, { $set: { category: correct } });
                 fixed++;
@@ -4905,7 +4913,7 @@ app.post('/api/admin/import-pbshabd', requireAuth, pbShabdUpload.array('zips', 5
                     stream.end(imgBuf);
                 });
             }
-            const category = mapRssCategory(city ? [city] : [], heading, 'desh');
+            const category = mapRssCategory(city ? [city] : [], heading, 'desh', content);
             const base = generateSlug(heading);
             let slug = base, counter = 1;
             while (await News.findOne({ slug }).lean()) { counter++; slug = `${base}-${counter}`; }
@@ -5118,7 +5126,7 @@ app.post('/api/admin/sync-pbshabd', requireAuth, async (req, res) => {
                 }
 
                 const stateHint = (story.state || '').toLowerCase();
-                const category  = mapRssCategory(stateHint ? [stateHint] : [], story.title, 'desh');
+                const category  = mapRssCategory(stateHint ? [stateHint] : [], story.title, 'desh', content);
 
                 const base = generateSlug(story.title);
                 let slug = base, ctr = 1;
