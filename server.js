@@ -384,9 +384,12 @@ function getArticleSourceTier(item, authorNameSet) {
 }
 
 // Re-ranks a date-desc sorted article list for homepage/category display. Never
-// removes an article — only reorders. `isPermanent` articles and `isImportant`
-// articles still within their 24h pin window always come first, in their original
-// order. After that:
+// removes an article — only reorders. Only `isImportant` articles still within
+// their 24h pin window always come first, in their original order — `isPermanent`
+// is NOT used here; it only protects an article from the monthly auto-delete
+// cleanup (see /api/admin/delete-old-articles) and has no bearing on feed order,
+// otherwise old permanent articles would permanently bury fresh content. After
+// the pinned items:
 //   - Top 5 (the "1 mukhya + 4 pramukh samachar" block): ~60% Prasar Bharati, ~20%
 //     own-author, ~20% RSS/API-imported (3:1:1). Own-author only fills its slot here
 //     when it's one of the pinned isImportant-within-24h articles above — a regular
@@ -398,7 +401,7 @@ function getArticleSourceTier(item, authorNameSet) {
 function curateNewsFeed(list, authorNameSet) {
     if (!Array.isArray(list) || list.length <= 1) return list;
 
-    const isProtected = (item) => item && (item.isPermanent === true || isImportantWithin24h(item));
+    const isProtected = (item) => isImportantWithin24h(item);
     const protectedQueue = list.filter(isProtected);
     const rest = list.filter(item => !isProtected(item));
     if (!rest.length) return list;
