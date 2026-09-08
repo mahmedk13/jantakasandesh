@@ -36,7 +36,7 @@ const CATEGORY_MAP = {
     'अपराध': 'crime', 'हत्या': 'crime', 'गिरफ्तार': 'crime', 'दुर्घटना': 'crime',
     'बलात्कार': 'crime', 'लूट': 'crime', 'डकैती': 'crime', 'तस्करी': 'crime',
     'फरार': 'crime', 'जेल': 'crime', 'पुलिस': 'crime', 'एफआईआर': 'crime',
-    'आरोपी': 'crime', 'अभियुक्त': 'crime', 'पीड़ित': 'crime', 'शव': 'crime',
+    'आरोपी': 'crime', 'अभियुक्त': 'crime', 'शव': 'crime',
     'crime': 'crime', 'murder': 'crime', 'arrested': 'crime', 'accident': 'crime',
     'rape': 'crime', 'robbery': 'crime', 'theft': 'crime', 'police': 'crime', 'fir': 'crime',
     'खेल': 'khel', 'क्रिकेट': 'khel', 'cricket': 'khel', 'football': 'khel', 'ipl': 'khel',
@@ -69,9 +69,10 @@ function categorize(title, stateHint, desc, sourceHint) {
             if (text.includes(key)) return val;
         }
     }
-    // No keyword matched — trust PB SHABD's own crime-category/Bhopal-search fetch pass
-    // (if this story came from one) before falling back to 'rajya'.
-    return sourceHint || 'rajya';
+    // No keyword matched — PB SHABD's own "crime" topic feed mixes in plenty of routine
+    // administrative/political stories (CM greetings, relief distribution, etc.), so that
+    // hint isn't trustworthy on its own; only the Bhopal search-pass hint is reliable here.
+    return sourceHint === 'bhopal' ? sourceHint : 'rajya';
 }
 
 // Maps PB SHABD's own `story.state` field (most reliable) and title/description

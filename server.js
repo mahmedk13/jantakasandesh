@@ -415,6 +415,9 @@ function curateNewsFeed(list, authorNameSet) {
     const FALLBACK_ORDER_NO_AUTHOR = ['pb', 'rss', 'other'];
     const idx = { pb: 0, rss: 0, author: 0, other: 0 };
     const result = [];
+    // IST calendar-day key ('YYYY-MM-DD') — used so the ratio schedule never picks an
+    // article from an earlier IST day while a different tier already has one from today.
+    const istDay = (d) => d ? new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : '';
 
     for (let i = 0; i < rest.length; i++) {
         const outPos = protectedQueue.length + result.length;
@@ -431,6 +434,18 @@ function curateNewsFeed(list, authorNameSet) {
         }
         if (!chosen) chosen = FALLBACK_ORDER.find(tier => idx[tier] < pools[tier].length); // last resort — don't drop remaining author-only items
         if (!chosen) break; // all pools exhausted
+
+        // Freshness guard: the ratio decides which tier *should* fill this slot, but if
+        // that tier's next article is from an earlier IST day than another tier's next
+        // article, surface the newer one instead — ratio adherence never justifies
+        // showing yesterday's news ahead of today's from a different source.
+        const chosenDay = istDay(pools[chosen][idx[chosen]].date);
+        for (const tier of FALLBACK_ORDER) {
+            if (tier === chosen || idx[tier] >= pools[tier].length) continue;
+            if (tier === 'author' && !authorEligible) continue;
+            if (istDay(pools[tier][idx[tier]].date) > chosenDay) { chosen = tier; break; }
+        }
+
         result.push(pools[chosen][idx[chosen]++]);
     }
     return protectedQueue.concat(result);
@@ -898,7 +913,7 @@ const CATEGORY_MAP = {
     'हैवानियत': 'crime', 'सनसनी': 'crime', 'अपहरण': 'crime', 'दुर्घटना': 'crime',
     'फायरिंग': 'crime', 'गोलीबारी': 'crime', 'बम': 'crime', 'विस्फोट': 'crime',
     'मारपीट': 'crime', 'लूट': 'crime', 'जेल': 'crime', 'आरोपी': 'crime',
-    'पीड़ित': 'crime', 'मृत': 'crime', 'घायल': 'crime', 'ठग': 'crime', 'नशे': 'crime',
+    'ठग': 'crime', 'नशे': 'crime',
     'crime': 'crime', 'murder': 'crime', 'rape': 'crime', 'theft': 'crime',
     'robbery': 'crime', 'arrested': 'crime', 'police': 'crime', 'accident': 'crime',
     'fraud': 'crime', 'scam': 'crime', 'घोटाला': 'crime', 'धोखाधड़ी': 'crime',
@@ -4452,7 +4467,14 @@ app.post('/api/admin/recategorize-rss', requireAuth, async (req, res) => {
         const articles = await News.find({ rssLink: { $ne: null }, heading: { $ne: null } }, { heading: 1, category: 1, rssSource: 1, content: 1 }).lean();
         let fixed = 0;
         for (const a of articles) {
-            const correct = mapRssCategory([], a.heading, a.category, a.content);
+            let correct = mapRssCategory([], a.heading, a.category, a.content);
+            // mapRssCategory only resets a generic 'desh' guess when nothing matches — it
+            // has no way to know a stored 'crime' was itself a bad guess. PB SHABD's own
+            // crime-topic feed pass used to default unmatched stories to 'crime' blindly
+            // (fixed for new imports), so re-check that specific stale case here too.
+            if (correct === 'crime' && a.category === 'crime' && a.rssSource === 'PB SHABD') {
+                correct = 'rajya';
+            }
             if (correct !== a.category) {
                 await News.updateOne({ _id: a._id }, { $set: { category: correct } });
                 fixed++;
