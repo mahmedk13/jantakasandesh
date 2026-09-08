@@ -92,12 +92,14 @@
                         <button type="button" onclick="formatText('underline')" class="format-btn" title="Underline (Ctrl+U)"><u>U</u></button>
                         <button type="button" onclick="formatText('h2')" class="format-btn" title="Section Heading (##)" style="font-weight:700;font-size:0.9rem;">H2</button>
                         <button type="button" onclick="formatText('h3')" class="format-btn" title="Sub-heading (###)" style="font-weight:600;font-size:0.85rem;">H3</button>
+                        <button type="button" onclick="formatText('ul')" class="format-btn" title="Bullet List">&#8226; List</button>
                         <span style="color: #718096; font-size: 0.85rem; margin-left: 10px;">उपशीर्षक के लिए H2/H3 बटन दबाएं — या लाइन शुरू में <code>## </code> लिखें</span>
                     </div>
                     <p style="margin: 0 0 8px; color: #4a5568; font-size: 0.82rem; line-height: 1.6;">
                         मीडिया एम्बेड: <code>PHOTO:https://example.com/a.jpg | फोटो का छोटा विवरण</code><br>
                         वीडियो: <code>VIDEO:https://youtu.be/xxxxx | वीडियो का शीर्षक</code><br>
-                        X पोस्ट: <code>X:https://x.com/username/status/1234567890 | पोस्ट का छोटा विवरण</code>
+                        X पोस्ट: <code>X:https://x.com/username/status/1234567890 | पोस्ट का छोटा विवरण</code><br>
+                        Facebook पोस्ट: <code>FACEBOOK:https://www.facebook.com/username/posts/12345 | पोस्ट का छोटा विवरण</code>
                     </p>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; align-items:center;">
                         <input id="inlineMediaUrl" type="url" placeholder="https://public-image-url.com/photo.jpg" style="flex:1; min-width:220px; padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; font-size:0.9rem;">
@@ -105,6 +107,7 @@
                             <option value="photo">PHOTO</option>
                             <option value="video">VIDEO</option>
                             <option value="x">X</option>
+                            <option value="facebook">FACEBOOK</option>
                         </select>
                         <button type="button" id="insertInlineMediaBtn" class="btn btn-primary btn-small" style="background:#2b6cb0;">Insert</button>
                     </div>
@@ -112,7 +115,7 @@
                         id="content" 
                         name="content" 
                         required 
-                        placeholder="समाचार का पूरा विवरण यहाँ लिखें...&#10;&#10;उपशीर्षक के लिए: ## उपशीर्षक यहाँ लिखें&#10;फोटो के लिए: PHOTO:https://example.com/image.jpg | फोटो का छोटा विवरण&#10;वीडियो के लिए: VIDEO:https://youtu.be/abcd1234 | वीडियो का छोटा विवरण&#10;X पोस्ट के लिए: X:https://x.com/voiceofkranti/status/1234567890 | पोस्ट का छोटा विवरण"
+                        placeholder="समाचार का पूरा विवरण यहाँ लिखें...&#10;&#10;उपशीर्षक के लिए: ## उपशीर्षक यहाँ लिखें&#10;फोटो के लिए: PHOTO:https://example.com/image.jpg | फोटो का छोटा विवरण&#10;वीडियो के लिए: VIDEO:https://youtu.be/abcd1234 | वीडियो का छोटा विवरण&#10;X पोस्ट के लिए: X:https://x.com/voiceofkranti/status/1234567890 | पोस्ट का छोटा विवरण&#10;Facebook पोस्ट के लिए: FACEBOOK:https://www.facebook.com/username/posts/12345 | पोस्ट का छोटा विवरण"
                         class="form-input"
                         rows="12"
                     ></textarea>
@@ -825,6 +828,14 @@
                     cursorOffset = pre3.length + 4;
                     break;
                 }
+                case 'ul': {
+                    // Prefix each selected line with '- ' (markdown bullet the renderer already supports)
+                    const preUl = start > 0 ? (textarea.value[start-1] === '\n' ? '' : '\n') : '';
+                    const bulleted = selectedText.split('\n').map(line => line.trim() ? `- ${line.trim()}` : line).join('\n');
+                    formattedText = `${preUl}${bulleted}\n`;
+                    cursorOffset = 0;
+                    break;
+                }
             }
             
             textarea.value = textarea.value.substring(0, start) + formattedText + textarea.value.substring(end);
@@ -846,7 +857,7 @@
             const normalizedUrl = rawValue.match(/https?:\/\/[^\s]+/i)?.[0] || rawValue;
             const chosenType = typeField.value;
             const caption = prompt('कैप्शन लिखें (वैकल्पिक):', '');
-            const prefix = chosenType === 'photo' ? 'PHOTO' : chosenType === 'video' ? 'VIDEO' : 'X';
+            const prefix = chosenType === 'photo' ? 'PHOTO' : chosenType === 'video' ? 'VIDEO' : chosenType === 'facebook' ? 'FACEBOOK' : 'X';
             const snippet = caption ? `${prefix}:${normalizedUrl} | ${caption}` : `${prefix}:${normalizedUrl}`;
 
             const textarea = contentTextarea;

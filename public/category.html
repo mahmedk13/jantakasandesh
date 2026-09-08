@@ -343,7 +343,7 @@
         return String(text)
             .replace(/\r/g, '')
             .split('\n')
-            .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(line.trim()))
+            .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET|FACEBOOK|FB)\s*:/i.test(line.trim()))
             .join('\n')
             .replace(/<[^>]+>/g, ' ')
             .replace(/https?:\/\/[^\s]+/gi, '')

@@ -445,7 +445,7 @@ function stripEmbeddedMediaFromPreview(text) {
     return String(text)
         .replace(/\r/g, '')
         .split('\n')
-        .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(line.trim()))
+        .filter(line => !/^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET|FACEBOOK|FB)\s*:/i.test(line.trim()))
         .join('\n')
         .replace(/<[^>]+>/g, ' ')
         .replace(/https?:\/\/[^\s]+/gi, '')
@@ -649,6 +649,17 @@ function renderArticleBodyForCrawler(text) {
             }
         }
 
+        const facebookMatch = trimmed.match(/^(?:FACEBOOK|FB)\s*:\s*(.+)$/i);
+        if (facebookMatch) {
+            const value = facebookMatch[1].trim();
+            const url = extractUrl(value.split('|')[0].trim());
+            const caption = (value.includes('|') ? value.split('|').slice(1).join('|').trim() : '').trim();
+            if (url) {
+                const embedSrc = `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(url)}&show_text=true&width=500`;
+                return `<figure class="embedded-media fb-embed"><iframe src="${escapeHtml(embedSrc)}" style="border:none;overflow:hidden;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+            }
+        }
+
         return '';
     };
 
@@ -672,40 +683,62 @@ function renderArticleBodyForCrawler(text) {
     for (const [token, tagValue] of tagMap.entries()) {
         restoredSource = restoredSource.replace(new RegExp(escapeRegExp(token), 'g'), tagValue);
     }
-    const paragraphized = restoredSource
-        .replace(/([।!?])\s+(?=[A-Za-z\u0900-\u097F])/g, '$1\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
 
-    let lines = paragraphized.split(/\n{2,}|\n/).map(part => part.trim()).filter(Boolean);
-
-    // Merge overly-short consecutive plain-text lines into readable paragraphs.
-    // The sentence-boundary preprocessing above can turn one real paragraph into
-    // one line per sentence — without this merge, every sentence would render as
-    // its own <p>. Structural lines (headings/lists/media) are left untouched.
+    // Preserve the author's own line breaks (single AND blank-line) as real paragraph
+    // boundaries instead of flattening everything to one sentence per line. Only two
+    // safety nets kick in: a short punctuation-less fragment gets folded into the next
+    // line (a genuinely broken mid-sentence wrap), and a single very long line with no
+    // breaks of its own gets auto-split into sentence-grouped chunks so it isn't one
+    // giant unreadable block. Structural lines (headings/lists/media) are untouched.
     const isStructuralLine = (l) =>
         /^##\s|^###\s|^-\s|^\d+\.\s/.test(l) ||
-        /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(l) ||
+        /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET|FACEBOOK|FB)\s*:/i.test(l) ||
         /^!\[.*?\]\(https?:\/\//i.test(l);
+    const looksUnfinishedLine = (l) => l.length < 40 && !/[।!?]["'”’)\]]*\s*$/.test(l);
+    const splitLongLine = (l) => {
+        if (l.length <= 600) return [l];
+        const raw = l
+            .replace(/।\s+/g, '।\n')
+            .replace(/([.!?])\s+([A-Za-z\u0900-\u097F])/g, '$1\n$2')
+            .split('\n').map(s => s.trim()).filter(Boolean);
+        const sentences = [];
+        for (let k = 0; k < raw.length; k++) {
+            if (raw[k].length < 20 && k < raw.length - 1) raw[k + 1] = `${raw[k]} ${raw[k + 1]}`;
+            else sentences.push(raw[k]);
+        }
+        const chunks = [];
+        let chunk = '', chunkLen = 0;
+        for (const s of sentences) {
+            chunk = chunk ? `${chunk} ${s}` : s;
+            chunkLen += s.length;
+            if (chunkLen >= 280) { chunks.push(chunk); chunk = ''; chunkLen = 0; }
+        }
+        if (chunk) chunks.push(chunk);
+        return chunks.length ? chunks : [l];
+    };
 
+    const rawLines = restoredSource.replace(/\n{3,}/g, '\n\n').trim().split(/\n/).map(part => part.trim());
     const mergedLines = [];
     let currentParagraph = '';
-    for (const line of lines) {
+    for (const line of rawLines) {
+        if (!line) {
+            if (currentParagraph) { mergedLines.push(...splitLongLine(currentParagraph)); currentParagraph = ''; }
+            continue;
+        }
         if (isStructuralLine(line)) {
-            if (currentParagraph) { mergedLines.push(currentParagraph); currentParagraph = ''; }
+            if (currentParagraph) { mergedLines.push(...splitLongLine(currentParagraph)); currentParagraph = ''; }
             mergedLines.push(line);
             continue;
         }
-        const candidate = currentParagraph ? `${currentParagraph} ${line}` : line;
-        if (candidate.length > 320 && currentParagraph) {
-            mergedLines.push(currentParagraph);
-            currentParagraph = line;
+        if (currentParagraph && looksUnfinishedLine(currentParagraph)) {
+            currentParagraph = `${currentParagraph} ${line}`;
         } else {
-            currentParagraph = candidate;
+            if (currentParagraph) mergedLines.push(...splitLongLine(currentParagraph));
+            currentParagraph = line;
         }
     }
-    if (currentParagraph) mergedLines.push(currentParagraph);
-    lines = mergedLines;
+    if (currentParagraph) mergedLines.push(...splitLongLine(currentParagraph));
+    const lines = mergedLines;
 
     if (!lines.length) return '<p>समाचार का विवरण उपलब्ध नहीं है।</p>';
 

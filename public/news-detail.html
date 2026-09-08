@@ -214,6 +214,15 @@
         margin: 0 auto;
         max-width: 100%;
     }
+    .fb-embed {
+        text-align: center;
+    }
+    .fb-embed iframe {
+        width: 100%;
+        max-width: 500px;
+        height: 715px;
+        border: 0;
+    }
     </style>
 </head>
 <body>
@@ -463,41 +472,76 @@
                 }
             }
 
+            const facebookMatch = text.match(/^(?:FACEBOOK|FB)\s*:\s*(.+)$/i);
+            if (facebookMatch) {
+                const value = facebookMatch[1].trim();
+                const url = extractUrl(value.split('|')[0].trim());
+                const caption = (value.includes('|') ? value.split('|').slice(1).join('|').trim() : '').trim();
+                if (url) {
+                    const embedSrc = `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(url)}&show_text=true&width=500`;
+                    return `<figure class="embedded-media fb-embed"><iframe src="${esc(embedSrc)}" style="border:none;overflow:hidden;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
+                }
+            }
+
             return '';
         }
 
-        // Merges overly-short consecutive plain-text lines into readable paragraphs
-        // (a source with one sentence per line would otherwise render one <p> per sentence).
-        // Structural lines (headings/lists/media markers) are left untouched.
+        // Preserves the author's own line breaks (single AND blank-line) as real paragraph
+        // boundaries instead of flattening everything to one sentence per line. Only two
+        // safety nets kick in: a short punctuation-less fragment gets folded into the next
+        // line (a genuinely broken mid-sentence wrap), and a single very long line with no
+        // breaks of its own gets auto-split into sentence-grouped chunks so it isn't one
+        // giant unreadable block. Structural lines (headings/lists/media markers) are untouched.
         function mergeShortLines(rawLines) {
             const isStructural = (l) =>
                 /^##\s|^###\s|^-\s|^\d+\.\s/.test(l) ||
-                /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET)\s*:/i.test(l) ||
+                /^(?:PHOTO|IMAGE|VIDEO|YOUTUBE|X|TWITTER|TWEET|FACEBOOK|FB)\s*:/i.test(l) ||
                 /^!\[.*?\]\(https?:\/\//i.test(l) ||
                 /^\*\*(प्रश्न|उत्तर|Q|A)[:\s]/.test(l);
+            const looksUnfinished = (l) => l.length < 40 && !/[।!?]["'”’)\]]*\s*$/.test(l);
+            const splitLongLine = (l) => {
+                if (l.length <= 600) return [l];
+                const raw = l
+                    .replace(/।\s+/g, '।\n')
+                    .replace(/([.!?])\s+([A-Z\u0900-\u097F])/g, '$1\n$2')
+                    .split('\n').map(s => s.trim()).filter(Boolean);
+                const sentences = [];
+                for (let k = 0; k < raw.length; k++) {
+                    if (raw[k].length < 20 && k < raw.length - 1) raw[k + 1] = `${raw[k]} ${raw[k + 1]}`;
+                    else sentences.push(raw[k]);
+                }
+                const chunks = [];
+                let chunk = '', chunkLen = 0;
+                for (const s of sentences) {
+                    chunk = chunk ? `${chunk} ${s}` : s;
+                    chunkLen += s.length;
+                    if (chunkLen >= 280) { chunks.push(chunk); chunk = ''; chunkLen = 0; }
+                }
+                if (chunk) chunks.push(chunk);
+                return chunks.length ? chunks : [l];
+            };
             const merged = [];
             let current = '';
             for (const raw of rawLines) {
                 const line = raw.trim();
                 if (!line) {
-                    if (current) { merged.push(current); current = ''; }
+                    if (current) { merged.push(...splitLongLine(current)); current = ''; }
                     merged.push('');
                     continue;
                 }
                 if (isStructural(line)) {
-                    if (current) { merged.push(current); current = ''; }
+                    if (current) { merged.push(...splitLongLine(current)); current = ''; }
                     merged.push(line);
                     continue;
                 }
-                const candidate = current ? `${current} ${line}` : line;
-                if (candidate.length > 320 && current) {
-                    merged.push(current);
-                    current = line;
+                if (current && looksUnfinished(current)) {
+                    current = `${current} ${line}`;
                 } else {
-                    current = candidate;
+                    if (current) merged.push(...splitLongLine(current));
+                    current = line;
                 }
             }
-            if (current) merged.push(current);
+            if (current) merged.push(...splitLongLine(current));
             return merged;
         }
 
@@ -557,21 +601,7 @@
                     html += `<p class="faq-a">${fmt(esc(a))}</p>`;
                 } else {
                     closeBlocks();
-                    if (t.length > 200) {
-                        // Auto-break long single-line text at sentence boundaries
-                        const sentences = t
-                            .replace(/।\s+/g, '।\n')
-                            .replace(/([.!?])\s+([A-Z\u0900-\u097F])/g, '$1\n$2')
-                            .split('\n').filter(s => s.trim());
-                        if (sentences.length >= 3) {
-                            for (let j = 0; j < sentences.length; j += 3)
-                                html += `<p>${fmt(esc(sentences.slice(j, j + 3).join(' ')))}</p>`;
-                        } else {
-                            html += `<p>${fmt(esc(t))}</p>`;
-                        }
-                    } else {
-                        html += `<p>${fmt(esc(t))}</p>`;
-                    }
+                    html += `<p>${fmt(esc(t))}</p>`;
                 }
             }
             closeBlocks();
@@ -636,7 +666,7 @@
             // Strip PB SHABD metadata header lines stored in older syncs
             text = text.split('\n').filter(l => !/^(Relevance|Slug|Title|Synopsis|Category|Deadline|Priority)\s*:/i.test(l.trim())).join('\n').replace(/^\n+/, '').trim();
 
-            const hasMediaMarker = /^(?:VIDEO|YOUTUBE|PHOTO|IMAGE|X|TWITTER|TWEET)\s*:/m.test(text);
+            const hasMediaMarker = /^(?:VIDEO|YOUTUBE|PHOTO|IMAGE|X|TWITTER|TWEET|FACEBOOK|FB)\s*:/m.test(text);
             const hasExplicitHtml = /<(?:p|div|blockquote|ul|ol|li|b|i|br|strong|em|h[1-6]|a|span|table|tr|td|th|hr|figure|figcaption)\b/i.test(text);
 
             if (hasMediaMarker || hasExplicitHtml) {
