@@ -756,7 +756,7 @@
                     var ago = timeAgo(news.date);
                     var auth = news.rssSource ? 'JKS Desk' : (news.author || 'JKS Desk');
                     var nav = 'window.location.href=\'' + url + '\'';
-                    var waUrl = 'https://wa.me/?text=' + encodeURIComponent('वॉयस ऑफ क्रांति\n\n') + encodeURIComponent(news.heading) + encodeURIComponent('\n\nhttps://voiceofkranti.com' + url.replace(/^https?:\/\/[^/]+/, ''));
+                    var waUrl = 'https://wa.me/?text=' + encodeURIComponent('वॉयस ऑफ क्रांति\n\n') + encodeURIComponent(news.heading) + encodeURIComponent('\n\nhttps://voiceofkranti.com' + url.replace(/^https?:\/\/[^/]+/, '')) + encodeURIComponent('\n\n📢 ताज़ा खबरों के लिए वॉयस ऑफ क्रांति का WhatsApp चैनल जॉइन करें: https://whatsapp.com/channel/0029VbDoE1QDZ4LThGXdEJ2D');
                     var catHtml = cat ? '<span class="nc-cat">' + cat + '</span>' : '';
                     var isLive = news.date && (Date.now() - new Date(news.date)) < 900000;
                     var liveHtml = isLive ? '<span class="nc-live">LIVE</span>' : '';

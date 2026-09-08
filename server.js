@@ -354,15 +354,8 @@ async function getAuthorNameSet() {
     }
 }
 
-// Re-ranks a date-desc sorted article list for category "Top 10" display. Never
-// removes articles — only reorders. Priority tiers, highest first:
-//   1. isPermanent === true, and/or article.author matches a real Author profile
-//      (from `authorNameSet`) — always kept in front, in their original order.
-//      Also includes isImportant articles still within their 24h pin window.
-//   2. PB SHABD — but capped at `maxRatio` of the first `windowSize` slots; any
-//      overflow is pushed to just after the window instead of being dropped.
-//   3. Articles tagged `full: true`.
-//   4. Everything else.
+// isImportant articles stay pinned near the top of listings for 24h from `importantAt`,
+// then behave like any other article.
 function isImportantWithin24h(item) {
     if (!item || item.isImportant !== true) return false;
     const importantAt = item.importantAt || item.updatedAt || item.date;
@@ -371,36 +364,71 @@ function isImportantWithin24h(item) {
     return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
 }
 
-function enforcePbShabdCap(list, authorNameSet, windowSize = 10, maxRatio = 0.5) {
+// Plain recency check (no isImportant tag required) — used to gate the "list of 10"'s
+// own-author ratio slots below.
+function isPublishedWithin24h(item) {
+    if (!item || !item.date) return false;
+    const ageMs = Date.now() - new Date(item.date).getTime();
+    return ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+}
+
+// Classifies an article into the source tier used by curateNewsFeed() below.
+// Checked in this order so a PB SHABD story (saved under a fixed byline) is never
+// mistaken for an own-author article, and any RSS/API import (incl. AI-scraped
+// articles that carry a source credit) is never mistaken for PB SHABD.
+function getArticleSourceTier(item, authorNameSet) {
+    if (isPbShabdArticle(item)) return 'pb';
+    if (item && item.rssSource) return 'rss';
+    if (isRealAuthorArticle(item, authorNameSet)) return 'author';
+    return 'other';
+}
+
+// Re-ranks a date-desc sorted article list for homepage/category display. Never
+// removes an article — only reorders. `isPermanent` articles and `isImportant`
+// articles still within their 24h pin window always come first, in their original
+// order. After that:
+//   - Top 5 (the "1 mukhya + 4 pramukh samachar" block): ~60% Prasar Bharati, ~20%
+//     own-author, ~20% RSS/API-imported (3:1:1). Own-author only fills its slot here
+//     when it's one of the pinned isImportant-within-24h articles above — a regular
+//     article can't occupy the top-5 author slot.
+//   - Each following "list of 10" block: 50% Prasar Bharati, 30% own-author, 20%
+//     RSS/API-imported (5:3:2). Own-author only fills its slot here when published
+//     within the last 24h — otherwise that slot's ratio is relaxed (filled from
+//     another tier instead).
+function curateNewsFeed(list, authorNameSet) {
     if (!Array.isArray(list) || list.length <= 1) return list;
 
-    const isProtected = (item) => item && (item.isPermanent === true || isRealAuthorArticle(item, authorNameSet) || isImportantWithin24h(item));
+    const isProtected = (item) => item && (item.isPermanent === true || isImportantWithin24h(item));
     const protectedQueue = list.filter(isProtected);
     const rest = list.filter(item => !isProtected(item));
     if (!rest.length) return list;
 
-    const pbQueue = rest.filter(isPbShabdArticle);
-    const fullQueue = rest.filter(item => !isPbShabdArticle(item) && item && item.full === true);
-    const otherQueue = rest.filter(item => !isPbShabdArticle(item) && !(item && item.full === true));
+    const pools = { pb: [], rss: [], author: [], other: [] };
+    for (const item of rest) pools[getArticleSourceTier(item, authorNameSet)].push(item);
 
-    const maxPbInWindow = Math.floor(windowSize * maxRatio);
+    const TOP5_SCHEDULE = ['pb', 'pb', 'author', 'pb', 'rss']; // 3:1:1 — top 5
+    const LIST_SCHEDULE = ['pb', 'author', 'pb', 'rss', 'pb', 'author', 'pb', 'rss', 'pb', 'author']; // 5:3:2 — list of 10
+    const FALLBACK_ORDER = ['pb', 'rss', 'author', 'other'];
+    const FALLBACK_ORDER_NO_AUTHOR = ['pb', 'rss', 'other'];
+    const idx = { pb: 0, rss: 0, author: 0, other: 0 };
     const result = [];
-    let pbIdx = 0, fullIdx = 0, otherIdx = 0, pbUsedInWindow = 0;
 
-    while (pbIdx < pbQueue.length || fullIdx < fullQueue.length || otherIdx < otherQueue.length) {
-        const inWindow = (protectedQueue.length + result.length) < windowSize;
-        const pbCapped = inWindow && pbUsedInWindow >= maxPbInWindow;
+    for (let i = 0; i < rest.length; i++) {
+        const outPos = protectedQueue.length + result.length;
+        const inTop5 = outPos < 5;
+        const wanted = inTop5 ? TOP5_SCHEDULE[outPos] : LIST_SCHEDULE[(outPos - 5) % LIST_SCHEDULE.length];
 
-        if (pbIdx < pbQueue.length && !pbCapped) {
-            result.push(pbQueue[pbIdx++]);
-            if (inWindow) pbUsedInWindow++;
-        } else if (fullIdx < fullQueue.length) {
-            result.push(fullQueue[fullIdx++]);
-        } else if (otherIdx < otherQueue.length) {
-            result.push(otherQueue[otherIdx++]);
-        } else if (pbIdx < pbQueue.length) {
-            result.push(pbQueue[pbIdx++]); // cap reached but nothing else left to fill with
+        const authorCandidate = pools.author[idx.author];
+        const authorEligible = inTop5 ? false : isPublishedWithin24h(authorCandidate);
+
+        let chosen = (wanted !== 'author' || authorEligible) && idx[wanted] < pools[wanted].length ? wanted : null;
+        if (!chosen) {
+            const order = authorEligible ? FALLBACK_ORDER : FALLBACK_ORDER_NO_AUTHOR;
+            chosen = order.find(tier => idx[tier] < pools[tier].length);
         }
+        if (!chosen) chosen = FALLBACK_ORDER.find(tier => idx[tier] < pools[tier].length); // last resort — don't drop remaining author-only items
+        if (!chosen) break; // all pools exhausted
+        result.push(pools[chosen][idx[chosen]++]);
     }
     return protectedQueue.concat(result);
 }
@@ -799,39 +827,17 @@ const CATEGORY_MAP = {
     'business': 'vyapar', 'economy': 'vyapar', 'finance': 'vyapar', 'market': 'vyapar',
     'sensex': 'vyapar', 'nifty': 'vyapar', 'stock': 'vyapar', 'share market': 'vyapar',
     'rbi': 'vyapar', 'budget': 'vyapar', 'gdp': 'vyapar', 'inflation': 'vyapar',
-    // NATIONAL - central-government/national-institution signals, checked BEFORE
-    // bhopal/rajya geo keywords so a nationally-important story datelined from a
-    // state doesn't get miscategorized as local rajya news.
+    // NATIONAL - central-government/national-institution signals only, checked BEFORE
+    // bhopal/crime so a nationally-important story datelined from a state doesn't get
+    // miscategorized as local news. Kept narrow — generic "india/desh" mentions do NOT
+    // belong here, so ordinary state/local news falls through to 'rajya' by default.
     'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
     'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
     'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
     'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
     'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
     'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
-    // BHOPAL - Bhopal city (checked BEFORE rajniti/crime so local Bhopal news isn't stolen by topic keywords)
-    'भोपाल': 'bhopal', 'bhopal': 'bhopal',
-    // RAJYA - MP districts/cities + other states (checked BEFORE rajniti/crime for same reason)
-    'मध्य प्रदेश': 'rajya', 'मध्यप्रदेश': 'rajya', 'madhya pradesh': 'rajya',
-    'इंदौर': 'rajya', 'ग्वालियर': 'rajya', 'जबलपुर': 'rajya', 'उज्जैन': 'rajya',
-    'रीवा': 'rajya', 'सागर': 'rajya', 'सतना': 'rajya', 'रतलाम': 'rajya',
-    'खंडवा': 'rajya', 'खरगोन': 'rajya', 'बालाघाट': 'rajya', 'छिंदवाड़ा': 'rajya',
-    'होशंगाबाद': 'rajya', 'नर्मदापुरम': 'rajya', 'विदिशा': 'rajya', 'रायसेन': 'rajya',
-    'सीहोर': 'rajya', 'गुना': 'rajya', 'शिवपुरी': 'rajya', 'भिंड': 'rajya',
-    'मुरैना': 'rajya', 'दतिया': 'rajya', 'देवास': 'rajya', 'मंदसौर': 'rajya',
-    'नीमच': 'rajya', 'पन्ना': 'rajya', 'मंडला': 'rajya', 'छतरपुर': 'rajya',
-    'टीकमगढ़': 'rajya', 'दमोह': 'rajya', 'सीधी': 'rajya', 'सिंगरौली': 'rajya',
-    'शहडोल': 'rajya', 'अनूपुर': 'rajya', 'उमरिया': 'rajya', 'बुरहानपुर': 'rajya',
-    'झाबुआ': 'rajya', 'अलीराजपुर': 'rajya', 'बड़वानी': 'rajya', 'धार': 'rajya',
-    'indore': 'rajya', 'gwalior': 'rajya', 'jabalpur': 'rajya', 'ujjain': 'rajya',
-    'rewa': 'rajya', 'sagar': 'rajya', 'satna': 'rajya', 'ratlam': 'rajya',
-    'khandwa': 'rajya', 'khargone': 'rajya', 'balaghat': 'rajya', 'chhindwara': 'rajya',
-    // Other States
-    'उत्तर प्रदेश': 'rajya', 'बिहार': 'rajya', 'राजस्थान': 'rajya', 'महाराष्ट्र': 'rajya',
-    'पंजाब': 'rajya', 'हरियाणा': 'rajya', 'गुजरात': 'rajya', 'छत्तीसगढ़': 'rajya',
-    'झारखंड': 'rajya', 'उत्तराखंड': 'rajya', 'हिमाचल': 'rajya', 'केरल': 'rajya',
-    'uttar pradesh': 'rajya', 'bihar': 'rajya', 'rajasthan': 'rajya', 'maharashtra': 'rajya',
-    'punjab': 'rajya', 'haryana': 'rajya', 'gujarat': 'rajya', 'chhattisgarh': 'rajya',
-    // RAJNITI - Politics (national level — after geo keywords so state-level news stays in bhopal/rajya)
+    // RAJNITI - Politics
     'राजनीति': 'rajniti', 'चुनाव': 'rajniti', 'विधानसभा': 'rajniti', 'लोकसभा': 'rajniti',
     'राज्यसभा': 'rajniti', 'संसद': 'rajniti', 'भाजपा': 'rajniti', 'कांग्रेस': 'rajniti',
     'politics': 'rajniti', 'election': 'rajniti', 'political': 'rajniti', 'parliament': 'rajniti',
@@ -848,7 +854,8 @@ const CATEGORY_MAP = {
     'afghanistan': 'videsh', 'bangladesh': 'videsh', 'nepal': 'videsh', 'saudi': 'videsh',
     'dubai': 'videsh', 'turkey': 'videsh', 'japan': 'videsh', 'germany': 'videsh',
     'france': 'videsh', 'uk': 'videsh', 'britain': 'videsh', 'canada': 'videsh',
-    // CRIME - Apradh (after videsh so international crime stays in videsh)
+    // CRIME - Apradh (checked before bhopal/any Indian city so a crime story from Bhopal
+    // or any other Indian city still lands in crime, not the city's own category)
     'अपराध': 'crime', 'हत्या': 'crime', 'चोरी': 'crime', 'डकैती': 'crime',
     'दुष्कर्म': 'crime', 'गिरफ्तार': 'crime', 'बलात्कार': 'crime', 'हादसा': 'crime',
     'शव': 'crime', 'लाश': 'crime', 'कांड': 'crime', 'वारदात': 'crime',
@@ -860,13 +867,14 @@ const CATEGORY_MAP = {
     'robbery': 'crime', 'arrested': 'crime', 'police': 'crime', 'accident': 'crime',
     'fraud': 'crime', 'scam': 'crime', 'घोटाला': 'crime', 'धोखाधड़ी': 'crime',
     'blast': 'crime', 'firing': 'crime', 'kidnap': 'crime', 'dead body': 'crime',
+    // BHOPAL - Bhopal city (checked after crime — a Bhopal crime story is 'crime', not 'bhopal')
+    'भोपाल': 'bhopal', 'bhopal': 'bhopal',
     // ITIHAS - History
     'इतिहास': 'itihas', 'पुरातत्व': 'itihas', 'विरासत': 'itihas', 'प्राचीन': 'itihas',
     'history': 'itihas', 'heritage': 'itihas', 'ancient': 'itihas', 'historical': 'itihas',
-    // DESH - National (broad fallback, keep last)
-    'देश': 'desh', 'भारत': 'desh', 'india': 'desh', 'nation': 'desh', 'national': 'desh',
-    'आस्था': 'desh', 'धर्म': 'desh', 'हिंदू': 'desh', 'मुस्लिम': 'desh', 'मंदिर': 'desh',
-    'मस्जिद': 'desh', 'धार्मिक': 'desh', 'विवाद': 'desh', 'विरोध': 'desh', 'controversy': 'desh',
+    // Everything else (incl. any other state/city not covered above) falls through to
+    // 'rajya' — see mapRssCategory()'s fallback below. 'rajya' is never a default GUESS,
+    // only the residual bucket once every other specific category has been ruled out.
 };
 
 function mapRssCategory(rssCategories, title, defaultCategory) {
@@ -884,7 +892,9 @@ function mapRssCategory(rssCategories, title, defaultCategory) {
             if (lower.includes(key)) return value;
         }
     }
-    return defaultCategory;
+    // No keyword matched — 'desh' was only ever a generic guess by the caller, so treat
+    // unmatched content as local/state news ('rajya') instead of defaulting to 'desh'.
+    return defaultCategory === 'desh' ? 'rajya' : defaultCategory;
 }
 
 // Maps title/content keywords to our internal 'rajya' sub-category values, for any
@@ -3662,7 +3672,7 @@ app.get('/api/news', async (req, res) => {
             const sorted = filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
             const paged = sorted.slice(skip, skip + limit);
             // No DB in this fallback mode, so the "real author" tier can't be checked here.
-            return res.json((category && !writtenOnly && skip === 0) ? enforcePbShabdCap(paged, new Set(), 10, 0.5) : paged);
+            return res.json((!writtenOnly && skip === 0) ? curateNewsFeed(paged, new Set()) : paged);
         }
 
         // On cold start retry DB connection; return 503 if still not ready so client retries quickly.
@@ -3734,11 +3744,11 @@ app.get('/api/news', async (req, res) => {
             id: item._id.toString()
         }));
 
-        // Category "Top 10" priority order: isPermanent/real-author first, then PB
-        // SHABD (capped at 50%), then full-tagged, then everything else — reorders
-        // only, no article is ever removed.
-        const finalNewsData = (category && !writtenOnly && skip === 0)
-            ? enforcePbShabdCap(newsData, await getAuthorNameSet(), 10, 0.5)
+        // Homepage/category "Top 5 + list of 10" composition — reorders only, no
+        // article is ever removed. Applies to both the homepage (no category) and
+        // per-category feeds; skipped for pagination and the writtenOnly (isOriginal) feed.
+        const finalNewsData = (!writtenOnly && skip === 0)
+            ? curateNewsFeed(newsData, await getAuthorNameSet())
             : newsData;
 
         if (cacheAllowed && finalNewsData.length > 0) {

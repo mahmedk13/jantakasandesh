@@ -28,49 +28,38 @@ const TARGET_STATES = [
     'KARNATAKA', 'KERALA', 'BIHAR', 'WEST BENGAL',
 ];
 
+// Priority-ordered: crime is checked first so a story naming a place/topic alongside
+// a crime keyword still lands in अपराध. 'rajya' is never a default guess — it's only
+// the residual bucket once foreign/national/bhopal/crime/sports/business/entertainment/
+// politics/history have all been ruled out (see categorize()'s default return).
 const CATEGORY_MAP = {
-    'खेल': 'khel', 'क्रिकेट': 'khel', 'cricket': 'khel', 'football': 'khel', 'ipl': 'khel',
-    'hockey': 'khel', 'tennis': 'khel', 'wrestling': 'khel', 'badminton': 'khel', 'sports': 'khel',
-    'मनोरंजन': 'manoranjan', 'बॉलीवुड': 'manoranjan', 'फिल्म': 'manoranjan',
-    'bollywood': 'manoranjan', 'cinema': 'manoranjan', 'film': 'manoranjan',
-    'व्यापार': 'vyapar', 'बाजार': 'vyapar', 'शेयर': 'vyapar', 'अर्थव्यवस्था': 'vyapar',
-    'business': 'vyapar', 'economy': 'vyapar', 'market': 'vyapar', 'budget': 'vyapar',
-    // NATIONAL - central-government/national-institution signals, checked BEFORE
-    // bhopal/rajya geo keywords so a nationally-important story (e.g. PM/Union Cabinet/
-    // Supreme Court) datelined from a state bureau isn't miscategorized as local rajya news.
-    'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
-    'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
-    'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
-    'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
-    'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
-    'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
-    'भोपाल': 'bhopal', 'bhopal': 'bhopal',
-    'मध्य प्रदेश': 'rajya', 'मध्यप्रदेश': 'rajya', 'madhya pradesh': 'rajya',
-    'इंदौर': 'rajya', 'ग्वालियर': 'rajya', 'जबलपुर': 'rajya', 'उज्जैन': 'rajya',
-    'indore': 'rajya', 'gwalior': 'rajya', 'jabalpur': 'rajya',
-    'उत्तर प्रदेश': 'rajya', 'बिहार': 'rajya', 'राजस्थान': 'rajya', 'महाराष्ट्र': 'rajya',
-    'uttar pradesh': 'rajya', 'bihar': 'rajya', 'rajasthan': 'rajya', 'maharashtra': 'rajya',
-    // Remaining states — must stay in sync with the fuller rajya keyword list in
-    // server.js (used for RSS/API imports) so PB SHABD doesn't miscategorize these as 'desh'.
-    'पंजाब': 'rajya', 'हरियाणा': 'rajya', 'गुजरात': 'rajya', 'छत्तीसगढ़': 'rajya',
-    'झारखंड': 'rajya', 'उत्तराखंड': 'rajya', 'हिमाचल': 'rajya', 'केरल': 'rajya',
-    'तेलंगाना': 'rajya', 'आंध्र प्रदेश': 'rajya', 'कर्नाटक': 'rajya', 'पश्चिम बंगाल': 'rajya',
-    'देहरादून': 'rajya', 'हरिद्वार': 'rajya',
-    'punjab': 'rajya', 'haryana': 'rajya', 'gujarat': 'rajya', 'chhattisgarh': 'rajya',
-    'jharkhand': 'rajya', 'uttarakhand': 'rajya', 'himachal': 'rajya', 'kerala': 'rajya',
-    'telangana': 'rajya', 'andhra pradesh': 'rajya', 'karnataka': 'rajya', 'west bengal': 'rajya',
-    'dehradun': 'rajya', 'haridwar': 'rajya',
-    'राजनीति': 'rajniti', 'चुनाव': 'rajniti', 'संसद': 'rajniti', 'भाजपा': 'rajniti', 'कांग्रेस': 'rajniti',
-    'politics': 'rajniti', 'election': 'rajniti', 'parliament': 'rajniti', 'bjp': 'rajniti', 'modi': 'rajniti',
-    'विदेश': 'videsh', 'अमेरिका': 'videsh', 'चीन': 'videsh', 'पाकिस्तान': 'videsh',
-    'world': 'videsh', 'international': 'videsh', 'china': 'videsh', 'pakistan': 'videsh',
     'अपराध': 'crime', 'हत्या': 'crime', 'गिरफ्तार': 'crime', 'दुर्घटना': 'crime',
     'बलात्कार': 'crime', 'लूट': 'crime', 'डकैती': 'crime', 'तस्करी': 'crime',
     'फरार': 'crime', 'जेल': 'crime', 'पुलिस': 'crime', 'एफआईआर': 'crime',
     'आरोपी': 'crime', 'अभियुक्त': 'crime', 'पीड़ित': 'crime', 'शव': 'crime',
     'crime': 'crime', 'murder': 'crime', 'arrested': 'crime', 'accident': 'crime',
     'rape': 'crime', 'robbery': 'crime', 'theft': 'crime', 'police': 'crime', 'fir': 'crime',
-    'देश': 'desh', 'भारत': 'desh', 'india': 'desh', 'national': 'desh',
+    'खेल': 'khel', 'क्रिकेट': 'khel', 'cricket': 'khel', 'football': 'khel', 'ipl': 'khel',
+    'hockey': 'khel', 'tennis': 'khel', 'wrestling': 'khel', 'badminton': 'khel', 'sports': 'khel',
+    'मनोरंजन': 'manoranjan', 'बॉलीवुड': 'manoranjan', 'फिल्म': 'manoranjan',
+    'bollywood': 'manoranjan', 'cinema': 'manoranjan', 'film': 'manoranjan',
+    'व्यापार': 'vyapar', 'बाजार': 'vyapar', 'शेयर': 'vyapar', 'अर्थव्यवस्था': 'vyapar',
+    'business': 'vyapar', 'economy': 'vyapar', 'market': 'vyapar', 'budget': 'vyapar',
+    'राजनीति': 'rajniti', 'चुनाव': 'rajniti', 'संसद': 'rajniti', 'भाजपा': 'rajniti', 'कांग्रेस': 'rajniti',
+    'politics': 'rajniti', 'election': 'rajniti', 'parliament': 'rajniti', 'bjp': 'rajniti', 'modi': 'rajniti',
+    'विदेश': 'videsh', 'अमेरिका': 'videsh', 'चीन': 'videsh', 'पाकिस्तान': 'videsh',
+    'world': 'videsh', 'international': 'videsh', 'china': 'videsh', 'pakistan': 'videsh',
+    // Bhopal — city-specific, checked after crime/videsh so a Bhopal crime story stays
+    // 'crime' and foreign-datelined stories stay 'videsh'
+    'भोपाल': 'bhopal', 'bhopal': 'bhopal',
+    // National importance — narrow institutional signals only. Generic "india/desh"
+    // mentions are deliberately NOT mapped here so ordinary state news falls to 'rajya'.
+    'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
+    'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
+    'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
+    'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
+    'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
+    'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
 };
 
 function categorize(title, stateHint, desc) {
@@ -80,12 +69,12 @@ function categorize(title, stateHint, desc) {
             if (text.includes(key)) return val;
         }
     }
-    return 'desh';
+    return 'rajya';
 }
 
 // Maps PB SHABD's own `story.state` field (most reliable) and title/description
 // keywords to our internal 'rajya' sub-category values. Keep this list in sync with
-// STATE_LIST in public/admin.html and public/category.html if states are added/removed.
+// STATE_MAP in server.js and STATE_LIST in public/admin.html / public/category.html.
 const STATE_MAP = {
     'madhya pradesh': 'mp', 'मध्य प्रदेश': 'mp', 'मध्यप्रदेश': 'mp',
     'indore': 'mp', 'इंदौर': 'mp', 'gwalior': 'mp', 'ग्वालियर': 'mp',
