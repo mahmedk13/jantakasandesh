@@ -20,6 +20,8 @@ const path = require('path');
 const fs = require('fs');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const ImageKit = require('imagekit');
+const sharp = require('sharp');
 const News = require('./models/News').News;
 const { generateSlug } = require('./models/News');
 const EPaper = require('./models/EPaper');
@@ -454,7 +456,9 @@ function curateNewsFeed(list, authorNameSet) {
 // Mirrors category.html's client-side optimizeCloudinaryUrl/stripEmbeddedMediaFromPreview/timeAgo
 // so server-rendered category cards look identical once client JS hydrates.
 function optimizeCloudinaryUrlForCard(url) {
-    if (!url || !url.includes('cloudinary')) return url;
+    if (!url) return url;
+    if (url.includes('ik.imagekit.io')) return url.includes('?') ? `${url}&tr=w-400,q-auto,f-auto` : `${url}?tr=w-400,q-auto,f-auto`;
+    if (!url.includes('cloudinary')) return url;
     return url.replace('/upload/', '/upload/q_auto,f_auto,w_400/');
 }
 
@@ -1038,11 +1042,29 @@ async function backfillImportantTimestamps() {
     if (result.modifiedCount) console.log(`✓ Important timestamp backfill updated ${result.modifiedCount} articles`);
 }
 
-// Delete all Cloudinary images for an article's photos array
-async function deleteCloudinaryPhotos(photos) {
+// Best-effort delete of a single ImageKit-hosted image by its delivery URL —
+// ImageKit's API only deletes by fileId, so we look the file up by its path first.
+async function deleteImageKitPhoto(photo) {
+    if (!imagekit) return;
+    try {
+        const urlPath = new URL(photo).pathname.split('/').filter(Boolean).slice(1).join('/'); // drop the imagekit id segment
+        const fileName = urlPath.split('/').pop();
+        const folderPath = '/' + urlPath.split('/').slice(0, -1).join('/');
+        const matches = await imagekit.listFiles({ path: folderPath, searchQuery: `name = "${fileName}"` });
+        if (matches && matches[0]?.fileId) {
+            await imagekit.deleteFile(matches[0].fileId);
+        }
+    } catch (err) {
+        console.log('ImageKit delete failed for', photo, err.message);
+    }
+}
+
+// Delete all cloud-hosted images for an article's photos array (Cloudinary legacy + ImageKit)
+async function deletePhotos(photos) {
     if (!photos || !photos.length) return;
     for (const photo of photos) {
-        if (photo && photo.includes('cloudinary')) {
+        if (!photo) continue;
+        if (photo.includes('cloudinary')) {
             // Extract public_id: last two path segments without extension
             // e.g. https://res.cloudinary.com/xxx/image/upload/v123/folder/public_id.jpg → folder/public_id
             const publicId = photo.split('/upload/')[1]?.replace(/^v\d+\//, '').replace(/\.[^/.]+$/, '');
@@ -1051,6 +1073,8 @@ async function deleteCloudinaryPhotos(photos) {
                     console.log('Cloudinary delete failed for', publicId, err.message)
                 );
             }
+        } else if (photo.includes('ik.imagekit.io')) {
+            await deleteImageKitPhoto(photo);
         }
     }
 }
@@ -1143,10 +1167,10 @@ async function fetchAndImportRSS() {
     const newDocs = dedupedCandidates.filter(c => !existingLinks.has(c.rssLink) && !existingNorms.has(c.headingNorm));
     if (!newDocs.length) { console.log('=== RSS import done: 0 new (all duplicates) ==='); return 0; }
 
-    // 4a. Upload images to Cloudinary in parallel (bypass CDN hotlink 401 for OG tags)
+    // 4a. Upload images to ImageKit in parallel (bypass CDN hotlink 401 for OG tags)
     await Promise.allSettled(
         newDocs
-            .filter(doc => doc.photos && doc.photos[0] && !doc.photos[0].includes('res.cloudinary.com'))
+            .filter(doc => doc.photos && doc.photos[0] && !doc.photos[0].includes('res.cloudinary.com') && !doc.photos[0].includes('ik.imagekit.io'))
             .map(async doc => {
                 const uploaded = await uploadImageFromUrl(doc.photos[0]);
                 if (uploaded !== doc.photos[0]) doc.photos = [uploaded];
@@ -2208,17 +2232,59 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
-// Configure Cloudinary
+// Configure Cloudinary — kept ONLY for reading/deleting pre-existing legacy media
+// (account is over free-tier usage and scheduled for deactivation). All NEW
+// uploads go to ImageKit instead (see imagekit config below).
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Download image using browser-like headers (bypasses CDN hotlink protection) then upload to Cloudinary.
-// Returns Cloudinary URL on success, original URL on failure.
+// Configure ImageKit — used for all new image/PDF uploads going forward.
+const imagekit = (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_URL_ENDPOINT)
+    ? new ImageKit({
+        publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+        privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+        urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+    })
+    : null;
+
+// Re-encode an image buffer to cut storage size with no visible quality loss:
+// auto-orients from EXIF, caps dimensions at 1600px (larger than any delivered
+// size we ever request), strips metadata, and re-compresses as mozjpeg q=85 —
+// mozjpeg at this quality is visually indistinguishable from source but routinely
+// 60-90% smaller than an un-recompressed phone-camera JPEG/PNG.
+async function compressImageBuffer(buffer) {
+    try {
+        return await sharp(buffer)
+            .rotate()
+            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer();
+    } catch (err) {
+        console.warn('Image compression failed, uploading original buffer:', err.message);
+        return buffer;
+    }
+}
+
+// Upload a buffer to ImageKit. Returns the delivery URL, or null on failure/misconfig.
+async function uploadBufferToImageKit(buffer, fileName, folder) {
+    if (!imagekit) return null;
+    try {
+        const compressed = await compressImageBuffer(buffer);
+        const result = await imagekit.upload({ file: compressed, fileName, folder, useUniqueFileName: true });
+        return result.url;
+    } catch (err) {
+        console.warn('ImageKit upload failed:', err.message);
+        return null;
+    }
+}
+
+// Download image using browser-like headers (bypasses CDN hotlink protection) then upload to ImageKit.
+// Returns the ImageKit URL on success, original URL on failure/misconfig.
 async function uploadImageFromUrl(imageUrl) {
-    if (!imageUrl || imageUrl.includes('res.cloudinary.com') || !process.env.CLOUDINARY_API_KEY) return imageUrl;
+    if (!imageUrl || imageUrl.includes('res.cloudinary.com') || imageUrl.includes('ik.imagekit.io') || !imagekit) return imageUrl;
     try {
         const res = await fetch(imageUrl, {
             headers: {
@@ -2230,14 +2296,8 @@ async function uploadImageFromUrl(imageUrl) {
         });
         if (!res.ok || !res.headers.get('content-type')?.startsWith('image')) return imageUrl;
         const buffer = Buffer.from(await res.arrayBuffer());
-        const cloudUrl = await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-                { folder: 'news', transformation: [{ width: 1200, height: 630, crop: 'fill', format: 'jpg', quality: 'auto' }] },
-                (err, result) => err ? reject(err) : resolve(result.secure_url)
-            );
-            stream.end(buffer);
-        });
-        return cloudUrl;
+        const url = await uploadBufferToImageKit(buffer, `news-${Date.now()}.jpg`, 'news');
+        return url || imageUrl;
     } catch (e) {
         console.warn('uploadImageFromUrl failed for', imageUrl, '—', e.message);
         return imageUrl;
@@ -2628,7 +2688,7 @@ app.get('/news/:slug', async (req, res) => {
             const rawImage = (article.photos && article.photos.length > 0)
                 ? article.photos[0]
                 : (article.photo || null);
-            // Force JPEG at 1200×630 for Cloudinary so WhatsApp/FB scraper gets a compatible image.
+            // Force JPEG at 1200×630 so WhatsApp/FB scraper gets a compatible image.
             const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
             const fallbackOgImage = cloudName
                 ? `https://res.cloudinary.com/${cloudName}/image/fetch/f_jpg,q_auto,w_1200,h_630,c_fill/${encodeURIComponent('https://voiceofkranti.com/og-banner.svg')}`
@@ -2636,7 +2696,9 @@ app.get('/news/:slug', async (req, res) => {
             const image = rawImage
                 ? (rawImage.includes('res.cloudinary.com') && rawImage.includes('/upload/')
                     ? rawImage.replace('/upload/', '/upload/f_jpg,q_auto,w_1200,h_630,c_fill/')
-                    : rawImage)
+                    : rawImage.includes('ik.imagekit.io')
+                        ? (rawImage.includes('?') ? `${rawImage}&tr=f-jpg,q-auto,w-1200,h-630` : `${rawImage}?tr=f-jpg,q-auto,w-1200,h-630`)
+                        : rawImage)
                 : fallbackOgImage;
 
             const photoMarkup = rawImage
@@ -3239,7 +3301,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', etag: true }));
 
-const mediaCloudinaryUpload = multer({
+const mediaImageKitUpload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 10 * 1024 * 1024 },
     fileFilter: function (req, file, cb) {
@@ -3247,38 +3309,31 @@ const mediaCloudinaryUpload = multer({
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
         const mimetype = allowedTypes.test(file.mimetype);
         if (mimetype && extname) return cb(null, true);
-        cb(new Error('Only image files are allowed in Cloudinary media uploads!'));
+        cb(new Error('Only image files are allowed in media uploads!'));
     }
 });
 
-app.post('/api/media/upload-cloudinary', requireAuth, mediaCloudinaryUpload.single('mediaFile'), async (req, res) => {
+app.post('/api/media/upload-imagekit', requireAuth, mediaImageKitUpload.single('mediaFile'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ error: 'No image file received' });
         }
 
-        if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-            return res.status(500).json({ error: 'Cloudinary is not configured in this environment.' });
+        if (!imagekit) {
+            return res.status(500).json({ error: 'ImageKit is not configured in this environment.' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-                {
-                    folder: 'janta-ka-sandesh/media',
-                    transformation: [{ quality: 'auto', fetch_format: 'auto' }]
-                },
-                (error, uploadResult) => {
-                    if (error) return reject(error);
-                    resolve(uploadResult);
-                }
-            );
-            stream.end(req.file.buffer);
+        const result = await imagekit.upload({
+            file: await compressImageBuffer(req.file.buffer),
+            fileName: req.file.originalname,
+            folder: 'janta-ka-sandesh/media',
+            useUniqueFileName: true
         });
 
-        res.json({ success: true, url: result.secure_url, publicId: result.public_id });
+        res.json({ success: true, url: result.url, fileId: result.fileId });
     } catch (error) {
-        console.error('Cloudinary media upload error:', error);
-        res.status(500).json({ error: error.message || 'Cloudinary media upload failed' });
+        console.error('ImageKit media upload error:', error);
+        res.status(500).json({ error: error.message || 'ImageKit media upload failed' });
     }
 });
 
@@ -3496,18 +3551,10 @@ ${urls}
     }
 });
 
-// Configure multer for Cloudinary uploads
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'janta-ka-sandesh',
-        allowed_formats: ['jpeg', 'jpg', 'png', 'gif', 'webp'],
-        transformation: [{ width: 1200, height: 800, crop: 'limit' }]
-    }
-});
-
+// Configure multer for ImageKit uploads — files buffered in memory, then uploaded
+// to ImageKit manually per-request (see uploadBufferToImageKit call sites below).
 const upload = multer({ 
-    storage: storage,
+    storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: function (req, file, cb) {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -3865,23 +3912,16 @@ app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) =
             : '';
 
         // Support external image URL (from scraper) when no file is uploaded.
-        // Upload to Cloudinary so og:image always works for WhatsApp/X sharing.
-        let photos = req.files ? req.files.map(file => file.path) : [];
+        // Upload to ImageKit so og:image always works for WhatsApp/X sharing.
+        let photos = req.files && req.files.length
+            ? (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean)
+            : [];
         if (photos.length === 0 && req.body.photoUrl) {
             const externalUrl = req.body.photoUrl;
-            if (externalUrl.includes('res.cloudinary.com')) {
+            if (externalUrl.includes('res.cloudinary.com') || externalUrl.includes('ik.imagekit.io')) {
                 photos = [externalUrl];
             } else {
-                try {
-                    const result = await cloudinary.uploader.upload(externalUrl, {
-                        folder: 'news',
-                        transformation: [{ width: 1200, height: 630, crop: 'fill', format: 'jpg', quality: 'auto' }]
-                    });
-                    photos = [result.secure_url];
-                } catch (uploadErr) {
-                    console.warn('Cloudinary upload of external image failed, storing URL directly:', uploadErr.message);
-                    photos = [externalUrl];
-                }
+                photos = [await uploadImageFromUrl(externalUrl)];
             }
         }
 
@@ -3964,7 +4004,7 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
             }
             
             const nextPhotos = req.files && req.files.length > 0
-                ? req.files.map(file => file.path)
+                ? (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean)
                 : (req.body.photoUrl ? [req.body.photoUrl] : extractInlineArticlePhotoUrls(content));
 
             allNews[newsIndex] = {
@@ -4025,7 +4065,7 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
 
         let updatedPhotos = [];
         if (req.files && req.files.length > 0) {
-            updatedPhotos = req.files.map(file => file.path);
+            updatedPhotos = (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean);
         } else if (req.body.photoUrl) {
             updatedPhotos = [req.body.photoUrl];
         } else {
@@ -4034,7 +4074,7 @@ app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res
 
         if (updatedPhotos.length > 0) {
             if (req.files && req.files.length > 0 && !keepExistingPhotos) {
-                await deleteCloudinaryPhotos(news.photos);
+                await deletePhotos(news.photos);
             }
             news.photos = updatedPhotos;
         }
@@ -4123,8 +4163,8 @@ app.delete('/api/news/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: 'News not found' });
         }
         
-        // Delete photos from Cloudinary if exist
-        await deleteCloudinaryPhotos(news.photos);
+        // Delete photos from cloud storage if exist
+        await deletePhotos(news.photos);
 
         await News.findByIdAndDelete(req.params.id);
         invalidateNewsCache();
@@ -4528,13 +4568,43 @@ app.post('/api/admin/delete-old-articles', requireAuth, async (req, res) => {
         ).lean();
 
         for (const article of toDelete) {
-            await deleteCloudinaryPhotos(article.photos);
+            await deletePhotos(article.photos);
         }
 
         const result = await News.deleteMany({ _id: { $in: toDelete.map(a => a._id) } });
         invalidateNewsCache();
         console.log(`🗑️ Admin deleted ${result.deletedCount} articles older than 1 month (cutoff: ${cutoff.toISOString()}) + Cloudinary images`);
         res.json({ success: true, deleted: result.deletedCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: strip photos (Cloudinary/ImageKit) from articles older than N days (default 30),
+// WITHOUT deleting the article itself — keeps slug/URL/content permanently intact so
+// Google-indexed pages never 404. isPermanent articles are skipped (kept forever, image
+// included). This is the storage-management lever instead of deleting old articles.
+app.post('/api/admin/strip-old-images', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        const days = Math.max(parseInt(req.body?.days, 10) || 30, 1);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        cutoff.setHours(0, 0, 0, 0);
+
+        const toStrip = await News.find(
+            { date: { $lt: cutoff }, isPermanent: { $ne: true }, photos: { $exists: true, $ne: [] } },
+            { _id: 1, photos: 1 }
+        ).lean();
+
+        for (const article of toStrip) {
+            await deletePhotos(article.photos);
+            await News.updateOne({ _id: article._id }, { $set: { photos: [] } });
+        }
+
+        invalidateNewsCache();
+        console.log(`🖼️ Admin stripped images from ${toStrip.length} articles older than ${days} days (cutoff: ${cutoff.toISOString()})`);
+        res.json({ success: true, stripped: toStrip.length });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -4831,34 +4901,30 @@ app.get('/api/epaper/by-date/:dateSlug', async (req, res) => {
     }
 });
 
-// Admin API: generate a Cloudinary signed upload params so the browser can
-// upload PDFs directly (bypasses Vercel's 4.5 MB serverless body limit).
+// Admin API: generate ImageKit auth params so the browser can upload PDFs
+// directly to ImageKit (bypasses Vercel's 4.5 MB serverless body limit).
 app.get('/api/admin/epaper/sign', requireAuth, (req, res) => {
     try {
-        const timestamp = Math.round(Date.now() / 1000);
-        // Explicit public_id keeps parity with old multer uploads (no .pdf extension in URL),
-        // which avoids a Cloudinary CDN quirk that blocks raw files ending in .pdf.
-        const publicId  = `epaper-${new Date().toISOString().split('T')[0]}-${timestamp}`;
-        const params    = { access_mode: 'public', folder: 'epaper', public_id: publicId, timestamp };
-        const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
+        if (!imagekit) return res.status(500).json({ error: 'ImageKit is not configured in this environment.' });
+        const authParams = imagekit.getAuthenticationParameters();
+        const fileName = `epaper-${new Date().toISOString().split('T')[0]}-${Date.now()}`;
         res.json({
-            signature,
-            timestamp,
-            api_key:    process.env.CLOUDINARY_API_KEY,
-            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-            folder:     'epaper',
-            public_id:  publicId,
+            ...authParams,
+            publicKey:   process.env.IMAGEKIT_PUBLIC_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+            folder:      'epaper',
+            fileName,
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Admin API: save ePaper metadata after browser has uploaded PDF directly to Cloudinary.
-// Body: { pdfUrl, cloudinaryId, title, edition?, publishDate?, pageCount? }
+// Admin API: save ePaper metadata after browser has uploaded PDF directly to ImageKit.
+// Body: { pdfUrl, imagekitFileId, title, edition?, publishDate?, pageCount? }
 app.post('/api/admin/epaper', requireAuth, async (req, res) => {
     try {
-        const { pdfUrl, cloudinaryId, title, edition, publishDate, pageCount } = req.body;
+        const { pdfUrl, imagekitFileId, cloudinaryId, title, edition, publishDate, pageCount } = req.body;
         if (!pdfUrl)   return res.status(400).json({ error: 'PDF URL आवश्यक है' });
         if (!title)    return res.status(400).json({ error: 'शीर्षक आवश्यक है' });
 
@@ -4867,6 +4933,7 @@ app.post('/api/admin/epaper', requireAuth, async (req, res) => {
             edition:      (edition || '').trim().slice(0, 100),
             pdfUrl,
             cloudinaryId: cloudinaryId || '',
+            imagekitFileId: imagekitFileId || '',
             publishDate:  publishDate ? new Date(publishDate) : new Date(),
             pageCount:    parseInt(pageCount, 10) || 0
         });
@@ -4884,8 +4951,10 @@ app.delete('/api/admin/epaper/:id', requireAuth, async (req, res) => {
         if (!isMongoDBConnected) return res.status(503).json({ error: 'DB not connected' });
         const paper = await EPaper.findById(req.params.id);
         if (!paper) return res.status(404).json({ error: 'नहीं मिला' });
-        // Delete PDF from Cloudinary
-        if (paper.cloudinaryId) {
+        // Delete PDF from cloud storage
+        if (paper.imagekitFileId && imagekit) {
+            await imagekit.deleteFile(paper.imagekitFileId).catch(e => console.warn('ImageKit ePaper delete:', e.message));
+        } else if (paper.cloudinaryId) {
             await cloudinary.uploader.destroy(paper.cloudinaryId, { resource_type: 'raw' })
                 .catch(e => console.warn('Cloudinary ePaper delete:', e.message));
         }
@@ -4963,13 +5032,7 @@ app.post('/api/admin/import-pbshabd', requireAuth, pbShabdUpload.array('zips', 5
             let photoUrl = null;
             if (imgEntry) {
                 const imgBuf = imgEntry.getData();
-                photoUrl = await new Promise(resolve => {
-                    const stream = cloudinary.uploader.upload_stream(
-                        { folder: 'news', transformation: [{ width: 1200, height: 630, crop: 'fill', format: 'jpg', quality: 'auto' }] },
-                        (err, result) => resolve(err ? null : result.secure_url)
-                    );
-                    stream.end(imgBuf);
-                });
+                photoUrl = await uploadBufferToImageKit(imgBuf, `pbshabd-${Date.now()}.jpg`, 'news');
             }
             const category = mapRssCategory(city ? [city] : [], heading, 'desh', content);
             const base = generateSlug(heading);

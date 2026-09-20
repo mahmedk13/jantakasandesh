@@ -3,3 +3,4 @@ uploads/
 news-data.json
 .env
 clean-html.js
+*-backup-*.json

@@ -122,14 +122,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="cloudinaryMediaInput">Cloudinary फोटो अपलोड करें</label>
+                    <label for="cloudinaryMediaInput">फोटो अपलोड करें (ImageKit)</label>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:center;">
                         <input type="file" id="cloudinaryMediaInput" accept="image/*" style="flex:1; min-width:220px; padding:0.55rem 0.7rem; border:1px solid #cbd5e0; border-radius:8px; background:#fff;">
-                        <button type="button" id="uploadCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#2f855a;">Upload to Cloudinary</button>
+                        <button type="button" id="uploadCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#2f855a;">Upload</button>
                     </div>
                     <div id="cloudinaryMediaStatus" style="font-size:0.82rem; color:#4a5568; margin-bottom:8px; min-height:18px;"></div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                        <input id="cloudinaryMediaUrl" type="text" readonly placeholder="Cloudinary URL will appear here" style="flex:1; min-width:220px; padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; background:#f8fafc; font-size:0.9rem;">
+                        <input id="cloudinaryMediaUrl" type="text" readonly placeholder="Uploaded image URL will appear here" style="flex:1; min-width:220px; padding:0.7rem 0.8rem; border:1px solid #cbd5e0; border-radius:8px; background:#f8fafc; font-size:0.9rem;">
                         <button type="button" id="copyCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#805ad5;">Copy URL</button>
                         <button type="button" id="useCloudinaryMediaBtn" class="btn btn-primary btn-small" style="background:#2b6cb0;">Use in article</button>
                     </div>
@@ -397,6 +397,9 @@
                     <button id="deleteOldBtn" onclick="deleteOldArticles()" class="btn btn-primary btn-small" style="background:#744210;">
                         🗑️ 1 महीने पुरानी खबरें हटाएं
                     </button>
+                    <button id="stripOldImagesBtn" onclick="stripOldImages()" class="btn btn-primary btn-small" style="background:#4a5568;">
+                        🖼️ 30 दिन पुरानी फोटो हटाएं (लेख सुरक्षित)
+                    </button>
                     <button id="cleanDupsBtn" onclick="cleanDuplicates()" class="btn btn-primary btn-small" style="background:#2d3748;border:1px solid #fc8181;">
                         🧹 डुप्लीकेट हटाएं
                     </button>
@@ -579,7 +582,7 @@
                     <div style="background:#e2e8f0;border-radius:4px;height:8px;overflow:hidden;">
                         <div id="ePaperProgressBar" style="background:#3182ce;height:100%;width:0%;transition:width 0.3s;"></div>
                     </div>
-                    <small id="ePaperProgressText" style="color:#718096;">Cloudinary पर अपलोड हो रहा है…</small>
+                    <small id="ePaperProgressText" style="color:#718096;">अपलोड हो रहा है…</small>
                 </div>
                 <button type="submit" class="btn btn-primary">
                     <span id="ePaperSubmitText">📤 ई-पेपर अपलोड करें</span>
@@ -642,16 +645,16 @@
             const formData = new FormData();
             formData.append('mediaFile', file);
 
-            cloudinaryMediaStatus.textContent = 'Cloudinary पर अपलोड हो रहा है...';
+            cloudinaryMediaStatus.textContent = 'अपलोड हो रहा है...';
             try {
-                const response = await fetch('/api/media/upload-cloudinary', {
+                const response = await fetch('/api/media/upload-imagekit', {
                     method: 'POST',
                     credentials: 'same-origin',
                     body: formData
                 });
                 const result = await response.json();
                 if (!response.ok || !result.success) {
-                    throw new Error(result.error || 'Cloudinary upload failed');
+                    throw new Error(result.error || 'Upload failed');
                 }
 
                 cloudinaryMediaUrl.value = result.url;
@@ -659,7 +662,7 @@
                 document.getElementById('inlineMediaType').value = 'photo';
                 document.getElementById('cloudinaryMediaPreviewImage').src = result.url;
                 document.getElementById('cloudinaryMediaPreview').style.display = 'block';
-                cloudinaryMediaStatus.textContent = 'Cloudinary URL तैयार है।';
+                cloudinaryMediaStatus.textContent = 'URL तैयार है।';
                 cloudinaryMediaInput.value = '';
             } catch (error) {
                 cloudinaryMediaStatus.textContent = error.message || 'Upload failed';
@@ -670,7 +673,7 @@
         document.getElementById('uploadCloudinaryMediaBtn').addEventListener('click', uploadToCloudinaryFromAdmin);
         document.getElementById('copyCloudinaryMediaBtn').addEventListener('click', async () => {
             if (!cloudinaryMediaUrl.value.trim()) {
-                alert('पहले Cloudinary फोटो अपलोड करें।');
+                alert('पहले फोटो अपलोड करें।');
                 return;
             }
             try {
@@ -682,7 +685,7 @@
         });
         document.getElementById('useCloudinaryMediaBtn').addEventListener('click', () => {
             if (!cloudinaryMediaUrl.value.trim()) {
-                alert('पहले Cloudinary फोटो अपलोड करें।');
+                alert('पहले फोटो अपलोड करें।');
                 return;
             }
             document.getElementById('inlineMediaUrl').value = cloudinaryMediaUrl.value.trim();
@@ -1527,9 +1530,11 @@
             }
         }
 
-        // Cloudinary URL optimization
+        // Cloudinary/ImageKit URL optimization
         function optimizeCloudinaryUrl(url) {
-            if (!url || !url.includes('cloudinary')) return url;
+            if (!url) return url;
+            if (url.includes('ik.imagekit.io')) return url.includes('?') ? `${url}&tr=w-800,q-auto,f-auto` : `${url}?tr=w-800,q-auto,f-auto`;
+            if (!url.includes('cloudinary')) return url;
             return url.replace('/upload/', '/upload/q_auto,f_auto,w_800/');
         }
 
@@ -1778,6 +1783,38 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🗑️ 1 महीने पुरानी खबरें हटाएं';
+            }
+        }
+
+        async function stripOldImages() {
+            if (!confirm('30 दिन से पुरानी सभी खबरों की फोटो हटा दी जाएगी (लेख का पूरा टेक्स्ट और URL सुरक्षित रहेगा, Permanent खबरें भी सुरक्षित रहेंगी)। क्या आप सुनिश्चित हैं?')) return;
+            const btn = document.getElementById('stripOldImagesBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ फोटो हटाई जा रही हैं...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/strip-old-images', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ days: 30 })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.stripped} पुरानी खबरों से फोटो हटाई गईं (लेख सुरक्षित हैं)`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🖼️ 30 दिन पुरानी फोटो हटाएं (लेख सुरक्षित)';
             }
         }
 
@@ -2186,32 +2223,28 @@
             const progressText = document.getElementById('ePaperProgressText');
 
             try {
-                // Step 1: get a signed upload from our server (tiny request — no file)
+                // Step 1: get ImageKit auth params from our server (tiny request — no file)
                 const signRes  = await fetch('/api/admin/epaper/sign', { credentials: 'same-origin' });
                 const signData = await signRes.json();
                 if (!signRes.ok) throw new Error(signData.error || 'Signature प्राप्त नहीं हुई');
 
-                // Step 2: upload PDF directly to Cloudinary (bypasses Vercel limit)
-                // Strip .pdf extension from the File object so Cloudinary does NOT append
-                // it to the public_id — raw files served with a .pdf URL return 401 on
-                // this account, while extension-less URLs return 200 (matches old uploads).
-                const uploadFile = new File([file], file.name.replace(/\.pdf$/i, ''), { type: file.type });
-                const cldFd = new FormData();
-                cldFd.append('file',          uploadFile);
-                cldFd.append('api_key',       signData.api_key);
-                cldFd.append('timestamp',     signData.timestamp);
-                cldFd.append('signature',     signData.signature);
-                cldFd.append('folder',        signData.folder);
-                cldFd.append('public_id',     signData.public_id);
-                cldFd.append('access_mode',   'public');
-                cldFd.append('resource_type', 'raw');
+                // Step 2: upload PDF directly to ImageKit (bypasses Vercel limit)
+                const ikFd = new FormData();
+                ikFd.append('file',              file);
+                ikFd.append('fileName',          signData.fileName);
+                ikFd.append('folder',            signData.folder);
+                ikFd.append('publicKey',         signData.publicKey);
+                ikFd.append('signature',         signData.signature);
+                ikFd.append('expire',            signData.expire);
+                ikFd.append('token',             signData.token);
+                ikFd.append('useUniqueFileName', 'true');
 
                 progressWrap.style.display = 'block';
                 progressBar.style.width    = '0%';
 
-                const cldResult = await new Promise((resolve, reject) => {
+                const ikResult = await new Promise((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
-                    xhr.open('POST', `https://api.cloudinary.com/v1_1/${signData.cloud_name}/raw/upload`);
+                    xhr.open('POST', 'https://upload.imagekit.io/api/v1/files/upload');
                     xhr.upload.onprogress = (ev) => {
                         if (ev.lengthComputable) {
                             const pct = Math.round((ev.loaded / ev.total) * 100);
@@ -2221,10 +2254,10 @@
                     };
                     xhr.onload = () => {
                         const r = JSON.parse(xhr.responseText);
-                        xhr.status === 200 ? resolve(r) : reject(new Error(r.error?.message || 'Cloudinary अपलोड विफल'));
+                        xhr.status === 200 ? resolve(r) : reject(new Error(r.message || 'ImageKit अपलोड विफल'));
                     };
-                    xhr.onerror = () => reject(new Error('नेटवर्क त्रुटि (Cloudinary)'));
-                    xhr.send(cldFd);
+                    xhr.onerror = () => reject(new Error('नेटवर्क त्रुटि (ImageKit)'));
+                    xhr.send(ikFd);
                 });
 
                 progressBar.style.width  = '100%';
@@ -2240,8 +2273,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
                     body: JSON.stringify({
-                        pdfUrl:      cldResult.secure_url,
-                        cloudinaryId: cldResult.public_id,
+                        pdfUrl:         ikResult.url,
+                        imagekitFileId: ikResult.fileId,
                         title,
                         edition,
                         publishDate,

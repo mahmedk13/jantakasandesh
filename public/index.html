@@ -405,7 +405,9 @@
         }
 
         function optimizeCloudinaryUrl(url) {
-            if (!url || !url.includes('cloudinary')) return url;
+            if (!url) return url;
+            if (url.includes('ik.imagekit.io')) return url.includes('?') ? `${url}&tr=w-800,q-auto,f-auto` : `${url}?tr=w-800,q-auto,f-auto`;
+            if (!url.includes('cloudinary')) return url;
             return url.replace('/upload/', '/upload/q_auto,f_auto,w_800/');
         }
 

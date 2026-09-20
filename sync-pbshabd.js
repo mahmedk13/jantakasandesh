@@ -6,7 +6,8 @@ const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 
 const mongoose   = require('mongoose');
-const cloudinary = require('cloudinary').v2;
+const ImageKit   = require('imagekit');
+const sharp      = require('sharp');
 const { News, generateSlug } = require('./models/News');
 
 const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
@@ -189,19 +190,26 @@ async function getImageUrl(cookies, mediaId, ext) {
     return r.ok ? (await r.text()).trim() : null;
 }
 
-async function uploadToCloudinary(imageUrl) {
-    if (!imageUrl || !process.env.CLOUDINARY_API_KEY) return imageUrl;
+async function uploadToImageKit(imageUrl) {
+    if (!imageUrl || !process.env.IMAGEKIT_PRIVATE_KEY) return imageUrl;
     try {
         const res = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) });
         if (!res.ok || !res.headers.get('content-type')?.startsWith('image')) return null;
         const buffer = Buffer.from(await res.arrayBuffer());
-        return await new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(
-                { folder: 'news', transformation: [{ width: 1200, height: 630, crop: 'fill', format: 'jpg', quality: 'auto' }] },
-                (err, result) => err ? reject(err) : resolve(result.secure_url)
-            );
-            stream.end(buffer);
+        // Recompress before upload — cuts storage footprint with no visible quality loss
+        const compressed = await sharp(buffer)
+            .rotate()
+            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer()
+            .catch(() => buffer);
+        const imagekit = new ImageKit({
+            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
         });
+        const result = await imagekit.upload({ file: compressed, fileName: `pbshabd-${Date.now()}.jpg`, folder: 'news', useUniqueFileName: true });
+        return result.url;
     } catch { return null; }
 }
 
@@ -291,12 +299,6 @@ async function main() {
     if (!process.env.MONGODB_URI)
         throw new Error('MONGODB_URI not set');
 
-    cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key:    process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
-
     await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
     console.log('✅ MongoDB connected');
 
@@ -371,7 +373,7 @@ async function main() {
                     m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
                 if (imgMedia) {
                     const s3Url = await getImageUrl(cookies, imgMedia.media_id, imgMedia.extention);
-                    if (s3Url) photoUrl = await uploadToCloudinary(s3Url);
+                    if (s3Url) photoUrl = await uploadToImageKit(s3Url);
                 }
             }
 

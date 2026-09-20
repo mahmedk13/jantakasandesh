@@ -278,7 +278,9 @@
     document.getElementById('json-ld-breadcrumb').textContent = JSON.stringify(breadcrumb);
 
     function optimizeCloudinaryUrl(url) {
-        if (!url || !url.includes('cloudinary')) return url;
+        if (!url) return url;
+        if (url.includes('ik.imagekit.io')) return url.includes('?') ? `${url}&tr=w-400,q-auto,f-auto` : `${url}?tr=w-400,q-auto,f-auto`;
+        if (!url.includes('cloudinary')) return url;
         return url.replace('/upload/', '/upload/q_auto,f_auto,w_400/');
     }
 
