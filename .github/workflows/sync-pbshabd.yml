@@ -39,5 +39,8 @@ jobs:
           CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
           CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          IMAGEKIT_PUBLIC_KEY:    ${{ secrets.IMAGEKIT_PUBLIC_KEY }}
+          IMAGEKIT_PRIVATE_KEY:   ${{ secrets.IMAGEKIT_PRIVATE_KEY }}
+          IMAGEKIT_URL_ENDPOINT:  ${{ secrets.IMAGEKIT_URL_ENDPOINT }}
           RESEND_API_KEY:         ${{ secrets.RESEND_API_KEY }}
           SITE_URL:               https://voiceofkranti.com

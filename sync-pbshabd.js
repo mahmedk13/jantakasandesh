@@ -191,7 +191,13 @@ async function getImageUrl(cookies, mediaId, ext) {
 }
 
 async function uploadToImageKit(imageUrl) {
-    if (!imageUrl || !process.env.IMAGEKIT_PRIVATE_KEY) return imageUrl;
+    // PB SHABD's own S3 URLs are AWS-signed and expire in ~1h (X-Amz-Expires=3600) — never
+    // return the raw imageUrl as a fallback, it would go dead shortly after import.
+    if (!imageUrl) return null;
+    if (!process.env.IMAGEKIT_PRIVATE_KEY) {
+        console.warn('⚠️ IMAGEKIT_PRIVATE_KEY not set — skipping photo (PB SHABD S3 URLs expire in ~1h, not safe to store directly)');
+        return null;
+    }
     try {
         const res = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) });
         if (!res.ok || !res.headers.get('content-type')?.startsWith('image')) return null;
