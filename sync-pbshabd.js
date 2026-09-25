@@ -21,6 +21,7 @@ const skipImages = args.includes('--skip-images');
 const PBSHABD_BASE       = 'https://shabd.prasarbharati.org';
 const IMPORT_TYPES       = new Set(['RUSH', 'PRI', 'URG']);
 const VALID_IMAGE_EXTS   = new Set(['.JPG', '.JPEG', '.PNG', '.WEBP', '.GIF']);
+const VALID_VIDEO_EXTS   = new Set(['.MP4', '.MOV', '.WEBM', '.MKV', '.M4V']);
 
 const CRIME_CATEGORY_ID = '19';
 const TARGET_STATES = [
@@ -181,8 +182,8 @@ async function fetchPage(cookies, page, state = '', category = '', search = '') 
     return r.json();
 }
 
-async function getImageUrl(cookies, mediaId, ext) {
-    const params = new URLSearchParams({ id: mediaId, st: 'pb-s3', ext, type: 'IMAGE' });
+async function getImageUrl(cookies, mediaId, ext, type = 'IMAGE') {
+    const params = new URLSearchParams({ id: mediaId, st: 'pb-s3', ext, type });
     const r = await fetch(`${PBSHABD_BASE}/getS3Urls?${params}`, {
         headers: { 'Cookie': cookieHeader(cookies), 'X-Requested-With': 'XMLHttpRequest' },
         signal: AbortSignal.timeout(10000),
@@ -219,6 +220,28 @@ async function uploadToImageKit(imageUrl) {
     } catch { return null; }
 }
 
+// Videos are much heavier than photos and eat into ImageKit's fixed storage cap fast —
+// re-hosted as-is (no compression, sharp can't touch video) so use sparingly.
+async function uploadVideoToImageKit(videoUrl) {
+    if (!videoUrl) return null;
+    if (!process.env.IMAGEKIT_PRIVATE_KEY) {
+        console.warn('⚠️ IMAGEKIT_PRIVATE_KEY not set — skipping video (PB SHABD S3 URLs expire in ~1h, not safe to store directly)');
+        return null;
+    }
+    try {
+        const res = await fetch(videoUrl, { signal: AbortSignal.timeout(20000) });
+        if (!res.ok || !res.headers.get('content-type')?.startsWith('video')) return null;
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const imagekit = new ImageKit({
+            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+        });
+        const result = await imagekit.upload({ file: buffer, fileName: `pbshabd-video-${Date.now()}.mp4`, folder: 'news-videos', useUniqueFileName: true });
+        return result.url;
+    } catch { return null; }
+}
+
 function stripHtml(html) {
     return (html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n')
         .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
@@ -237,13 +260,19 @@ function parsePbDate(str) {
     return d;
 }
 
-// Removes PB SHABD metadata header lines and duplicate title from story_intro_line
+// Removes PB SHABD metadata header lines and duplicate title from story_intro_line.
+// Synopsis text is kept (not dropped) — reinserted as a "## " subheadline (site's
+// markdown subheading convention, see admin.html's "## उपशीर्षक" placeholder).
 function cleanPbContent(text, title) {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ');
     let t = text.trim();
-    // Strip labeled metadata lines PB SHABD prepends (Relevance/Slug/Title/Synopsis/Category/Deadline)
+    let synopsis = '';
     t = t.split('\n')
-        .filter(line => !/^(Relevance|Slug|Title|Synopsis|Category|Deadline|Priority)\s*:/i.test(line.trim()))
+        .filter(line => {
+            const m = line.trim().match(/^Synopsis\s*:\s*(.*)$/i);
+            if (m) { synopsis = m[1].trim(); return false; }
+            return !/^(Relevance|Slug|Title|Category|Deadline|Priority)\s*:/i.test(line.trim());
+        })
         .join('\n').replace(/^\n+/, '').trim();
     // Strip leading title repeat
     const titlePrefix = norm(title).substring(0, 30);
@@ -251,7 +280,8 @@ function cleanPbContent(text, title) {
         const end = t.indexOf('\n');
         t = end >= 0 ? t.slice(end) : t;
     }
-    return t.replace(/^\n+/, '').trim();
+    t = t.replace(/^\n+/, '').trim();
+    return synopsis ? (t ? `## ${synopsis}\n\n${t}` : `## ${synopsis}`) : t;
 }
 
 // ── Email report ────────────────────────────────────────────────────────────
@@ -356,9 +386,6 @@ async function main() {
             seenStoryIds.add(story.story_id);
             importable++;
 
-            // Skip stories that carry video/audio — their content is broadcast-script formatted
-            if ((story.media || []).some(m => m.type === 'VIDEO' || m.type === 'AUDIO')) continue;
-
             const rssLink = `${PBSHABD_BASE}/download?story_id=${story.story_id}`;
             if (await News.findOne({ rssLink }).lean()) { dups++; continue; }
 
@@ -370,16 +397,35 @@ async function main() {
             }
 
             const raw = stripHtml(story.story_intro_line);
-            const content = cleanPbContent(raw, story.title) || story.description || '';
+            // Run description through the same cleaner too — it can carry the same
+            // "Synopsis :" label, and this fallback was leaking that literal word into content.
+            const rawDesc = stripHtml(story.description || '');
+            const content = cleanPbContent(raw, story.title) || cleanPbContent(rawDesc, story.title) || '';
             if (!content) continue;
 
-            let photoUrl = null;
+            let photoUrls = [];
             if (!skipImages) {
-                const imgMedia = (story.media || []).find(m =>
+                const imgMediaList = (story.media || []).filter(m =>
                     m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
-                if (imgMedia) {
+                for (const imgMedia of imgMediaList) {
                     const s3Url = await getImageUrl(cookies, imgMedia.media_id, imgMedia.extention);
-                    if (s3Url) photoUrl = await uploadToImageKit(s3Url);
+                    const uploaded = s3Url ? await uploadToImageKit(s3Url) : null;
+                    if (uploaded) photoUrls.push(uploaded);
+                }
+            }
+
+            let videoUrls = [];
+            let finalContent = content;
+            if (!skipImages) {
+                const vidMediaList = (story.media || []).filter(m =>
+                    m.type === 'VIDEO' && VALID_VIDEO_EXTS.has((m.extention || '').toUpperCase()));
+                for (const vidMedia of vidMediaList) {
+                    const s3Url = await getImageUrl(cookies, vidMedia.media_id, vidMedia.extention, 'VIDEO');
+                    const uploaded = s3Url ? await uploadVideoToImageKit(s3Url) : null;
+                    if (uploaded) videoUrls.push(uploaded);
+                }
+                if (videoUrls.length) {
+                    finalContent += '\n\n' + videoUrls.map(u => `VIDEO:${u} | वीडियो`).join('\n\n');
                 }
             }
 
@@ -390,11 +436,12 @@ async function main() {
 
             await new News({
                 heading:    story.title,
-                content,
+                content:    finalContent,
                 category,
                 state:      category === 'rajya' ? detectState(story.title, story.state || '', content) : null,
                 author:     'Maroof Ahmed Khan',
-                photos:     photoUrl ? [photoUrl] : [],
+                photos:     photoUrls,
+                videos:     videoUrls,
                 rssSource:  'PB SHABD',
                 rssLink,
                 isOriginal: false,

@@ -458,6 +458,10 @@
                     if (youtubeId) {
                         return `<figure class="embedded-media"><div class="video-embed"><iframe src="https://www.youtube.com/embed/${youtubeId}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
                     }
+                    // Direct video file (e.g. re-hosted ImageKit URL) — native player instead of iframing a file
+                    if (/\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(url)) {
+                        return `<figure class="embedded-media"><video controls preload="metadata" style="width:100%" src="${esc(url)}"></video>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
+                    }
                     return `<figure class="embedded-media"><div class="video-embed"><iframe src="${esc(url)}" allowfullscreen></iframe></div>${caption ? `<figcaption>${esc(caption)}</figcaption>` : ''}</figure>`;
                 }
             }

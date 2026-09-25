@@ -657,6 +657,10 @@ function renderArticleBodyForCrawler(text) {
                 if (youtubeId) {
                     return `<figure class="embedded-media"><div class="video-embed"><iframe src="https://www.youtube.com/embed/${youtubeId}?rel=0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
                 }
+                // Direct video file (e.g. re-hosted ImageKit URL) — native player instead of iframing a file
+                if (/\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(url)) {
+                    return `<figure class="embedded-media"><video controls preload="metadata" style="width:100%" src="${escapeHtml(url)}"></video>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
+                }
                 return `<figure class="embedded-media"><div class="video-embed"><iframe src="${escapeHtml(url)}" allowfullscreen></iframe></div>${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>`;
             }
         }
@@ -4604,6 +4608,43 @@ app.post('/api/admin/strip-old-images', requireAuth, async (req, res) => {
 
         invalidateNewsCache();
         console.log(`🖼️ Admin stripped images from ${toStrip.length} articles older than ${days} days (cutoff: ${cutoff.toISOString()})`);
+        res.json({ success: true, stripped: toStrip.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: strip re-hosted videos (ImageKit) from articles older than N days (default 3 —
+// videos are far heavier than photos, so a much shorter default retention before freeing
+// them up). Removes the `videos` array + their VIDEO: marker lines from content, WITHOUT
+// deleting the article — keeps slug/URL/text intact. Manual-trigger lever for when
+// ImageKit's fixed storage cap runs low (same pattern as strip-old-images).
+app.post('/api/admin/strip-old-videos', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        const days = Math.max(parseInt(req.body?.days, 10) || 3, 0);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        cutoff.setHours(0, 0, 0, 0);
+
+        const toStrip = await News.find(
+            { date: { $lt: cutoff }, isPermanent: { $ne: true }, videos: { $exists: true, $ne: [] } },
+            { _id: 1, videos: 1, content: 1 }
+        ).lean();
+
+        for (const article of toStrip) {
+            await deletePhotos(article.videos); // deleteImageKitPhoto works for any ImageKit-hosted file, not just images
+            const strippedContent = (article.content || '')
+                .split('\n')
+                .filter(line => !/^VIDEO\s*:/i.test(line.trim()))
+                .join('\n')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+            await News.updateOne({ _id: article._id }, { $set: { videos: [], content: strippedContent } });
+        }
+
+        invalidateNewsCache();
+        console.log(`🎥 Admin stripped videos from ${toStrip.length} articles older than ${days} days (cutoff: ${cutoff.toISOString()})`);
         res.json({ success: true, stripped: toStrip.length });
     } catch (err) {
         res.status(500).json({ error: err.message });

@@ -28,6 +28,13 @@ const newsSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
+    // Re-hosted (ImageKit) video URLs embedded in `content` via VIDEO: markers.
+    // Kept as its own array (not just inline markers) so admin storage-cleanup tools
+    // can find/delete video-only stories without regex-scanning content.
+    videos: {
+        type: [String],
+        default: []
+    },
     date: {
         type: Date,
         default: Date.now

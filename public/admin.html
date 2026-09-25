@@ -400,6 +400,9 @@
                     <button id="stripOldImagesBtn" onclick="stripOldImages()" class="btn btn-primary btn-small" style="background:#4a5568;">
                         🖼️ 30 दिन पुरानी फोटो हटाएं (लेख सुरक्षित)
                     </button>
+                    <button id="stripOldVideosBtn" onclick="stripOldVideos()" class="btn btn-primary btn-small" style="background:#4a5568;">
+                        🎥 पुराने वीडियो हटाएं (स्टोरेज फुल होने पर, लेख सुरक्षित)
+                    </button>
                     <button id="cleanDupsBtn" onclick="cleanDuplicates()" class="btn btn-primary btn-small" style="background:#2d3748;border:1px solid #fc8181;">
                         🧹 डुप्लीकेट हटाएं
                     </button>
@@ -1815,6 +1818,38 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🖼️ 30 दिन पुरानी फोटो हटाएं (लेख सुरक्षित)';
+            }
+        }
+
+        async function stripOldVideos() {
+            if (!confirm('3 दिन से पुराने वीडियो वाली खबरों से वीडियो हटा दिए जाएंगे (लेख का पूरा टेक्स्ट, फोटो और URL सुरक्षित रहेगा, Permanent खबरें भी सुरक्षित रहेंगी)। यह स्टोरेज फुल होने पर उपयोग करें। क्या आप सुनिश्चित हैं?')) return;
+            const btn = document.getElementById('stripOldVideosBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ वीडियो हटाई जा रही हैं...';
+            status.textContent = '';
+            try {
+                const response = await fetch('/api/admin/strip-old-videos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ days: 3 })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.stripped} पुराने वीडियो हटाए गए (लेख सुरक्षित हैं)`;
+                    status.style.color = '#38a169';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎥 पुराने वीडियो हटाएं (स्टोरेज फुल होने पर, लेख सुरक्षित)';
             }
         }
 
