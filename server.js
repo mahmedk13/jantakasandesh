@@ -2254,6 +2254,11 @@ const imagekit = (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVAT
     })
     : null;
 
+// Shared static placeholder ("NEWS" graphic) — used instead of re-uploading a fresh
+// image per article whenever a story has no real photo (video-only stories, or
+// articles whose photos were administratively stripped). One file, referenced by URL.
+const DEFAULT_PHOTO_URL = 'https://voiceofkranti.com/default-news-photo.svg';
+
 // Re-encode an image buffer to cut storage size with no visible quality loss:
 // auto-orients from EXIF, caps dimensions at 1600px (larger than any delivered
 // size we ever request), strips metadata, and re-compresses as mozjpeg q=85 —
@@ -4602,8 +4607,9 @@ app.post('/api/admin/strip-old-images', requireAuth, async (req, res) => {
         ).lean();
 
         for (const article of toStrip) {
+            if (article.photos.length === 1 && article.photos[0] === DEFAULT_PHOTO_URL) continue; // already stripped
             await deletePhotos(article.photos);
-            await News.updateOne({ _id: article._id }, { $set: { photos: [] } });
+            await News.updateOne({ _id: article._id }, { $set: { photos: [DEFAULT_PHOTO_URL] } });
         }
 
         invalidateNewsCache();
@@ -4629,18 +4635,23 @@ app.post('/api/admin/strip-old-videos', requireAuth, async (req, res) => {
 
         const toStrip = await News.find(
             { date: { $lt: cutoff }, isPermanent: { $ne: true }, videos: { $exists: true, $ne: [] } },
-            { _id: 1, videos: 1, content: 1 }
+            { _id: 1, videos: 1, content: 1, photos: 1 }
         ).lean();
 
         for (const article of toStrip) {
             await deletePhotos(article.videos); // deleteImageKitPhoto works for any ImageKit-hosted file, not just images
+            // Only strip OUR re-hosted VIDEO: lines (ik.imagekit.io) — never touch a
+            // legitimate YouTube VIDEO: embed an editor may have added manually.
             const strippedContent = (article.content || '')
                 .split('\n')
-                .filter(line => !/^VIDEO\s*:/i.test(line.trim()))
+                .filter(line => !(/^VIDEO\s*:/i.test(line.trim()) && /ik\.imagekit\.io/i.test(line)))
                 .join('\n')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
-            await News.updateOne({ _id: article._id }, { $set: { videos: [], content: strippedContent } });
+            // Video-only stories had no real photo — fall back to the shared placeholder
+            const update = { videos: [], content: strippedContent };
+            if (!article.photos || !article.photos.length) update.photos = [DEFAULT_PHOTO_URL];
+            await News.updateOne({ _id: article._id }, { $set: update });
         }
 
         invalidateNewsCache();

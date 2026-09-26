@@ -11,6 +11,10 @@ const sharp      = require('sharp');
 const { News, generateSlug } = require('./models/News');
 
 const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
+// Single shared placeholder ("NEWS" graphic, matches the site's CSS placeholder design) —
+// used for video-only stories and any story with no usable photo, instead of re-hosting
+// media to ImageKit for every article. Never uploaded per-article, just referenced by URL.
+const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.svg`;
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args      = process.argv.slice(2);
@@ -21,7 +25,6 @@ const skipImages = args.includes('--skip-images');
 const PBSHABD_BASE       = 'https://shabd.prasarbharati.org';
 const IMPORT_TYPES       = new Set(['RUSH', 'PRI', 'URG']);
 const VALID_IMAGE_EXTS   = new Set(['.JPG', '.JPEG', '.PNG', '.WEBP', '.GIF']);
-const VALID_VIDEO_EXTS   = new Set(['.MP4', '.MOV', '.WEBM', '.MKV', '.M4V']);
 
 const CRIME_CATEGORY_ID = '19';
 const TARGET_STATES = [
@@ -220,28 +223,6 @@ async function uploadToImageKit(imageUrl) {
     } catch { return null; }
 }
 
-// Videos are much heavier than photos and eat into ImageKit's fixed storage cap fast —
-// re-hosted as-is (no compression, sharp can't touch video) so use sparingly.
-async function uploadVideoToImageKit(videoUrl) {
-    if (!videoUrl) return null;
-    if (!process.env.IMAGEKIT_PRIVATE_KEY) {
-        console.warn('⚠️ IMAGEKIT_PRIVATE_KEY not set — skipping video (PB SHABD S3 URLs expire in ~1h, not safe to store directly)');
-        return null;
-    }
-    try {
-        const res = await fetch(videoUrl, { signal: AbortSignal.timeout(20000) });
-        if (!res.ok || !res.headers.get('content-type')?.startsWith('video')) return null;
-        const buffer = Buffer.from(await res.arrayBuffer());
-        const imagekit = new ImageKit({
-            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
-        });
-        const result = await imagekit.upload({ file: buffer, fileName: `pbshabd-video-${Date.now()}.mp4`, folder: 'news-videos', useUniqueFileName: true });
-        return result.url;
-    } catch { return null; }
-}
-
 function stripHtml(html) {
     return (html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n')
         .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
@@ -414,20 +395,11 @@ async function main() {
                 }
             }
 
-            let videoUrls = [];
-            let finalContent = content;
-            if (!skipImages) {
-                const vidMediaList = (story.media || []).filter(m =>
-                    m.type === 'VIDEO' && VALID_VIDEO_EXTS.has((m.extention || '').toUpperCase()));
-                for (const vidMedia of vidMediaList) {
-                    const s3Url = await getImageUrl(cookies, vidMedia.media_id, vidMedia.extention, 'VIDEO');
-                    const uploaded = s3Url ? await uploadVideoToImageKit(s3Url) : null;
-                    if (uploaded) videoUrls.push(uploaded);
-                }
-                if (videoUrls.length) {
-                    finalContent += '\n\n' + videoUrls.map(u => `VIDEO:${u} | वीडियो`).join('\n\n');
-                }
-            }
+            // Video/audio-carrying stories are still imported for their text, but the video
+            // itself is never re-hosted (ImageKit's video processing quota is far too easy
+            // to exhaust — PB SHABD attaches many duplicate renditions per story). Shared
+            // "NEWS" placeholder photo used instead whenever a story has no real photo.
+            if (!photoUrls.length) photoUrls = [DEFAULT_PHOTO_URL];
 
             const category = categorize(story.title, story.state || '', content, sourceHint);
             const base = generateSlug(story.title);
@@ -436,12 +408,11 @@ async function main() {
 
             await new News({
                 heading:    story.title,
-                content:    finalContent,
+                content,
                 category,
                 state:      category === 'rajya' ? detectState(story.title, story.state || '', content) : null,
                 author:     'Maroof Ahmed Khan',
                 photos:     photoUrls,
-                videos:     videoUrls,
                 rssSource:  'PB SHABD',
                 rssLink,
                 isOriginal: false,
