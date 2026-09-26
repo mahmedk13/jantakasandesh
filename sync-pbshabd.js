@@ -14,7 +14,9 @@ const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/
 // Single shared placeholder ("NEWS" graphic, matches the site's CSS placeholder design) —
 // used for video-only stories and any story with no usable photo, instead of re-hosting
 // media to ImageKit for every article. Never uploaded per-article, just referenced by URL.
-const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.svg`;
+// Must be a raster format (jpg/png) — Facebook/WhatsApp/Twitter link-preview crawlers do
+// not render SVG for og:image, so an .svg here would silently break social share previews.
+const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.jpg`;
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args      = process.argv.slice(2);

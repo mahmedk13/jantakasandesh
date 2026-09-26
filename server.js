@@ -2257,7 +2257,9 @@ const imagekit = (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVAT
 // Shared static placeholder ("NEWS" graphic) — used instead of re-uploading a fresh
 // image per article whenever a story has no real photo (video-only stories, or
 // articles whose photos were administratively stripped). One file, referenced by URL.
-const DEFAULT_PHOTO_URL = 'https://voiceofkranti.com/default-news-photo.svg';
+// Must be a raster format (jpg/png) — Facebook/WhatsApp/Twitter link-preview crawlers do
+// not render SVG for og:image, so an .svg here would silently break social share previews.
+const DEFAULT_PHOTO_URL = 'https://voiceofkranti.com/default-news-photo.jpg';
 
 // Re-encode an image buffer to cut storage size with no visible quality loss:
 // auto-orients from EXIF, caps dimensions at 1600px (larger than any delivered
