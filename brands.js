@@ -10,6 +10,11 @@ const BRANDS = {
         key: 'vok',
         isDefault: true,
         domain: 'voiceofkranti.com',
+        // canonicalHost = the exact host that should ultimately be served (matches
+        // whichever of apex/www is set as "Production" in Vercel's domain settings);
+        // altHost = the other variant, which gets 301-redirected to canonicalHost.
+        canonicalHost: 'voiceofkranti.com',
+        altHost: 'www.voiceofkranti.com',
         slug: 'voiceofkranti',
         nameHi: 'वॉयस ऑफ क्रांति',
         nameEn: 'Voice of Kranti',
@@ -25,7 +30,13 @@ const BRANDS = {
     'jantakasandesh.in': {
         key: 'jks',
         isDefault: false,
-        domain: 'jantakasandesh.in',
+        // Vercel has www.jantakasandesh.in set as Production (apex 308s to www) —
+        // the opposite of voiceofkranti.com — so domain/canonicalHost include www
+        // here to match, otherwise our own www-normalization fights Vercel's and
+        // loops forever (ERR_TOO_MANY_REDIRECTS).
+        domain: 'www.jantakasandesh.in',
+        canonicalHost: 'www.jantakasandesh.in',
+        altHost: 'jantakasandesh.in',
         slug: 'jantakasandesh',
         nameHi: 'जनता का संदेश',
         nameEn: 'Janta Ka Sandesh',
@@ -76,6 +87,12 @@ function applyBrand(html, brand) {
     // Asset filenames (before the domain swap so full URLs end up fully rebranded)
     out = out.split('og-banner.svg').join(brand.ogBannerFile);
     out = out.split('logo.svg').join(brand.logoFile);
+
+    // Email addresses first and exact — brand.domain may carry a 'www.' prefix for
+    // display URLs (see brands.js canonicalHost comment), but mail is always sent
+    // to the bare domain, so this must NOT fall through to the generic domain swap
+    // below (which would otherwise produce an invalid 'editor@www.…' address).
+    out = out.split('editor@voiceofkranti.com').join(brand.email);
 
     // Domain (longest literal first)
     out = out.split('voiceofkranti.com').join(brand.domain);

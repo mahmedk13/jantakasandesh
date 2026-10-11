@@ -2572,12 +2572,15 @@ app.use(session(sessionConfig));
 app.use(compression());
 
 // Resolve the requesting domain's brand (name/logo/tagline/etc. — see brands.js) and
-// normalize www.<domain> → <domain> (301), preserving the domain the visitor used.
+// redirect the non-canonical apex/www variant (altHost) to whichever one each brand
+// declares as canonicalHost — this MUST match each domain's Vercel "Production"
+// domain setting, or this redirect fights Vercel's own apex↔www redirect forever
+// (ERR_TOO_MANY_REDIRECTS).
 app.use((req, res, next) => {
-    const host = req.hostname || '';
+    const host = (req.hostname || '').toLowerCase();
     req.brand = getBrand(host);
-    if (host.startsWith('www.') && (host === 'www.voiceofkranti.com' || host === 'www.jantakasandesh.in')) {
-        return res.redirect(301, `https://${req.brand.domain}` + req.originalUrl);
+    if (req.brand && req.brand.altHost && host === req.brand.altHost.toLowerCase()) {
+        return res.redirect(301, `https://${req.brand.canonicalHost}` + req.originalUrl);
     }
     next();
 });
