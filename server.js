@@ -30,6 +30,30 @@ const RSSParser = require('rss-parser');
 const Groq = require('groq-sdk');
 const mammoth = require('mammoth');
 const AdmZip = require('adm-zip');
+const { getBrand, applyBrand, DEFAULT_BRAND } = require('./brands');
+
+// Reads an HTML/text file from public/ and rewrites it for the requesting domain's brand.
+function sendBranded(req, res, filePath, contentType) {
+    try {
+        let content = fs.readFileSync(filePath, 'utf8');
+        content = applyBrand(content, req.brand);
+        if (contentType) res.set('Content-Type', contentType);
+        res.send(content);
+    } catch (e) {
+        res.status(500).send('Error loading page');
+    }
+}
+
+// On non-default-brand domains (e.g. jantakasandesh.in), fires an extra GA4
+// page_view for the equivalent default-brand (voiceofkranti.com) URL, so
+// Analytics reports show matching view counts for the same page on both
+// domains. Must be called AFTER applyBrand() so the literal domain here is
+// never caught by its blanket 'voiceofkranti.com' text substitution.
+function injectGaMirror(html, req) {
+    if (!req.brand || req.brand.domain === DEFAULT_BRAND.domain) return html;
+    const mirrorScript = `<script>(function(){try{if(typeof gtag==='function'){gtag('event','page_view',{page_location:${JSON.stringify('https://' + DEFAULT_BRAND.domain)}+location.pathname+location.search,page_title:document.title});}}catch(e){}})();</script>`;
+    return html.replace('</head>', mirrorScript + '</head>');
+}
 
 // ── LLM helpers ───────────────────────────────────────────────────────────────
 // callGemini is used for the three daily long-form features so they do not
@@ -2547,11 +2571,13 @@ app.use(session(sessionConfig));
 // Gzip compress all responses
 app.use(compression());
 
-// Redirect jantakasandesh.in and www.voiceofkranti.com → voiceofkranti.com (301 permanent)
+// Resolve the requesting domain's brand (name/logo/tagline/etc. — see brands.js) and
+// normalize www.<domain> → <domain> (301), preserving the domain the visitor used.
 app.use((req, res, next) => {
     const host = req.hostname || '';
-    if (host.includes('jantakasandesh') || host === 'www.voiceofkranti.com') {
-        return res.redirect(301, 'https://voiceofkranti.com' + req.originalUrl);
+    req.brand = getBrand(host);
+    if (host.startsWith('www.') && (host === 'www.voiceofkranti.com' || host === 'www.jantakasandesh.in')) {
+        return res.redirect(301, `https://${req.brand.domain}` + req.originalUrl);
     }
     next();
 });
@@ -2668,7 +2694,7 @@ app.get('/news/:slug', async (req, res) => {
         // DB was reachable but article genuinely doesn't exist (never existed, or was
         // deleted) → serve a real 404 instead of redirecting anywhere
         if (!dbError && !article) {
-            return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+            return sendBranded(req, res.status(404), path.join(__dirname, 'public', '404.html'), 'text/html; charset=utf-8');
         }
 
         // Read the static HTML template
@@ -2750,6 +2776,7 @@ app.get('/news/:slug', async (req, res) => {
                         ${(authorLabel ? `<span class="news-detail-author">लेखक: ${authorMarkup}</span>` : '')}
                         <time class="news-detail-date" datetime="${esc(isoPublished)}">प्रकाशित: ${esc(dateLabel)}</time>
                         <span class="news-detail-date">अंतिम अपडेट: ${esc(modifiedLabel)}</span>
+                        ${article.views ? `<span class="news-detail-views">👁️ ${Number(article.views).toLocaleString('hi-IN')} बार पढ़ा गया</span>` : ''}
                     </div>
                     <div class="news-detail-meta" style="margin-top:0.5rem;">
                         <span class="news-detail-author">प्रकाशक: <strong>वॉयस ऑफ क्रांति</strong></span>
@@ -2858,13 +2885,15 @@ app.get('/news/:slug', async (req, res) => {
                 .replace(/(<script id="json-ld-breadcrumb"[^>]*>)[^<]*(<\/script>)/, r(null, breadcrumb));
         }
 
+        html = applyBrand(html, req.brand);
+        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // Prevent Vercel edge caching so social crawlers always get fresh OG tags
         res.setHeader('Cache-Control', 'no-store');
         res.send(html);
     } catch (err) {
         console.error('Slug route error:', err.message);
-        res.sendFile(path.join(__dirname, 'public', 'news-detail.html'));
+        sendBranded(req, res, path.join(__dirname, 'public', 'news-detail.html'), 'text/html; charset=utf-8');
     }
 });
 
@@ -2995,7 +3024,7 @@ app.get('/authors/:slug', async (req, res) => {
         const pageTitle = `${authorName} | वॉयस ऑफ क्रांति`;
         const metaDescription = `${authorName} की प्रोफ़ाइल | वॉयस ऑफ क्रांति`;
 
-        const html = `<!DOCTYPE html>
+        let html = `<!DOCTYPE html>
 <html lang="hi">
 <head>
   <meta charset="UTF-8" />
@@ -3091,6 +3120,7 @@ app.get('/authors/:slug', async (req, res) => {
 </body>
 </html>`;
 
+        html = applyBrand(html, req.brand);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
     } catch (error) {
@@ -3268,12 +3298,15 @@ app.get('/c/:category', async (req, res) => {
             .replace(/<title>[^<]*<\/title>/, `<title>${cat.title}</title>`)
             .replace(/(<meta name="description" content=")[^"]*(")/,         `$1${cat.metaDesc}$2`)
             .replace(/(<link rel="canonical" href=")[^"]*(")/,               `$1${pageUrl}$2`)
+            .replace(/(<link rel="alternate" type="application\/rss\+xml"[^>]*href=")[^"]*(")/, `$1https://voiceofkranti.com/c/${catId}/feed/$2`)
             .replace(/(<meta property="og:url" content=")[^"]*(")/,          `$1${pageUrl}$2`)
             .replace(/(<meta property="og:title" content=")[^"]*(")/,        `$1${cat.title}$2`)
             .replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${cat.metaDesc}$2`)
             .replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${cat.title}$2`)
             .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${cat.metaDesc}$2`);
 
+        html = applyBrand(html, req.brand);
+        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
     } catch (err) {
@@ -3296,10 +3329,32 @@ app.get('/news-detail.html', async (req, res, next) => {
     return next();
 });
 
+// Branded static pages — these carry hardcoded Voice of Kranti name/logo/contact
+// text, so serve them through sendBranded() (not plain express.static) so each
+// domain gets its own name/logo/tagline. Must be registered before express.static.
+const BRANDABLE_STATIC_PAGES = [
+    'about.html', 'contact.html', 'terms.html', 'privacy-policy.html',
+    'editorial-policy.html', 'ethics-policy.html', 'fact-checking-policy.html',
+    'corrections-policy.html', 'glossary.html', 'facts.html', 'aaj-ka-itihas.html',
+    'weekly-roundup.html', 'shorts.html', 'authors.html', 'clip-generator.html',
+    'latest.html', 'epaper.html'
+];
+BRANDABLE_STATIC_PAGES.forEach(name => {
+    app.get('/' + name, (req, res) => sendBranded(req, res, path.join(__dirname, 'public', name), 'text/html; charset=utf-8'));
+});
+app.get('/robots.txt', (req, res) => sendBranded(req, res, path.join(__dirname, 'public', 'robots.txt'), 'text/plain'));
+// Avoid indexing '/index.html' as a duplicate of '/' (which carries SSR + brand + curated meta)
+app.get('/index.html', (req, res) => res.redirect(301, '/'));
+
 // Static files — no cache for HTML, 1-day cache for assets (CSS/JS/images versioned by ?v=)
 app.use(express.static(path.join(__dirname, 'public'), {
     maxAge: 0,
     etag: true,
+    // Without this, serve-static's default "index.html" directory-index behavior
+    // silently shadows the dynamic app.get('/', ...) route below (registered later
+    // in the stack) for every request to '/' — skipping brand rewriting, SSR news
+    // injection and curated meta tags entirely. The dynamic route handles '/' itself.
+    index: false,
     setHeaders(res, filePath) {
         if (filePath.endsWith('.html')) {
             // Always revalidate HTML so CSS/JS version bumps are picked up instantly
@@ -3408,12 +3463,13 @@ app.get('/sitemap-news.xml', async (req, res) => {
     </news:news>
   </url>`).join('\n');
 
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
 ${newsXml}
 </urlset>`;
 
+        xml = applyBrand(xml, req.brand);
         res.set('Content-Type', 'application/xml');
         res.set('Cache-Control', 'public, max-age=3600');
         res.send(xml);
@@ -3473,12 +3529,13 @@ app.get('/sitemap.xml', async (req, res) => {
     <priority>0.6</priority>
   </url>`).join('\n');
 
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${staticXml}
 ${urlsXml}
 </urlset>`;
 
+        xml = applyBrand(xml, req.brand);
         res.set('Content-Type', 'application/xml');
         res.set('Cache-Control', 'public, max-age=3600');
         res.send(xml);
@@ -3497,7 +3554,8 @@ app.get('/news-sitemap.xml', async (req, res) => {
         body: req.body,
         get: req.get.bind(req),
         originalUrl: req.originalUrl,
-        socket: req.socket
+        socket: req.socket,
+        brand: req.brand
     }, res);
 });
 
@@ -3511,7 +3569,7 @@ app.get('/sitemap-index.xml', async (req, res) => {
         <loc>https://voiceofkranti.com/sitemap-articles-${index + 2}.xml</loc>
         <lastmod>${today}</lastmod>
     </sitemap>`).join('\n');
-                const xml = `<?xml version="1.0" encoding="UTF-8"?>
+                let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
     <loc>https://voiceofkranti.com/sitemap.xml</loc>
@@ -3523,6 +3581,7 @@ ${archiveSitemaps}
     <lastmod>${today}</lastmod>
   </sitemap>
 </sitemapindex>`;
+    xml = applyBrand(xml, req.brand);
     res.set('Content-Type', 'application/xml');
     res.set('Cache-Control', 'public, max-age=3600');
     res.send(xml);
@@ -3549,11 +3608,12 @@ app.get('/sitemap-articles-:page.xml', async (req, res) => {
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>`).join('\n');
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls}
 </urlset>`;
 
+        xml = applyBrand(xml, req.brand);
         res.set('Content-Type', 'application/xml');
         res.set('Cache-Control', 'public, max-age=3600');
         res.send(xml);
@@ -3561,6 +3621,95 @@ ${urls}
         res.status(500).send('Sitemap error');
     }
 });
+
+// ── Real-time RSS feed (WordPress-style /feed/) ──────────────────────────────
+// Queries MongoDB fresh on every request (no caching) so newly-saved articles
+// appear in the feed immediately — same brand-aware handling as the sitemaps.
+const FEED_CATEGORY_NAMES = { desh: 'देश', videsh: 'विदेश', rajya: 'राज्य', bhopal: 'भोपाल', crime: 'अपराध', khel: 'खेल', rajniti: 'राजनीति', manoranjan: 'मनोरंजन', vyapar: 'व्यापार', itihas: 'इतिहास' };
+function escapeXmlFeed(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function toRfc822(d) {
+    const dt = d ? new Date(d) : new Date();
+    return Number.isNaN(dt.getTime()) ? new Date().toUTCString() : dt.toUTCString();
+}
+
+app.get(['/feed', '/feed/'], (req, res) => handleFeedRequest(req, res, req.query.category));
+
+// Category feeds use the site's real category URL convention (/c/desh, not ?category=desh)
+app.get(['/c/:category/feed', '/c/:category/feed/'], (req, res) => {
+    const aliasMap = { apradh: 'crime' };
+    const catId = aliasMap[req.params.category] || req.params.category;
+    if (!CATEGORY_PAGE_INFO[catId]) return res.redirect(301, '/feed/');
+    return handleFeedRequest(req, res, catId);
+});
+
+async function handleFeedRequest(req, res, categoryFilter) {
+    try {
+        if (!isMongoDBConnected) {
+            try {
+                await Promise.race([
+                    connectDB(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+                ]);
+            } catch (e) {
+                return res.status(503).set('Content-Type', 'text/plain').send('Feed unavailable during cold start, please retry.');
+            }
+        }
+
+        const brand = req.brand;
+        const count = Math.min(Math.max(parseInt(req.query.count, 10) || 50, 1), 100);
+
+        const query = { slug: { $exists: true, $ne: '' }, isOriginal: { $ne: true } };
+        if (categoryFilter) query.category = categoryFilter;
+
+        const articles = await News.find(query, {
+            heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, slug: 1, rssSource: 1
+        }).sort({ date: -1 }).limit(count).lean();
+
+        const items = articles.map(a => {
+            const link = `https://${brand.domain}/news/${a.slug}`;
+            const renderedHtml = renderArticleBodyForCrawler(a.content || '');
+            const plainText = renderedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            const excerpt = plainText.slice(0, 300);
+            const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
+            const image = (a.photos && a.photos.length > 0) ? a.photos[0] : '';
+            return `  <item>
+    <title><![CDATA[${a.heading || ''}]]></title>
+    <link>${escapeXmlFeed(link)}</link>
+    <guid isPermaLink="true">${escapeXmlFeed(link)}</guid>
+    <pubDate>${toRfc822(a.date)}</pubDate>
+    ${catName ? `<category><![CDATA[${catName}]]></category>` : ''}
+    <dc:creator><![CDATA[${a.author || a.rssSource || brand.nameHi}]]></dc:creator>
+    <description><![CDATA[${excerpt}]]></description>
+    <content:encoded><![CDATA[${renderedHtml}]]></content:encoded>
+    ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
+  </item>`;
+        }).join('\n');
+
+        const feedSelfUrl = categoryFilter ? `https://${brand.domain}/c/${categoryFilter}/feed` : `https://${brand.domain}/feed`;
+        const feedTitle = categoryFilter ? `${brand.nameHi} — ${FEED_CATEGORY_NAMES[categoryFilter] || categoryFilter}` : brand.nameHi;
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>${escapeXmlFeed(feedTitle)}</title>
+  <atom:link href="${escapeXmlFeed(feedSelfUrl)}" rel="self" type="application/rss+xml"/>
+  <link>https://${brand.domain}/${categoryFilter ? `c/${categoryFilter}` : ''}</link>
+  <description>${escapeXmlFeed(brand.nameHi + ' — ' + brand.tagline)}</description>
+  <language>hi</language>
+  <lastBuildDate>${toRfc822(new Date())}</lastBuildDate>
+${items}
+</channel>
+</rss>`;
+
+        res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+        res.set('Cache-Control', 'no-store');
+        res.send(xml);
+    } catch (err) {
+        console.error('Feed route error:', err.message);
+        res.status(500).set('Content-Type', 'text/plain').send('Feed error');
+    }
+}
 
 // Configure multer for ImageKit uploads — files buffered in memory, then uploaded
 // to ImageKit manually per-request (see uploadBufferToImageKit call sites below).
@@ -3618,11 +3767,13 @@ app.get('/', async (req, res) => {
         html = html.replace('</head>', `<script>window.__INITIAL_NEWS__=${payload};</script></head>`);
         // Inject SSR news cards so crawlers see real headlines without running JS
         html = html.replace('<!-- filled instantly by server-injected __INITIAL_NEWS__ -->', renderHomepageSSR(initialNews, null));
+        html = applyBrand(html, req.brand);
+        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
     } catch (err) {
         // Fall back to static file if SSR fails
-        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+        sendBranded(req, res, path.join(__dirname, 'public', 'index.html'), 'text/html; charset=utf-8');
     }
 });
 
@@ -4883,11 +5034,11 @@ function dateRangeFromSlug(slug) {
 
 // Public page: ePaper reader
 app.get('/epaper', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'epaper.html'));
+    sendBranded(req, res, path.join(__dirname, 'public', 'epaper.html'), 'text/html; charset=utf-8');
 });
 
 app.get('/latest', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'latest.html'));
+    sendBranded(req, res, path.join(__dirname, 'public', 'latest.html'), 'text/html; charset=utf-8');
 });
 
 // Public page: ePaper reader with date URL
@@ -4895,7 +5046,7 @@ app.get('/epaper/:dateSlug', (req, res) => {
     if (!dateRangeFromSlug(req.params.dateSlug)) {
         return res.redirect('/epaper');
     }
-    res.sendFile(path.join(__dirname, 'public', 'epaper.html'));
+    sendBranded(req, res, path.join(__dirname, 'public', 'epaper.html'), 'text/html; charset=utf-8');
 });
 
 // Generate a Cloudinary signed delivery URL (24-hour expiry) for raw PDFs

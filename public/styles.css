@@ -1004,6 +1004,12 @@ textarea.form-input {
     font-weight: 500;
 }
 
+.news-detail-views {
+    font-size: 0.95rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
 .news-detail-author {
     font-size: 1rem;
     color: #2d3748;
