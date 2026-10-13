@@ -1021,6 +1021,7 @@ const STATE_MAP = {
     'andhra pradesh': 'andhra_pradesh', 'आंध्र प्रदेश': 'andhra_pradesh',
     'karnataka': 'karnataka', 'कर्नाटक': 'karnataka',
     'west bengal': 'west_bengal', 'पश्चिम बंगाल': 'west_bengal',
+    'delhi': 'delhi', 'दिल्ली': 'delhi', 'new delhi': 'delhi', 'नई दिल्ली': 'delhi',
 };
 
 function detectState(title, content) {
@@ -2791,6 +2792,9 @@ app.get('/news/:slug', async (req, res) => {
                         ${(article.rssSource && article.rssSource !== 'PB SHABD') ? `<p class="news-source-credit">📡 स्रोत: ${article.rssLink ? `<a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer">${esc(article.rssSource)}</a>` : `<strong>${esc(article.rssSource)}</strong>`}</p>` : ''}
                         ${(article.rssLink && article.rssSource !== 'PB SHABD' && !article.isAiScraped) ? `<div class="read-full-article"><a href="${esc(article.rssLink)}" target="_blank" rel="noopener noreferrer" class="read-full-btn">📰 पूरी खबर पढ़ें (${esc(article.rssSource || 'मूल स्रोत')} पर जाएं)</a></div>` : ''}
                     </div>
+                    <!-- AD ZONE — after article body, before related content. Drop ad creative here and
+                         remove style="display:none" when ready (see homepage ad zones for the pattern). -->
+                    <div class="ad-zone ad-zone-article" id="adZoneArticle" style="display:none;"></div>
                     ${explainerBoxSsr}
                     ${kaMatBoxSsr}
                     ${tagsHtmlSsr}
@@ -3047,7 +3051,9 @@ app.get('/authors/:slug', async (req, res) => {
   <meta name="twitter:description" content="${metaDescription}" />
   <meta name="twitter:image" content="${photo}" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 52 52%22><rect width=%2252%22 height=%2252%22 rx=%229%22 fill=%22%23ff9933%22/><rect x=%2219%22 y=%225%22 width=%2214%22 height=%2222%22 rx=%227%22 fill=%22white%22/><path d=%22M 10,22 Q 10,35 26,35 Q 42,35 42,22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2226%22 y1=%2235%22 x2=%2226%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><line x1=%2217%22 y1=%2243%22 x2=%2235%22 y2=%2243%22 stroke=%22white%22 stroke-width=%222.5%22 stroke-linecap=%22round%22/><path d=%22M 42,18 C 47,22 47,31 42,35%22 fill=%22none%22 stroke=%22white%22 stroke-opacity=%22.8%22 stroke-width=%222%22 stroke-linecap=%22round%22/></svg>">
-  <link rel="stylesheet" href="/styles.css?v=21" />
+  <link rel="preload" href="/styles.css?v=21" as="style" />
+  <link rel="stylesheet" href="/styles.css?v=21" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="/styles.css?v=21" /></noscript>
   <style>
     body { margin: 0; font-family: Arial, sans-serif; background: #f8fafc; color: #1f2937; }
     .container { max-width: 1100px; margin: 0 auto; padding: 0 1rem; }
@@ -3262,23 +3268,47 @@ app.get('/c/:category', async (req, res) => {
 
     // Serve index.html (same design as homepage) with category pre-filtered news
     try {
-        // Cap the ENTIRE DB-dependent part (connect + query) to a short budget so a
-        // slow/cold MongoDB Atlas connection can never block the page shell itself —
-        // see the matching comment on '/' above for why this isn't just an 8s connect-wait.
+        // Reuse the same stale-while-revalidate cache as GET /api/news (keyed by catId)
+        // instead of always querying fresh — see the matching comment on '/' above for
+        // why the old always-query-with-a-2s-timeout approach left SSR/preloaded news
+        // empty on almost every request. Rajya state-filtered views aren't cached (same
+        // as /api/news's cacheAllowed rule), so they keep the direct time-capped query.
         let initialNews = [];
-        try {
-            await Promise.race([
-                (async () => {
-                    if (!isMongoDBConnected) await connectDB();
-                    const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
-                    const query = { category: catId, isOriginal: { $ne: true } };
-                    if (state) query.state = state;
-                    const docs = await News.find(query, projection).sort({ date: -1 }).limit(200).lean();
-                    initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
-                })(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-            ]);
-        } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
+        if (state) {
+            try {
+                await Promise.race([
+                    (async () => {
+                        if (!isMongoDBConnected) await connectDB();
+                        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
+                        const query = { category: catId, isOriginal: { $ne: true }, state };
+                        const docs = await News.find(query, projection).sort({ date: -1 }).limit(200).lean();
+                        initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
+                    })(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                ]);
+            } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
+        } else {
+            const cachedCat = newsCache.get(catId);
+            if (cachedCat) {
+                initialNews = cachedCat.data;
+                if (cachedCat.expires <= Date.now() && !cachedCat.refreshing) {
+                    cachedCat.refreshing = true;
+                    fetchNewsForCache(catId, { category: catId, isOriginal: { $ne: true } }, false, 0, 200)
+                        .catch(err => console.error('Background category cache refresh failed:', err.message))
+                        .finally(() => { const c = newsCache.get(catId); if (c) c.refreshing = false; });
+                }
+            } else {
+                try {
+                    await Promise.race([
+                        (async () => {
+                            if (!isMongoDBConnected) await connectDB();
+                            initialNews = await fetchNewsForCache(catId, { category: catId, isOriginal: { $ne: true } }, false, 0, 200);
+                        })(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                    ]);
+                } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
+            }
+        }
 
         const htmlPath = path.join(__dirname, 'public', 'index.html');
         let html;
@@ -3747,25 +3777,34 @@ app.get('/', async (req, res) => {
         return res.redirect(301, `/c/${qCat}`);
     }
     try {
-        // Cap the ENTIRE DB-dependent part (connect + query) to a short budget so a
-        // slow/cold MongoDB Atlas connection can never block the page shell itself —
-        // only the SSR news cards are skipped; client-side JS already re-fetches
-        // /api/news right after load regardless, so nothing is lost, just rendered
-        // a beat later. Previously this only capped the connect() phase (8s) and let
-        // the subsequent News.find() run unbounded (up to the 45s socketTimeoutMS),
-        // which made '/' hang for 10-70s whenever Atlas was slow to reconnect.
+        // Reuse the same stale-while-revalidate cache as GET /api/news (key 'all') instead
+        // of always querying fresh — an uncached query on the shared Atlas tier routinely
+        // takes 10-15s, far past any reasonable page-shell budget, which used to mean the
+        // 2s timeout below fired on almost every request and both SSR cards and the
+        // client's preloaded __INITIAL_NEWS__ came back empty (client JS then had to
+        // re-fetch /api/news from scratch, repeating the same 10-15s wait with nothing
+        // visible in between — the reported "no news until refresh" symptom).
         let initialNews = [];
-        try {
-            await Promise.race([
-                (async () => {
-                    if (!isMongoDBConnected) await connectDB();
-                    const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
-                    const docs = await News.find({ isOriginal: { $ne: true } }, projection).sort({ date: -1 }).limit(200).lean();
-                    initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
-                })(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-            ]);
-        } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
+        const cachedAll = newsCache.get('all');
+        if (cachedAll) {
+            initialNews = cachedAll.data;
+            if (cachedAll.expires <= Date.now() && !cachedAll.refreshing) {
+                cachedAll.refreshing = true;
+                fetchNewsForCache('all', { isOriginal: { $ne: true } }, false, 0, 200)
+                    .catch(err => console.error('Background homepage cache refresh failed:', err.message))
+                    .finally(() => { const c = newsCache.get('all'); if (c) c.refreshing = false; });
+            }
+        } else {
+            try {
+                await Promise.race([
+                    (async () => {
+                        if (!isMongoDBConnected) await connectDB();
+                        initialNews = await fetchNewsForCache('all', { isOriginal: { $ne: true } }, false, 0, 200);
+                    })(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+                ]);
+            } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
+        }
         let html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
         const payload = JSON.stringify(initialNews).replace(/<\/script>/gi, '<\\/script>');
         html = html.replace('</head>', `<script>window.__INITIAL_NEWS__=${payload};</script></head>`);
@@ -3896,10 +3935,30 @@ app.post('/api/change-password', requireAuth, (req, res) => {
     }
 });
 
-// Simple in-memory cache for news list (60 s TTL — short to stay in sync across Vercel instances)
-const newsCache = new Map(); // key: category|all, value: { data, expires }
-const NEWS_CACHE_TTL = 60 * 1000; // 60 seconds
+// In-memory cache for news list, stale-while-revalidate (see fetchNewsForCache below).
+// TTL raised from the old 60s: the shared/free MongoDB Atlas tier can take 10-15s for
+// an uncached query, so short TTLs meant most real visitors hit that slow path anyway.
+const newsCache = new Map(); // key: category|all, value: { data, expires, refreshing }
+const NEWS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 function invalidateNewsCache() { newsCache.clear(); }
+
+// Runs the News.find + curation query for one cache key and stores the result.
+// Shared by the cache-miss (synchronous, must await) and stale-cache (background,
+// fire-and-forget) paths in GET /api/news below.
+async function fetchNewsForCache(cacheKey, query, writtenOnly, skip, limit) {
+    const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, importantAt: 1, state: 1 };
+    const news = await News.find(query, projection).sort({ date: -1 }).skip(skip).limit(limit).lean();
+    const newsData = news.map(item => ({
+        ...item,
+        full: item.full === true || isFullArticleContent(String(item.content || '')),
+        id: item._id.toString()
+    }));
+    const finalNewsData = (!writtenOnly && skip === 0) ? curateNewsFeed(newsData, await getAuthorNameSet()) : newsData;
+    if (finalNewsData.length > 0) {
+        newsCache.set(cacheKey, { data: finalNewsData, expires: Date.now() + NEWS_CACHE_TTL, refreshing: false });
+    }
+    return finalNewsData;
+}
 
 app.post('/api/fix-imported-content', requireAuth, async (req, res) => {
     try {
@@ -3960,14 +4019,6 @@ app.get('/api/news', async (req, res) => {
             }
         }
 
-        if (cacheAllowed) {
-            const cached = newsCache.get(cacheKey);
-            if (cached && cached.expires > Date.now()) {
-                res.set('X-Cache', 'HIT');
-                return res.json(cached.data);
-            }
-        }
-
         let query = {};
         if (writtenOnly) {
             query = { isOriginal: true };
@@ -4002,30 +4053,32 @@ app.get('/api/news', async (req, res) => {
             const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
             query.date = { $gte: cutoff };
         }
-        const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, importantAt: 1, state: 1 };
 
-        const news = await News.find(query, projection)
-            .sort({ date: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean();
-
-        const newsData = news.map(item => ({
-            ...item,
-            full: item.full === true || isFullArticleContent(String(item.content || '')),
-            id: item._id.toString()
-        }));
-
-        // Homepage/category "Top 5 + list of 10" composition — reorders only, no
-        // article is ever removed. Applies to both the homepage (no category) and
-        // per-category feeds; skipped for pagination and the writtenOnly (isOriginal) feed.
-        const finalNewsData = (!writtenOnly && skip === 0)
-            ? curateNewsFeed(newsData, await getAuthorNameSet())
-            : newsData;
-
-        if (cacheAllowed && finalNewsData.length > 0) {
-            newsCache.set(cacheKey, { data: finalNewsData, expires: Date.now() + NEWS_CACHE_TTL });
+        if (cacheAllowed) {
+            const cached = newsCache.get(cacheKey);
+            if (cached) {
+                if (cached.expires > Date.now()) {
+                    res.set('X-Cache', 'HIT');
+                    return res.json(cached.data);
+                }
+                // Stale: a fresh query on the shared Atlas tier can take 10s+, so never make
+                // the user wait on it — serve the last-known data now and refresh in the
+                // background for the next request. Avoid piling up duplicate refreshes if
+                // several requests arrive while one is already in flight.
+                res.set('X-Cache', 'STALE');
+                res.json(cached.data);
+                if (!cached.refreshing) {
+                    cached.refreshing = true;
+                    fetchNewsForCache(cacheKey, query, writtenOnly, skip, limit)
+                        .catch(err => console.error('Background news cache refresh failed:', err.message))
+                        .finally(() => { const c = newsCache.get(cacheKey); if (c) c.refreshing = false; });
+                }
+                return;
+            }
         }
+
+        // No cache entry at all (first request for this key, or just invalidated) — must query now.
+        const finalNewsData = await fetchNewsForCache(cacheKey, query, writtenOnly, skip, limit);
         res.set('X-Cache', 'MISS');
         res.json(finalNewsData);
     } catch (error) {
@@ -4727,9 +4780,15 @@ app.post('/api/admin/delete-old-articles', requireAuth, async (req, res) => {
         cutoff.setMonth(cutoff.getMonth() - 1);
         cutoff.setHours(0, 0, 0, 0);
 
-        // Fetch matching articles first so we can clean up their Cloudinary images
+        // Only ever-unread articles (0 views) are eligible — anything that got at least
+        // one reader is kept regardless of age. `views` is missing on legacy docs predating
+        // the field, treated the same as 0.
         const toDelete = await News.find(
-            { date: { $lt: cutoff }, isPermanent: { $ne: true } },
+            {
+                date: { $lt: cutoff },
+                isPermanent: { $ne: true },
+                $or: [{ views: { $exists: false } }, { views: 0 }]
+            },
             { _id: 1, photos: 1 }
         ).lean();
 
@@ -4739,7 +4798,7 @@ app.post('/api/admin/delete-old-articles', requireAuth, async (req, res) => {
 
         const result = await News.deleteMany({ _id: { $in: toDelete.map(a => a._id) } });
         invalidateNewsCache();
-        console.log(`🗑️ Admin deleted ${result.deletedCount} articles older than 1 month (cutoff: ${cutoff.toISOString()}) + Cloudinary images`);
+        console.log(`🗑️ Admin deleted ${result.deletedCount} unread (0-view) articles older than 1 month (cutoff: ${cutoff.toISOString()}) + Cloudinary images`);
         res.json({ success: true, deleted: result.deletedCount });
     } catch (err) {
         res.status(500).json({ error: err.message });

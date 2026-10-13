@@ -15,7 +15,9 @@
     <title>लाइव फीड — ताज़ा खबरें | वॉयस ऑफ क्रांति</title>
     <meta name="description" content="वॉयस ऑफ क्रांति की ताज़ातरीन खबरें — आगमन समय के अनुसार। हर मिनट अपडेट।">
     <meta name="robots" content="noindex, follow">
-    <link rel="stylesheet" href="/styles.css?v=21">
+    <link rel="preload" href="/styles.css?v=21" as="style">
+    <link rel="stylesheet" href="/styles.css?v=21" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="/styles.css?v=21"></noscript>
     <style>
         .lf-hero {
             background: linear-gradient(135deg, #0a0a1a 0%, #0f172a 60%, #1e1b4b 100%);

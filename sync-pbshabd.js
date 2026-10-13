@@ -29,10 +29,13 @@ const IMPORT_TYPES       = new Set(['RUSH', 'PRI', 'URG']);
 const VALID_IMAGE_EXTS   = new Set(['.JPG', '.JPEG', '.PNG', '.WEBP', '.GIF']);
 
 const CRIME_CATEGORY_ID = '19';
+// Every major Hindi-belt state plus the other states we show a rajya filter for.
 const TARGET_STATES = [
     'UTTAR PRADESH', 'MADHYA PRADESH', 'RAJASTHAN', 'CHHATTISGARH',
     'HARYANA', 'PUNJAB', 'TELANGANA', 'ANDHRA PRADESH',
     'KARNATAKA', 'KERALA', 'BIHAR', 'WEST BENGAL',
+    'GUJARAT', 'MAHARASHTRA', 'JHARKHAND', 'UTTARAKHAND',
+    'HIMACHAL PRADESH', 'DELHI',
 ];
 
 // Priority-ordered: crime is checked first so a story naming a place/topic alongside
@@ -105,6 +108,7 @@ const STATE_MAP = {
     'andhra pradesh': 'andhra_pradesh',
     'karnataka': 'karnataka',
     'west bengal': 'west_bengal',
+    'delhi': 'delhi', 'दिल्ली': 'delhi', 'new delhi': 'delhi', 'नई दिल्ली': 'delhi',
 };
 
 function detectState(title, stateHint, desc) {
@@ -250,11 +254,20 @@ function cleanPbContent(text, title) {
     const norm = s => (s || '').trim().replace(/\s+/g, ' ');
     let t = text.trim();
     let synopsis = '';
+    // Everything from the "story folder" footer onward is TV/radio production metadata
+    // (byte/soundbite references, clip captions for the newsroom's own editing use) —
+    // never meant for public reading. Truncate it before the per-line label filter below.
+    const folderIdx = t.search(/इस\s*स्टोरी\s*फोल्डर\s*में/);
+    if (folderIdx !== -1) t = t.slice(0, folderIdx).trim();
     t = t.split('\n')
         .filter(line => {
-            const m = line.trim().match(/^Synopsis\s*:\s*(.*)$/i);
+            const trimmed = line.trim();
+            const m = trimmed.match(/^Synopsis\s*:\s*(.*)$/i);
             if (m) { synopsis = m[1].trim(); return false; }
-            return !/^(Relevance|Slug|Title|Category|Deadline|Priority)\s*:/i.test(line.trim());
+            if (/^(Relevance|Slug|Title|Category|Deadline|Priority|Marking)\s*:/i.test(trimmed)) return false;
+            // Defensive: drop stray byte/caption/PTC lines even without the folder header above
+            if (/^(बाइट|byte|caption|ptc|anchor)\s*:/i.test(trimmed)) return false;
+            return true;
         })
         .join('\n').replace(/^\n+/, '').trim();
     // Strip leading title repeat
@@ -264,6 +277,23 @@ function cleanPbContent(text, title) {
         t = end >= 0 ? t.slice(end) : t;
     }
     t = t.replace(/^\n+/, '').trim();
+
+    // PB often repeats the headline verbatim as the story's final line (their "caption").
+    // Per editorial decision: keep it, but bold it so it renders as a highlighted line
+    // instead of an unremarkable duplicate paragraph.
+    if (t && titlePrefix) {
+        const lines = t.split('\n');
+        let lastIdx = lines.length - 1;
+        while (lastIdx >= 0 && !lines[lastIdx].trim()) lastIdx--;
+        if (lastIdx >= 0) {
+            const lastLine = lines[lastIdx].trim();
+            if (norm(lastLine).startsWith(titlePrefix) && !lastLine.startsWith('**')) {
+                lines[lastIdx] = `**${lastLine}**`;
+                t = lines.join('\n');
+            }
+        }
+    }
+
     return synopsis ? (t ? `## ${synopsis}\n\n${t}` : `## ${synopsis}`) : t;
 }
 
@@ -334,6 +364,9 @@ async function main() {
         // Crime (all states)
         { page: 1, state: '', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'Crime pg1' },
         { page: 2, state: '', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'Crime pg2' },
+        // MP crime specifically — the all-states crime pass above can miss MP stories that
+        // PB didn't tag under its crime category but did tag with state=MADHYA PRADESH.
+        { page: 1, state: 'MADHYA PRADESH', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'MP Crime' },
         // MP and UP get 2 pages each — priority states
         { page: 1, state: 'MADHYA PRADESH', pbCatId: '', search: '', label: 'MP pg1' },
         { page: 2, state: 'MADHYA PRADESH', pbCatId: '', search: '', label: 'MP pg2' },

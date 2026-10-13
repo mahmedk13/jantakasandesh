@@ -29,6 +29,7 @@ const STATE_MAP = {
     'andhra pradesh': 'andhra_pradesh',
     'karnataka': 'karnataka',
     'west bengal': 'west_bengal',
+    'delhi': 'delhi', 'दिल्ली': 'delhi',
 };
 
 function detectState(title, content) {

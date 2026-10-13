@@ -181,6 +181,7 @@
                         <option value="andhra_pradesh">आंध्र प्रदेश</option>
                         <option value="karnataka">कर्नाटक</option>
                         <option value="west_bengal">पश्चिम बंगाल</option>
+                        <option value="delhi">दिल्ली</option>
                         <option value="other">अन्य राज्य</option>
                     </select>
                 </div>
@@ -1760,7 +1761,7 @@
         }
 
         async function deleteOldArticles() {
-            if (!confirm('1 महीने से पुरानी सभी खबरें हटाई जाएंगी (Permanent खबरें सुरक्षित रहेंगी)। क्या आप सुनिश्चित हैं?')) return;
+            if (!confirm('1 महीने से पुरानी और 0 व्यूस वाली खबरें हटाई जाएंगी (Permanent खबरें और जिन्हें कम से कम 1 व्यू मिला हो, सुरक्षित रहेंगी)। क्या आप सुनिश्चित हैं?')) return;
             const btn = document.getElementById('deleteOldBtn');
             const status = document.getElementById('rssStatus');
             btn.disabled = true;
@@ -1773,7 +1774,7 @@
                 });
                 const data = await response.json();
                 if (response.ok) {
-                    status.textContent = `✅ ${data.deleted} पुरानी खबरें हटाई गईं`;
+                    status.textContent = `✅ ${data.deleted} पुरानी अविकसित (0 व्यू) खबरें हटाई गईं`;
                     status.style.color = '#38a169';
                     loadNews();
                 } else {
@@ -1785,7 +1786,7 @@
                 status.style.color = '#e53e3e';
             } finally {
                 btn.disabled = false;
-                btn.textContent = '🗑️ 1 महीने पुरानी खबरें हटाएं';
+                btn.textContent = '🗑️ 1 महीने पुरानी, 0-व्यू खबरें हटाएं';
             }
         }
 

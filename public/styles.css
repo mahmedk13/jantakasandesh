@@ -1407,10 +1407,17 @@ textarea.form-input {
     margin: 1rem 0 1.5rem;
     min-height: 90px;
 }
+.ad-zone-article {
+    margin: 1.5rem 0;
+    min-height: 250px;
+}
 @media (max-width: 768px) {
     .ad-zone-leaderboard {
         max-width: 100%;
         min-height: 50px;
+    }
+    .ad-zone-article {
+        min-height: 100px;
     }
 }
 
