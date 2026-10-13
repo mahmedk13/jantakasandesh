@@ -3691,7 +3691,9 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const brand = req.brand;
         const count = Math.min(Math.max(parseInt(req.query.count, 10) || 50, 1), 100);
 
-        const query = { slug: { $exists: true, $ne: '' }, isOriginal: { $ne: true } };
+        // Every published article (original + PB SHABD + RSS/API-imported) belongs in
+        // the public RSS feed — this is a full content feed, not a curated subset.
+        const query = { slug: { $exists: true, $ne: '' } };
         if (categoryFilter) query.category = categoryFilter;
 
         const articles = await News.find(query, {

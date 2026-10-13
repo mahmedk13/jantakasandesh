@@ -167,6 +167,22 @@ function transliterate(text) {
             result += 'n';
         } else if (ch === 'ः' || ch === '़' || ch === '।' || ch === '॥') {
             // Visarga, nukta, dandas → skip
+        } else if (ch === 'ज' && next === HALANT && chars[i + 2] === 'ञ') {
+            // ज्ञ conjunct ("gya" sound, e.g. गणितज्ञ, विज्ञान, ज्ञान, सर्वज्ञ) — handled as one unit;
+            // char-by-char processing would otherwise split it into 'j'+'ny' (e.g. "ganitajny").
+            const afterConjunct = chars[i + 3];
+            if (MATRA_MAP[afterConjunct] !== undefined) {
+                result += 'gy' + MATRA_MAP[afterConjunct];
+                i += 3;
+            } else if (afterConjunct === HALANT) {
+                result += 'gy';
+                i += 3;
+            } else {
+                // Word-final or before another consonant — real pronunciation keeps the
+                // 'a' here (unlike the general word-final schwa-deletion rule above).
+                result += 'gya';
+                i += 2;
+            }
         } else if (CONSONANT_MAP[ch]) {
             if (next === HALANT) {
                 // Halant cancels inherent 'a' → emit consonant-only, skip halant
@@ -209,13 +225,23 @@ const SLUG_STOP_WORDS = new Set([
     'होगी','होंगे','किया','किए','किसी','किसने','कहा','बोला','चाहिए','बहुत',
 ]);
 
+// Common Hindi words where the simple consonant-vowel transliteration algorithm
+// misreads mid-word schwa deletion (e.g. जानते sounds like "jaante/jante", not the
+// mechanical "janate") — kept as a small exception list rather than a general
+// schwa-deletion algorithm, which is a much harder problem and risks mistransliterating
+// words that already work correctly.
+const SLUG_WORD_OVERRIDES = {
+    'जानते': 'jante',
+};
+
 function generateSlug(heading) {
     // 1. Split into words; filter stop words; take first 6 significant words
     const words = heading.split(/[\s,।\-:!?;]+/).filter(w => w.length >= 2);
     const significant = words.filter(w => !SLUG_STOP_WORDS.has(w)).slice(0, 6);
     const toSlugify = significant.length >= 2 ? significant : words.slice(0, 6);
-    // 2. Transliterate, collapse hyphens, trim, cap at 50 chars
-    const base = transliterate(toSlugify.join(' '))
+    // 2. Transliterate (per word, with overrides for common mid-word schwa-deletion
+    // cases the mechanical algorithm gets wrong), collapse hyphens, trim, cap at 50 chars
+    const base = toSlugify.map(w => SLUG_WORD_OVERRIDES[w] || transliterate(w)).join('-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 50);
