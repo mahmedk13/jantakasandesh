@@ -3262,25 +3262,23 @@ app.get('/c/:category', async (req, res) => {
 
     // Serve index.html (same design as homepage) with category pre-filtered news
     try {
-        // Wait for DB on cold start (up to 8s) so this container doesn't render an
-        // empty shell — mirrors the retry pattern already used by /news/:slug and /api/news
-        if (!isMongoDBConnected) {
-            try {
-                await Promise.race([
-                    connectDB(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-                ]);
-            } catch (_) { /* timeout — fall through and render with whatever we have */ }
-        }
+        // Cap the ENTIRE DB-dependent part (connect + query) to a short budget so a
+        // slow/cold MongoDB Atlas connection can never block the page shell itself —
+        // see the matching comment on '/' above for why this isn't just an 8s connect-wait.
         let initialNews = [];
-        if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
-            const query = { category: catId, isOriginal: { $ne: true } };
-            if (state) query.state = state;
-            const docs = await News.find(query, projection)
-                .sort({ date: -1 }).limit(200).lean();
-            initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
-        }
+        try {
+            await Promise.race([
+                (async () => {
+                    if (!isMongoDBConnected) await connectDB();
+                    const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
+                    const query = { category: catId, isOriginal: { $ne: true } };
+                    if (state) query.state = state;
+                    const docs = await News.find(query, projection).sort({ date: -1 }).limit(200).lean();
+                    initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
+                })(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+            ]);
+        } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
 
         const htmlPath = path.join(__dirname, 'public', 'index.html');
         let html;
@@ -3749,22 +3747,25 @@ app.get('/', async (req, res) => {
         return res.redirect(301, `/c/${qCat}`);
     }
     try {
-        // Wait for DB on cold start (up to 8s) so this container doesn't render an
-        // empty shell — mirrors the retry pattern already used by /news/:slug and /api/news
-        if (!isMongoDBConnected) {
-            try {
-                await Promise.race([
-                    connectDB(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
-                ]);
-            } catch (_) { /* timeout — fall through and render with whatever we have */ }
-        }
+        // Cap the ENTIRE DB-dependent part (connect + query) to a short budget so a
+        // slow/cold MongoDB Atlas connection can never block the page shell itself —
+        // only the SSR news cards are skipped; client-side JS already re-fetches
+        // /api/news right after load regardless, so nothing is lost, just rendered
+        // a beat later. Previously this only capped the connect() phase (8s) and let
+        // the subsequent News.find() run unbounded (up to the 45s socketTimeoutMS),
+        // which made '/' hang for 10-70s whenever Atlas was slow to reconnect.
         let initialNews = [];
-        if (isMongoDBConnected) {
-            const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
-            const docs = await News.find({ isOriginal: { $ne: true } }, projection).sort({ date: -1 }).limit(200).lean();
-            initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
-        }
+        try {
+            await Promise.race([
+                (async () => {
+                    if (!isMongoDBConnected) await connectDB();
+                    const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
+                    const docs = await News.find({ isOriginal: { $ne: true } }, projection).sort({ date: -1 }).limit(200).lean();
+                    initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
+                })(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+            ]);
+        } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
         let html = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
         const payload = JSON.stringify(initialNews).replace(/<\/script>/gi, '<\\/script>');
         html = html.replace('</head>', `<script>window.__INITIAL_NEWS__=${payload};</script></head>`);
