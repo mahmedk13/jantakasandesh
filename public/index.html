@@ -454,6 +454,12 @@
         let allNewsData = [];
         let tickerLoaded = false;
         var shownCatHeaders = new Set();
+        // Bumped on every category/filter switch (reset=true) so a slow, now-stale
+        // request from an earlier click can never overwrite a newer one's result
+        // (e.g. clicking Bhopal right after Vyapar used to be able to render
+        // Vyapar's data under the Bhopal URL/active-highlight if Vyapar's fetch
+        // happened to resolve later).
+        let loadRequestToken = 0;
 
         // Detect mobile browser
         const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
@@ -520,8 +526,14 @@
         }
 
         async function loadNews(reset) {
-            if (isLoading) return;
-            if (!reset && !hasMore) return;
+            // Category/filter switches always supersede whatever is in flight — never
+            // block on isLoading here, or an earlier slow request can silently swallow
+            // this click (see loadRequestToken comment above for the full failure mode).
+            if (!reset) {
+                if (isLoading) return;
+                if (!hasMore) return;
+            }
+            const myLoadToken = reset ? ++loadRequestToken : loadRequestToken;
             isLoading = true;
 
             if (!reset && currentPage > 0) {
@@ -564,6 +576,10 @@
                     }
                     // Specific category views are left as-is: curateNewsFeed() already ordered them server-side.
                 }
+
+                // A newer category/filter switch started after this fetch began — discard
+                // this now-stale response instead of rendering the wrong category's data.
+                if (myLoadToken !== loadRequestToken) { isLoading = false; return; }
 
                 if (reset) {
                     currentPage = 0;
