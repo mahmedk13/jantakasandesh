@@ -2895,8 +2895,15 @@ app.get('/news/:slug', async (req, res) => {
         html = applyBrand(html, req.brand);
         html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        // Prevent Vercel edge caching so social crawlers always get fresh OG tags
-        res.setHeader('Cache-Control', 'no-store');
+        // Edge-cache successfully rendered articles briefly — views are tracked via a
+        // separate client-triggered API call (not this SSR render), so a short cache
+        // window doesn't lose view counts, and an edit lands within ~2 min. Keep
+        // dbError/degraded fallback renders uncached so they're never stuck stale.
+        if (article && !dbError) {
+            res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1800');
+        } else {
+            res.setHeader('Cache-Control', 'no-store');
+        }
         res.send(html);
     } catch (err) {
         console.error('Slug route error:', err.message);
@@ -3339,6 +3346,11 @@ app.get('/c/:category', async (req, res) => {
         html = applyBrand(html, req.brand);
         html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        // Same short edge cache as homepage; skip for state-filtered rajya views since
+        // those already bypass the in-memory cache and are cheap/low-traffic anyway.
+        if (!state) {
+            res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+        }
         res.send(html);
     } catch (err) {
         console.error('Category page error:', err.message);
@@ -3391,8 +3403,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
             // Always revalidate HTML so CSS/JS version bumps are picked up instantly
             res.setHeader('Cache-Control', 'no-cache');
         } else if (/\.(css|js|png|jpg|jpeg|webp|gif|svg|ico|woff2?)$/.test(filePath)) {
-            // Assets — 7 days (versioned via ?v= query string in HTML)
-            res.setHeader('Cache-Control', 'public, max-age=604800');
+            // Assets — 7 days browser + edge cache (versioned via ?v= query string in
+            // HTML); s-maxage lets Vercel's CDN serve repeat asset requests directly
+            // instead of invoking this function for every CSS/image/font load.
+            res.setHeader('Cache-Control', 'public, max-age=604800, s-maxage=604800');
         }
     }
 }));
@@ -3815,6 +3829,9 @@ app.get('/', async (req, res) => {
         html = applyBrand(html, req.brand);
         html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        // Short edge cache — offloads repeat homepage hits to Vercel's CDN instead of
+        // re-running SSR/brand rewriting per request; client JS still re-fetches /api/news.
+        res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
         res.send(html);
     } catch (err) {
         // Fall back to static file if SSR fails
@@ -4057,6 +4074,9 @@ app.get('/api/news', async (req, res) => {
         }
 
         if (cacheAllowed) {
+            // Public, cacheable query shape — let Vercel's edge serve repeat hits
+            // directly without invoking the function at all (cuts invocations + CPU).
+            res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
             const cached = newsCache.get(cacheKey);
             if (cached) {
                 if (cached.expires > Date.now()) {
