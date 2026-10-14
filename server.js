@@ -2824,8 +2824,16 @@ app.get('/news/:slug', async (req, res) => {
                 `<div id="newsDetail" class="news-detail-container" data-ssr-article="true">${articleMarkup}</div>`
             );
 
+            // Escapes <, >, & in a JSON string so embedded article text can never
+            // contain a literal "</script>" (or similar) that prematurely closes the
+            // <script> tag and truncates the JSON — the truncation is what Search
+            // Console reports as "Parsing error: Missing ',' or '}'". \uXXXX escapes
+            // are valid JSON and decode back to the same characters, so this is a no-op
+            // for the parsed data itself.
+            const safeJsonLd = obj => JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+
             // NewsArticle JSON-LD schema for Google (server-side so crawlers see it)
-            const schema = JSON.stringify({
+            const schema = safeJsonLd({
                 "@context": "https://schema.org",
                 "@type": "NewsArticle",
                 "mainEntityOfPage": { "@type": "WebPage", "@id": pageUrl },
@@ -2858,7 +2866,7 @@ app.get('/news/:slug', async (req, res) => {
             ];
             if (catName) breadcrumbItems.push({ "@type": "ListItem", "position": 2, "name": catName, "item": `https://voiceofkranti.com/c/${article.category}` });
             breadcrumbItems.push({ "@type": "ListItem", "position": catName ? 3 : 2, "name": article.heading, "item": pageUrl });
-            const breadcrumb = JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": breadcrumbItems });
+            const breadcrumb = safeJsonLd({ "@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": breadcrumbItems });
 
             // news_keywords meta for Google News
             const catKeywordsMap = { desh:'भारत,राष्ट्रीय समाचार,देश', videsh:'विदेश समाचार,अंतर्राष्ट्रीय', rajya:'राज्य समाचार,मध्यप्रदेश', bhopal:'भोपाल,मध्यप्रदेश', crime:'अपराध,क्राइम न्यूज़', khel:'खेल समाचार,sports news', rajniti:'राजनीति,politics', manoranjan:'मनोरंजन,बॉलीवुड', vyapar:'व्यापार,business', itihas:'इतिहास' };
@@ -3451,6 +3459,12 @@ app.post('/api/media/upload-imagekit', requireAuth, mediaImageKitUpload.single('
 // ── Dynamic sitemap including all live news articles ──────────────────────────
 // Google News sitemap best practice: only articles published in the last 2 days,
 // capped at 1000 URLs. Older/all articles live in the general /sitemap.xml instead.
+// Per-file article cap for /sitemap.xml and /sitemap-articles-N.xml — kept well
+// under the 50,000-URL spec limit so each file stays small/fast to generate and
+// fetch (a single 19k+-article sitemap.xml was ~4MB and took ~20s, which Googlebot
+// was reporting as "Couldn't fetch"); pagination via sitemap-index.xml kicks in
+// automatically once the article count exceeds this.
+const SITEMAP_PAGE_SIZE = 5000;
 app.get('/sitemap-news.xml', async (req, res) => {
     try {
         // Wait for DB on cold start (up to 8s)
@@ -3544,7 +3558,7 @@ app.get('/sitemap.xml', async (req, res) => {
             const articles = await News.find(
                 { slug: { $exists: true, $ne: '' } },
                 { _id: 1, slug: 1, date: 1 }
-            ).sort({ date: -1 }).limit(50000).lean();
+            ).sort({ date: -1 }).limit(SITEMAP_PAGE_SIZE).lean();
             urls = articles.map(a => ({
                 loc: `https://voiceofkranti.com/news/${a.slug}`,
                 lastmod: a.date ? new Date(a.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
@@ -3608,7 +3622,7 @@ app.get('/sitemap-index.xml', async (req, res) => {
         try {
                 if (!isMongoDBConnected) await connectDB();
                 const articleCount = await News.countDocuments({ slug: { $exists: true, $ne: '' } });
-                const pageCount = Math.ceil(articleCount / 50000);
+                const pageCount = Math.ceil(articleCount / SITEMAP_PAGE_SIZE);
                 const today = new Date().toISOString().split('T')[0];
                 const archiveSitemaps = Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => `  <sitemap>
         <loc>https://voiceofkranti.com/sitemap-articles-${index + 2}.xml</loc>
@@ -3644,7 +3658,7 @@ app.get('/sitemap-articles-:page.xml', async (req, res) => {
         const articles = await News.find(
             { slug: { $exists: true, $ne: '' } },
             { slug: 1, date: 1 }
-        ).sort({ date: -1 }).skip((page - 1) * 50000).limit(50000).lean();
+        ).sort({ date: -1 }).skip((page - 1) * SITEMAP_PAGE_SIZE).limit(SITEMAP_PAGE_SIZE).lean();
         if (!articles.length) return res.status(404).send('Sitemap not found');
 
         const urls = articles.map(article => `  <url>
