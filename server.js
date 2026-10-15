@@ -2701,6 +2701,15 @@ app.get('/news/:slug', async (req, res) => {
             return sendBranded(req, res.status(404), path.join(__dirname, 'public', '404.html'), 'text/html; charset=utf-8');
         }
 
+        // DB was unreachable (not "confirmed missing") — must NOT look like a 200 soft-404
+        // to crawlers, so mark this a transient failure (503 + Retry-After) rather than
+        // silently serving the raw template at 200 while the client-side JS underneath
+        // renders "समाचार नहीं मिला". Google treats 503 as "try again later", not "delete
+        // from the index", unlike an undetected soft-404.
+        if (dbError && !article) {
+            res.status(503).set('Retry-After', '30');
+        }
+
         // Read the static HTML template
         const htmlPath = path.join(__dirname, 'public', 'news-detail.html');
         let html = require('fs').readFileSync(htmlPath, 'utf8');
@@ -3720,9 +3729,17 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const count = Math.min(Math.max(parseInt(req.query.count, 10) || 50, 1), 100);
 
         // Every published article (original + PB SHABD + RSS/API-imported) belongs in
-        // the public RSS feed — this is a full content feed, not a curated subset.
+        // the public RSS feed — this is a full content feed, not a curated subset —
+        // except thin articles: skip anything under 1200 chars (incl. spaces) of body
+        // text so the feed only carries substantial stories.
         const query = { slug: { $exists: true, $ne: '' } };
         if (categoryFilter) query.category = categoryFilter;
+        query.$expr = {
+            $gt: [
+                { $strLenCP: { $trim: { input: { $ifNull: ['$content', ''] } } } },
+                1200
+            ]
+        };
 
         const articles = await News.find(query, {
             heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, slug: 1, rssSource: 1
@@ -3735,6 +3752,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
             const excerpt = plainText.slice(0, 300);
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
             const image = (a.photos && a.photos.length > 0) ? a.photos[0] : '';
+            const imageTag = image ? `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>` : '';
             return `  <item>
     <title><![CDATA[${a.heading || ''}]]></title>
     <link>${escapeXmlFeed(link)}</link>
@@ -3742,8 +3760,8 @@ async function handleFeedRequest(req, res, categoryFilter) {
     <pubDate>${toRfc822(a.date)}</pubDate>
     ${catName ? `<category><![CDATA[${catName}]]></category>` : ''}
     <dc:creator><![CDATA[${a.author || a.rssSource || brand.nameHi}]]></dc:creator>
-    <description><![CDATA[${excerpt}]]></description>
-    <content:encoded><![CDATA[${renderedHtml}]]></content:encoded>
+    <description><![CDATA[${imageTag}<p>${excerpt}</p>]]></description>
+    <content:encoded><![CDATA[${imageTag}${renderedHtml}]]></content:encoded>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
   </item>`;
         }).join('\n');
@@ -3973,14 +3991,42 @@ app.post('/api/change-password', requireAuth, (req, res) => {
 // an uncached query, so short TTLs meant most real visitors hit that slow path anyway.
 const newsCache = new Map(); // key: category|all, value: { data, expires, refreshing }
 const NEWS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
-function invalidateNewsCache() { newsCache.clear(); }
+// Mark every cached key stale instead of deleting it outright. A hard `clear()` forces
+// the NEXT reader of ANY category (not just the one just edited) into a synchronous
+// ~13-15s Atlas query — see repo memory on the M0 tier's per-query latency — and this
+// runs on every single publish/edit/delete, including frequent automated ones (hourly
+// PB SHABD sync, RSS import). Keeping `data` in place lets GET /api/news's existing
+// stale-while-revalidate path serve the (briefly outdated) list instantly while it
+// refreshes in the background, same staleness tradeoff already accepted elsewhere.
+function invalidateNewsCache() {
+    for (const entry of newsCache.values()) entry.expires = 0;
+}
 
 // Runs the News.find + curation query for one cache key and stores the result.
 // Shared by the cache-miss (synchronous, must await) and stale-cache (background,
 // fire-and-forget) paths in GET /api/news below.
+// Default feed view (homepage/category first page) is scoped to the last few days
+// first — most categories publish enough daily content that this alone fills a page,
+// and it keeps the query + cached JSON payload much smaller/faster on the shared Atlas
+// tier. Sparse categories/pb/full-only views transparently fall back to the full,
+// unbounded history so nothing ever looks emptier than before. Older articles are
+// still reachable — the client re-fetches with skip>0 once it runs out of this batch,
+// which always queries the full unbounded history (see the `else` branch below).
+const RECENT_WINDOW_DAYS = 3;
+const RECENT_WINDOW_MIN_RESULTS = 30;
 async function fetchNewsForCache(cacheKey, query, writtenOnly, skip, limit) {
     const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, importantAt: 1, state: 1 };
-    const news = await News.find(query, projection).sort({ date: -1 }).skip(skip).limit(limit).lean();
+    let news;
+    const windowEligible = !writtenOnly && skip === 0 && cacheKey !== 'full' && cacheKey !== 'pb';
+    if (windowEligible) {
+        const recentCutoff = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+        news = await News.find({ ...query, date: { $gte: recentCutoff } }, projection).sort({ date: -1 }).limit(limit).lean();
+        if (news.length < Math.min(RECENT_WINDOW_MIN_RESULTS, limit)) {
+            news = await News.find(query, projection).sort({ date: -1 }).limit(limit).lean();
+        }
+    } else {
+        news = await News.find(query, projection).sort({ date: -1 }).skip(skip).limit(limit).lean();
+    }
     const newsData = news.map(item => ({
         ...item,
         full: item.full === true || isFullArticleContent(String(item.content || '')),

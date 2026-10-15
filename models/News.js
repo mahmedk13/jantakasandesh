@@ -232,6 +232,7 @@ const SLUG_STOP_WORDS = new Set([
 // words that already work correctly.
 const SLUG_WORD_OVERRIDES = {
     'जानते': 'jante',
+    'यूपी': 'up',
 };
 
 function generateSlug(heading) {

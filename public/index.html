@@ -456,6 +456,11 @@
         const itemsPerPage = 20;
         let allNewsData = [];
         let tickerLoaded = false;
+        // The initial fetch only covers the last few days (see server's RECENT_WINDOW_DAYS) —
+        // once the client-side slicing below exhausts that batch, this stays true until a
+        // skip-based re-fetch for older articles comes back empty, confirming there's truly
+        // nothing more (reset on every category/filter switch alongside hasMore).
+        let serverHasOlderNews = true;
         var shownCatHeaders = new Set();
         // Bumped on every category/filter switch (reset=true) so a slow, now-stale
         // request from an earlier click can never overwrite a newer one's result
@@ -593,6 +598,7 @@
                 if (reset) {
                     currentPage = 0;
                     hasMore = true;
+                    serverHasOlderNews = true;
                     newsList.innerHTML = '';
                     tickerLoaded = false;
                     shownCatHeaders.clear();
@@ -734,6 +740,25 @@
                 hasMore = endIndex < allNewsData.length;
 
                 if (pageItems.length === 0) {
+                    // The initial fetch only covers the last few days (server-side recent
+                    // window) — exhausting it doesn't mean there's no more news, just that
+                    // older articles need a real server fetch (skip-based, bypasses that window).
+                    if (serverHasOlderNews && !writtenOnly) {
+                        try {
+                            const olderUrl = (currentCategory === 'all' ? '/api/news?' : '/api/news?category=' + currentCategory + '&')
+                                + 'skip=' + allNewsData.length + '&limit=100'
+                                + (currentState ? '&state=' + encodeURIComponent(currentState) : '');
+                            const olderResp = await fetch(olderUrl, { credentials: 'same-origin' });
+                            const olderData = olderResp.ok ? (await olderResp.json()).filter(function(n) { return !n.isOriginal; }) : [];
+                            if (myLoadToken !== loadRequestToken) { isLoading = false; return; }
+                            if (olderData.length > 0) {
+                                allNewsData = allNewsData.concat(olderData);
+                                isLoading = false;
+                                return loadNews();
+                            }
+                            serverHasOlderNews = false;
+                        } catch (_) { serverHasOlderNews = false; }
+                    }
                     hasMore = false;
                     updateViewMoreBtn();
                     isLoading = false;

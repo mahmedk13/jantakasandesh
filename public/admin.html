@@ -1097,7 +1097,20 @@
                 if (response.ok) {
                     showMessage(newsId ? 'समाचार सफलतापूर्वक अपडेट हो गई है!' : 'समाचार सफलतापूर्वक प्रकाशित हो गई है!', 'success');
                     resetForm();
-                    loadNews();
+                    // Show the saved article immediately — the shared /api/news cache was
+                    // just invalidated server-side, so the next fetch there can take 10+
+                    // seconds on a cold query; don't make the admin wait on it to see their
+                    // own just-published article.
+                    if (data.news) {
+                        const idx = allNewsData.findIndex(n => n.id === data.news.id);
+                        if (idx !== -1) {
+                            allNewsData[idx] = data.news;
+                        } else {
+                            allNewsData.unshift(data.news);
+                        }
+                        applyNewsFilter();
+                    }
+                    loadNews(); // reconcile with server in the background (not awaited)
                 } else {
                     showMessage('त्रुटि: ' + data.error, 'error');
                 }
