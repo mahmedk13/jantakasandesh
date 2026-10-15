@@ -3771,6 +3771,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
+            const creatorName = a.author || a.rssSource || brand.nameHi;
             const image = a.photos[0];
             const imageTag = `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>`;
             return `  <item>
@@ -3779,7 +3780,8 @@ async function handleFeedRequest(req, res, categoryFilter) {
     <guid isPermaLink="true">${escapeXmlFeed(link)}</guid>
     <pubDate>${toRfc822(a.date)}</pubDate>
     ${catName ? `<category><![CDATA[${safeCdata(catName)}]]></category>` : ''}
-    <dc:creator><![CDATA[${safeCdata(a.author || a.rssSource || brand.nameHi)}]]></dc:creator>
+    <dc:creator><![CDATA[${safeCdata(creatorName)}]]></dc:creator>
+    <author><![CDATA[${safeCdata(creatorName)}]]></author>
     <description><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></description>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
     ${image ? `<media:content url="${escapeXmlFeed(image)}" type="image/jpeg" medium="image"/>` : ''}
