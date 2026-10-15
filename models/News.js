@@ -19,6 +19,16 @@ const newsSchema = new mongoose.Schema({
         required: true,
         enum: ['desh', 'videsh', 'rajya', 'bhopal', 'crime', 'khel', 'rajniti', 'manoranjan', 'vyapar', 'itihas']
     },
+    // Which white-label brand/domain this article belongs to (brands.js BRANDS key)
+    // — keeps the two domains' public content fully separate so Google never sees
+    // the same article at two different URLs (cross-domain duplicate content).
+    // Default 'vok' because every pre-existing article was effectively only ever
+    // indexed/ranked under voiceofkranti.com before jantakasandesh.in existed.
+    brand: {
+        type: String,
+        enum: ['vok', 'jks'],
+        default: 'vok'
+    },
     author: {
         type: String,
         required: true,
@@ -127,6 +137,9 @@ const newsSchema = new mongoose.Schema({
 // ── Indexes for fast queries ──────────────────────────────────────────────────
 // Homepage / all-news feed: sort by date
 newsSchema.index({ date: -1 });
+// Brand-filtered homepage / category feed (every public query now filters by brand)
+newsSchema.index({ brand: 1, date: -1 });
+newsSchema.index({ brand: 1, category: 1, date: -1 });
 // Category feed: filter by category, sort by date (most used query)
 newsSchema.index({ category: 1, date: -1 });
 // Author filter + date sort

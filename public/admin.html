@@ -187,6 +187,15 @@
                 </div>
 
                 <div class="form-group">
+                    <label for="brand">वेबसाइट (ब्रांड) *</label>
+                    <select id="brand" name="brand" class="form-input">
+                        <option value="vok">Voice of Kranti</option>
+                        <option value="jks">Janta Ka Sandesh</option>
+                    </select>
+                    <small style="color: #718096;">यह लेख किस साइट पर दिखेगा</small>
+                </div>
+
+                <div class="form-group">
                     <label for="author">लेखक का नाम *</label>
                     <input 
                         type="text" 
@@ -622,6 +631,15 @@
         // Show the "राज्य चुनें" sub-category dropdown only when category === rajya
         const categorySelect = document.getElementById('category');
         const stateGroup = document.getElementById('stateGroup');
+
+        // Default the brand selector to whichever domain the admin is currently on
+        // (overridable per-article), so publishing from either domain defaults to that
+        // domain's own site without extra clicks.
+        const brandSelect = document.getElementById('brand');
+        if (brandSelect) {
+            brandSelect.value = window.location.hostname.includes('jantakasandesh') ? 'jks' : 'vok';
+        }
+
         function toggleStateGroup() {
             stateGroup.style.display = categorySelect.value === 'rajya' ? 'block' : 'none';
             if (categorySelect.value !== 'rajya') document.getElementById('state').value = '';
@@ -742,7 +760,7 @@
             }
 
             try {
-                const response = await fetch(`/api/news/search?q=${encodeURIComponent(q)}`, { credentials: 'same-origin' });
+                const response = await fetch(`/api/news/search?q=${encodeURIComponent(q)}&allBrands=true`, { credentials: 'same-origin' });
                 if (!response.ok) {
                     throw new Error('Search failed');
                 }
@@ -1130,6 +1148,7 @@
             newsForm.reset();
             editingNewsId.value = '';
             document.getElementById('manualSlug').value = '';
+            if (brandSelect) brandSelect.value = window.location.hostname.includes('jantakasandesh') ? 'jks' : 'vok';
             toggleStateGroup();
             imagePreview.style.display = 'none';
             submitText.textContent = 'समाचार प्रकाशित करें';
@@ -1158,6 +1177,7 @@
             document.getElementById('content').value = news.content || '';
             document.getElementById('category').value = news.category || '';
             document.getElementById('author').value = news.author || '';
+            document.getElementById('brand').value = news.brand || 'vok';
             document.getElementById('isPermanent').checked = !!news.isPermanent;
             document.getElementById('isOriginal').checked = !!news.isOriginal;
             document.getElementById('isImportant').checked = !!news.isImportant;
@@ -1206,15 +1226,22 @@
                 return;
             }
             if (countEl) countEl.textContent = `${data.length} खबरें`;
+            // Admin now manages articles from both brands at once — "open article" must
+            // link to whichever domain the article actually belongs to, not whichever
+            // domain the admin happens to be browsing admin.html from (a jks-tagged
+            // article opened on voiceofkranti.com would 404 under the new brand filter).
+            const BRAND_DOMAINS = { vok: 'https://voiceofkranti.com', jks: 'https://www.jantakasandesh.in' };
             newsList.innerHTML = data.map(news => {
                     lastRenderedNewsById.set(news.id, news);
                     const photos = news.photos || (news.photo ? [news.photo] : []);
                     const firstPhoto = optimizeCloudinaryUrl(photos[0]);
                     const hasMultiplePhotos = photos.length > 1;
-                    const publicUrl = news.slug ? `/news/${news.slug}` : `/news-detail.html?id=${news.id}`;
-                    const categoryHref = news.category ? `/?category=${news.category}` : '/';
+                    const newsBrand = news.brand === 'jks' ? 'jks' : 'vok';
+                    const brandOrigin = BRAND_DOMAINS[newsBrand];
+                    const publicUrl = news.slug ? `${brandOrigin}/news/${news.slug}` : `${brandOrigin}/news-detail.html?id=${news.id}`;
+                    const categoryHref = news.category ? `${brandOrigin}/?category=${news.category}` : brandOrigin + '/';
                     
-                    const fullUrl = window.location.origin + publicUrl;
+                    const fullUrl = publicUrl;
                     return `
                     <div class="news-card" onclick="window.open('${publicUrl}', '_blank');" style="cursor:pointer;position:relative;">
                         <label onclick="event.stopPropagation();" style="position:absolute;top:8px;left:8px;z-index:5;background:rgba(255,255,255,0.92);border-radius:6px;padding:4px 6px;line-height:0;">
@@ -1233,6 +1260,7 @@
                         `}
                         <div class="news-content">
                             <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px;">
+                                <span style="background:${newsBrand === 'jks' ? '#7c3aed' : '#2563eb'};color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">${newsBrand === 'jks' ? 'JKS' : 'VOK'}</span>
                                 ${news.category ? `<a href="${categoryHref}" target="_blank" onclick="event.stopPropagation();" class="category-badge" style="text-decoration:none;">${categoryNames[news.category] || news.category}</a>` : ''}
                                 ${news.isPermanent ? `<span style="background:#d97706;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">📌 स्थायी</span>` : ''}
                                 ${news.isOriginal ? `<span style="background:#16a34a;color:#fff;font-size:.75rem;font-weight:700;padding:.15rem .5rem;border-radius:4px;">✍️ मूल लेख</span>` : ''}
@@ -1255,8 +1283,10 @@
             if (checked) {
                 const news = lastRenderedNewsById.get(id);
                 if (!news) return;
+                const BRAND_DOMAINS = { vok: 'https://voiceofkranti.com', jks: 'https://www.jantakasandesh.in' };
+                const brandOrigin = BRAND_DOMAINS[news.brand === 'jks' ? 'jks' : 'vok'];
                 const publicUrl = news.slug ? `/news/${news.slug}` : `/news-detail.html?id=${news.id}`;
-                selectedNewsMap.set(id, { heading: news.heading || '', url: window.location.origin + publicUrl });
+                selectedNewsMap.set(id, { heading: news.heading || '', url: brandOrigin + publicUrl });
             } else {
                 selectedNewsMap.delete(id);
             }
@@ -1423,7 +1453,9 @@
 
         async function loadNews() {
             try {
-                const response = await fetch('/api/news', { credentials: 'same-origin' });
+                // allBrands=true: admin panel manages articles across both VOK and JKS,
+                // unlike the public site which only ever sees its own domain's content.
+                const response = await fetch('/api/news?allBrands=true', { credentials: 'same-origin' });
                 const newsData = await response.json();
                 allNewsData = newsData;
                 if (!newsData.length) {
