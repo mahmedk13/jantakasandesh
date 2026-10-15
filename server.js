@@ -2664,20 +2664,19 @@ app.get('/news/:slug', async (req, res) => {
         // Call connectDB() fresh (not the stale module-load `dbReady` promise) so a
         // container that recovers after a cold-start hiccup doesn't keep failing forever.
         let dbError = false;
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
         try {
             await connectDB();
-            article = await News.findOne({ slug, brand: brandKey }).lean();
+            article = await News.findOne({ slug }).lean();
             // Case-insensitive fallback
             if (!article) {
-                article = await News.findOne({ slug: new RegExp('^' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'), brand: brandKey }).lean();
+                article = await News.findOne({ slug: new RegExp('^' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }).lean();
             }
             // Keyword fallback — slug words matched against heading
             if (!article) {
                 const words = slug.split('-').filter(w => w.length >= 4);
                 if (words.length >= 2) {
                     const regexes = words.slice(0, 4).map(w => new RegExp(w, 'i'));
-                    article = await News.findOne({ brand: brandKey, $and: regexes.map(r => ({ heading: r })) }).lean();
+                    article = await News.findOne({ $and: regexes.map(r => ({ heading: r })) }).lean();
                 }
             }
         } catch (dbErr) {
@@ -2705,7 +2704,11 @@ app.get('/news/:slug', async (req, res) => {
         let html = require('fs').readFileSync(htmlPath, 'utf8');
 
         if (article) {
-            const pageUrl  = `https://voiceofkranti.com/news/${slug}`;
+            // jantakasandesh.in is the single canonical source for all article content
+            // (both domains share the same article pool) — always point here regardless
+            // of which domain actually serves this request, so Google never again sees
+            // both domains self-declaring canonical for the same article.
+            const pageUrl  = `https://www.jantakasandesh.in/news/${slug}`;
             const esc = s => (s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const title    = esc('वॉयस ऑफ क्रांति | ' + (article.heading || 'वॉयस ऑफ क्रांति'));
             const desc     = esc((article.content || '').replace(/<[^>]+>/g, '').slice(0, 155).trim() || 'वॉयस ऑफ क्रांति पर ताज़ा हिंदी समाचार पढ़ें।');
@@ -3174,17 +3177,16 @@ app.get('/api/news/by-slug/:slug', async (req, res) => {
             }
         }
         // Exact match first, then case-insensitive fallback
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
-        let article = await News.findOne({ slug: req.params.slug, brand: brandKey }).lean();
+        let article = await News.findOne({ slug: req.params.slug }).lean();
         if (!article) {
-            article = await News.findOne({ slug: new RegExp('^' + req.params.slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'), brand: brandKey }).lean();
+            article = await News.findOne({ slug: new RegExp('^' + req.params.slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }).lean();
         }
         // Last resort: search by significant words extracted from the slug
         if (!article) {
             const words = req.params.slug.split('-').filter(w => w.length >= 4);
             if (words.length >= 2) {
                 const regexes = words.slice(0, 4).map(w => new RegExp(w, 'i'));
-                article = await News.findOne({ brand: brandKey, $and: regexes.map(r => ({ heading: r })) }).lean();
+                article = await News.findOne({ $and: regexes.map(r => ({ heading: r })) }).lean();
             }
         }
         if (!article) return res.status(404).json({ error: 'Not found' });
@@ -3212,9 +3214,6 @@ app.get('/api/news/by-id/:id', async (req, res) => {
         }
         const article = await News.findById(req.params.id).lean();
         if (!article) return res.status(404).json({ error: 'Not found' });
-        if (article.brand && article.brand !== (req.brand || DEFAULT_BRAND).key) {
-            return res.status(404).json({ error: 'Not found' });
-        }
         res.json({ ...article, id: article._id.toString() });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -3242,7 +3241,7 @@ app.get('/api/news/related/:id', async (req, res) => {
             const keywordRegexes = words.slice(0, 6).map(w => new RegExp(w, 'i'));
             // Find articles where heading matches any of the key words, same category preferred
             const keywordResults = await News.find(
-                { _id: { $ne: current._id }, brand: current.brand, heading: { $in: keywordRegexes } },
+                { _id: { $ne: current._id }, heading: { $in: keywordRegexes } },
                 { heading: 1, photos: 1, slug: 1, date: 1, category: 1, content: 1 }
             ).sort({ date: -1 }).limit(8).lean();
 
@@ -3261,7 +3260,7 @@ app.get('/api/news/related/:id', async (req, res) => {
         if (related.length < 4) {
             const existingIds = related.map(a => a._id);
             const fallback = await News.find(
-                { category: current.category, brand: current.brand, _id: { $ne: current._id, $nin: existingIds } },
+                { category: current.category, _id: { $ne: current._id, $nin: existingIds } },
                 { heading: 1, photos: 1, slug: 1, date: 1, category: 1, content: 1 }
             ).sort({ date: -1 }).limit(4 - related.length).lean();
             related = [...related, ...fallback.map(a => ({ ...a, id: a._id.toString() }))];
@@ -3285,22 +3284,19 @@ app.get('/c/:category', async (req, res) => {
 
     // Serve index.html (same design as homepage) with category pre-filtered news
     try {
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
-        // Reuse the same stale-while-revalidate cache as GET /api/news (keyed by
-        // catId+brand) instead of always querying fresh — see the matching comment on
-        // '/' above for why the old always-query-with-a-2s-timeout approach left
-        // SSR/preloaded news empty on almost every request. Rajya state-filtered views
-        // aren't cached (same as /api/news's cacheAllowed rule), so they keep the direct
-        // time-capped query.
+        // Reuse the same stale-while-revalidate cache as GET /api/news (keyed by catId)
+        // instead of always querying fresh — see the matching comment on '/' above for
+        // why the old always-query-with-a-2s-timeout approach left SSR/preloaded news
+        // empty on almost every request. Rajya state-filtered views aren't cached (same
+        // as /api/news's cacheAllowed rule), so they keep the direct time-capped query.
         let initialNews = [];
-        const catCacheKey = catId + ':' + brandKey;
         if (state) {
             try {
                 await Promise.race([
                     (async () => {
                         if (!isMongoDBConnected) await connectDB();
                         const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, isImportant: 1, importantAt: 1, state: 1 };
-                        const query = { category: catId, isOriginal: { $ne: true }, state, brand: brandKey };
+                        const query = { category: catId, isOriginal: { $ne: true }, state };
                         const docs = await News.find(query, projection).sort({ date: -1 }).limit(200).lean();
                         initialNews = docs.map(d => ({ ...d, id: d._id.toString() }));
                     })(),
@@ -3308,21 +3304,21 @@ app.get('/c/:category', async (req, res) => {
                 ]);
             } catch (_) { /* DB slow/unavailable — render the shell now, client JS fetches /api/news itself */ }
         } else {
-            const cachedCat = newsCache.get(catCacheKey);
+            const cachedCat = newsCache.get(catId);
             if (cachedCat) {
                 initialNews = cachedCat.data;
                 if (cachedCat.expires <= Date.now() && !cachedCat.refreshing) {
                     cachedCat.refreshing = true;
-                    fetchNewsForCache(catCacheKey, { category: catId, isOriginal: { $ne: true }, brand: brandKey }, false, 0, 200)
+                    fetchNewsForCache(catId, { category: catId, isOriginal: { $ne: true } }, false, 0, 200)
                         .catch(err => console.error('Background category cache refresh failed:', err.message))
-                        .finally(() => { const c = newsCache.get(catCacheKey); if (c) c.refreshing = false; });
+                        .finally(() => { const c = newsCache.get(catId); if (c) c.refreshing = false; });
                 }
             } else {
                 try {
                     await Promise.race([
                         (async () => {
                             if (!isMongoDBConnected) await connectDB();
-                            initialNews = await fetchNewsForCache(catCacheKey, { category: catId, isOriginal: { $ne: true }, brand: brandKey }, false, 0, 200);
+                            initialNews = await fetchNewsForCache(catId, { category: catId, isOriginal: { $ne: true } }, false, 0, 200);
                         })(),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
                     ]);
@@ -3488,12 +3484,10 @@ app.get('/sitemap-news.xml', async (req, res) => {
             // Only include canonical, unsyndicated reporting. Syndicated articles stay
             // in the general sitemap but should not dilute the Google News feed.
             const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-            const brandKey = (req.brand || DEFAULT_BRAND).key;
             const articles = await News.find(
                 {
                     slug: { $exists: true, $ne: '' },
                     date: { $gte: twoDaysAgo },
-                    brand: brandKey,
                     $or: [{ rssSource: null }, { rssSource: { $exists: false } }]
                 },
                 { _id: 1, slug: 1, date: 1, heading: 1 }
@@ -3561,9 +3555,8 @@ app.get('/sitemap.xml', async (req, res) => {
 
         let urls = [];
         if (isMongoDBConnected) {
-            const brandKey = (req.brand || DEFAULT_BRAND).key;
             const articles = await News.find(
-                { slug: { $exists: true, $ne: '' }, brand: brandKey },
+                { slug: { $exists: true, $ne: '' } },
                 { _id: 1, slug: 1, date: 1 }
             ).sort({ date: -1 }).limit(SITEMAP_PAGE_SIZE).lean();
             urls = articles.map(a => ({
@@ -3628,8 +3621,7 @@ app.get('/news-sitemap.xml', async (req, res) => {
 app.get('/sitemap-index.xml', async (req, res) => {
         try {
                 if (!isMongoDBConnected) await connectDB();
-                const sitemapBrandKey = (req.brand || DEFAULT_BRAND).key;
-                const articleCount = await News.countDocuments({ slug: { $exists: true, $ne: '' }, brand: sitemapBrandKey });
+                const articleCount = await News.countDocuments({ slug: { $exists: true, $ne: '' } });
                 const pageCount = Math.ceil(articleCount / SITEMAP_PAGE_SIZE);
                 const today = new Date().toISOString().split('T')[0];
                 const archiveSitemaps = Array.from({ length: Math.max(0, pageCount - 1) }, (_, index) => `  <sitemap>
@@ -3663,9 +3655,8 @@ app.get('/sitemap-articles-:page.xml', async (req, res) => {
         if (!Number.isInteger(page) || page < 2) return res.status(404).send('Sitemap not found');
         if (!isMongoDBConnected) await connectDB();
 
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
         const articles = await News.find(
-            { slug: { $exists: true, $ne: '' }, brand: brandKey },
+            { slug: { $exists: true, $ne: '' } },
             { slug: 1, date: 1 }
         ).sort({ date: -1 }).skip((page - 1) * SITEMAP_PAGE_SIZE).limit(SITEMAP_PAGE_SIZE).lean();
         if (!articles.length) return res.status(404).send('Sitemap not found');
@@ -3751,7 +3742,6 @@ async function handleFeedRequest(req, res, categoryFilter) {
         // substantial stories.
         const query = {
             slug: { $exists: true, $ne: '' },
-            brand: (brand || DEFAULT_BRAND).key,
             $or: [{ rssSource: null }, { rssSource: { $exists: false } }, { rssSource: 'PB SHABD' }],
             photos: { $exists: true, $not: { $size: 0 } },
             'photos.0': { $ne: DEFAULT_PHOTO_URL }
@@ -3857,23 +3847,21 @@ app.get('/', async (req, res) => {
         // re-fetch /api/news from scratch, repeating the same 10-15s wait with nothing
         // visible in between — the reported "no news until refresh" symptom).
         let initialNews = [];
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
-        const homeCacheKey = 'all:' + brandKey;
-        const cachedAll = newsCache.get(homeCacheKey);
+        const cachedAll = newsCache.get('all');
         if (cachedAll) {
             initialNews = cachedAll.data;
             if (cachedAll.expires <= Date.now() && !cachedAll.refreshing) {
                 cachedAll.refreshing = true;
-                fetchNewsForCache(homeCacheKey, { isOriginal: { $ne: true }, brand: brandKey }, false, 0, 200)
+                fetchNewsForCache('all', { isOriginal: { $ne: true } }, false, 0, 200)
                     .catch(err => console.error('Background homepage cache refresh failed:', err.message))
-                    .finally(() => { const c = newsCache.get(homeCacheKey); if (c) c.refreshing = false; });
+                    .finally(() => { const c = newsCache.get('all'); if (c) c.refreshing = false; });
             }
         } else {
             try {
                 await Promise.race([
                     (async () => {
                         if (!isMongoDBConnected) await connectDB();
-                        initialNews = await fetchNewsForCache(homeCacheKey, { isOriginal: { $ne: true }, brand: brandKey }, false, 0, 200);
+                        initialNews = await fetchNewsForCache('all', { isOriginal: { $ne: true } }, false, 0, 200);
                     })(),
                     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
                 ]);
@@ -4042,9 +4030,7 @@ const RECENT_WINDOW_MIN_RESULTS = 30;
 async function fetchNewsForCache(cacheKey, query, writtenOnly, skip, limit) {
     const projection = { heading: 1, content: 1, category: 1, author: 1, photos: 1, date: 1, formattedDate: 1, rssLink: 1, isPermanent: 1, isOriginal: 1, slug: 1, rssSource: 1, full: 1, isImportant: 1, importantAt: 1, state: 1 };
     let news;
-    // cacheKey is now "<kind>:<brandKey>" (e.g. "full:vok", "pb:jks") — compare against
-    // the kind prefix, not full equality, so brand-suffixed keys still match correctly.
-    const windowEligible = !writtenOnly && skip === 0 && !cacheKey.startsWith('full:') && !cacheKey.startsWith('pb:');
+    const windowEligible = !writtenOnly && skip === 0 && cacheKey !== 'full' && cacheKey !== 'pb';
     if (windowEligible) {
         const recentCutoff = new Date(Date.now() - RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
         news = await News.find({ ...query, date: { $gte: recentCutoff } }, projection).sort({ date: -1 }).limit(limit).lean();
@@ -4090,14 +4076,8 @@ app.get('/api/news', async (req, res) => {
         const hours = parseFloat(req.query.hours) || null;
         const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
         const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
-        // Only an authenticated admin session can see across brands (e.g. admin.html's
-        // own management list) — every public/anonymous request is always scoped to the
-        // requesting domain's own brand, so the two white-label sites never show each
-        // other's articles (the cross-domain duplicate-content issue this was built to fix).
-        const allBrands = req.query.allBrands === 'true' && !!(req.session && req.session.isAuthenticated);
-        const brandKey = (req.brand || DEFAULT_BRAND).key;
-        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours && !state && !allBrands;
-        const cacheKey = (source === 'pb' ? 'pb' : (fullOnly ? 'full' : (writtenOnly ? 'written' : (category || 'all')))) + ':' + (allBrands ? 'all-brands' : brandKey);
+        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours && !state;
+        const cacheKey = source === 'pb' ? 'pb' : (fullOnly ? 'full' : (writtenOnly ? 'written' : (category || 'all')));
 
         // Use JSON file in development if MongoDB is not connected
         if (isDevelopment && !isMongoDBConnected) {
@@ -4139,7 +4119,6 @@ app.get('/api/news', async (req, res) => {
         } else {
             query = { isOriginal: { $ne: true } };
         }
-        if (!allBrands) query.brand = brandKey;
         if (state) query.state = state;
         if (fullOnly) {
             query.$or = [
@@ -4220,13 +4199,8 @@ app.get('/api/news/search', async (req, res) => {
             } catch (_) {}
             if (!isMongoDBConnected) return res.status(503).json({ error: 'DB not ready' });
         }
-        // Admin panel searches across both brands (same bypass rule as GET /api/news);
-        // public visitors only ever search their own domain's content.
-        const allBrands = req.query.allBrands === 'true' && !!(req.session && req.session.isAuthenticated);
-        const searchQuery = { $or: [{ heading: regex }, { content: regex }, { category: regex }, { author: regex }] };
-        if (!allBrands) searchQuery.brand = (req.brand || DEFAULT_BRAND).key;
         const results = await News.find(
-            searchQuery,
+            { $or: [{ heading: regex }, { content: regex }, { category: regex }, { author: regex }] },
             { heading: 1, category: 1, author: 1, photos: 1, date: 1, slug: 1, rssSource: 1, content: 1, formattedDate: 1, isPermanent: 1, isOriginal: 1, views: 1 }
         ).sort({ date: -1 }).limit(1000).lean();
         res.json(results.map(r => ({ ...r, id: r._id.toString() })));
@@ -4576,7 +4550,7 @@ app.get('/api/aaj-ka-itihas', async (req, res) => {
     try {
         if (!isMongoDBConnected) return res.json([]);
         const raw = await News.find(
-            { isAajKaItihas: true, brand: (req.brand || DEFAULT_BRAND).key },
+            { isAajKaItihas: true },
             { heading: 1, content: 1, date: 1, formattedDate: 1, slug: 1 }
         ).sort({ date: -1 }).limit(120).lean();
         // Deduplicate: keep only one article per calendar day (newest)
@@ -4598,7 +4572,7 @@ app.get('/api/weekly-roundup', async (req, res) => {
     try {
         if (!isMongoDBConnected) return res.json([]);
         const articles = await News.find(
-            { isOriginal: true, heading: { $regex: /^साप्ताहिक समीक्षा:/i }, brand: (req.brand || DEFAULT_BRAND).key },
+            { isOriginal: true, heading: { $regex: /^साप्ताहिक समीक्षा:/i } },
             { heading: 1, content: 1, date: 1, formattedDate: 1, slug: 1 }
         ).sort({ date: -1 }).limit(20).lean();
         res.json(articles.map(a => ({ ...a, id: a._id.toString() })));
@@ -5008,7 +4982,7 @@ app.post('/api/admin/strip-old-videos', requireAuth, async (req, res) => {
 app.get('/api/news/daily-facts', async (req, res) => {
     try {
         const raw = await News.find(
-            { $or: [{ isDailyFact: true }, { heading: { $regex: /^क्या आप जानते हैं:/i } }], brand: (req.brand || DEFAULT_BRAND).key },
+            { $or: [{ isDailyFact: true }, { heading: { $regex: /^क्या आप जानते हैं:/i } }] },
             { heading: 1, category: 1, photos: 1, slug: 1, date: 1, content: 1 }
         ).sort({ date: -1 }).limit(20).lean();
         // Deduplicate: keep only one article per calendar day (newest)
@@ -5029,7 +5003,7 @@ app.get('/api/news/daily-facts', async (req, res) => {
 app.get('/api/news/shorts', async (req, res) => {
     try {
         const category = req.query.category;
-        const query = { 'shortNews.generatedAt': { $ne: null }, brand: (req.brand || DEFAULT_BRAND).key };
+        const query = { 'shortNews.generatedAt': { $ne: null } };
         if (category && SHORTS_CATEGORIES.includes(category)) query.category = category;
 
         const shorts = await News.find(
