@@ -4433,7 +4433,7 @@ app.put('/api/news/:id/view', async (req, res) => {
         const news = await News.findByIdAndUpdate(
             req.params.id,
             { $inc: { views: 1 } },
-            { new: true }
+            { new: true, timestamps: false } // a pageview is not a content edit — must not bump updatedAt (used for incremental backups + article:modified_time)
         );
         
         if (!news) {

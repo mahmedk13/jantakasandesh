@@ -13,7 +13,10 @@ concurrency:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Generous margin for the weekly full-dump day — Atlas M0's shared-tier query
+    # throttling (see repo memory) can make a full 20k+ doc collection scan slow;
+    # incremental days finish in well under this.
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repo
@@ -35,14 +38,9 @@ jobs:
           sudo cp mongodb-database-tools-*/bin/* /usr/local/bin/
           mongodump --version
 
-      - name: Dump database (excludes ephemeral session tokens)
-        run: |
-          mongodump --uri="${{ secrets.MONGODB_URI }}" \
-            --excludeCollection=sessions \
-            --gzip --archive=backup.gz
-
-      - name: Upload to Google Drive
+      - name: Dump database and upload to Google Drive
         env:
+          MONGODB_URI:                ${{ secrets.MONGODB_URI }}
           GDRIVE_SERVICE_ACCOUNT_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_KEY }}
           GDRIVE_BACKUP_FOLDER_ID:    ${{ secrets.GDRIVE_BACKUP_FOLDER_ID }}
-        run: node backup-to-gdrive.js backup.gz
+        run: node backup-to-gdrive.js
