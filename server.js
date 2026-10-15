@@ -3697,6 +3697,14 @@ const FEED_CATEGORY_NAMES = { desh: 'देश', videsh: 'विदेश', rajy
 function escapeXmlFeed(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
+// A literal "]]>" inside any CDATA-wrapped field (title/description/content:encoded)
+// prematurely terminates that CDATA section — everything after it spills out as raw
+// XML, corrupting or truncating the rest of that item (and sometimes the whole feed)
+// for the reader. Splits the sequence across two CDATA sections, which is the
+// standard-compliant escape and renders byte-identical to the original text.
+function safeCdata(s) {
+    return String(s == null ? '' : s).replace(/]]>/g, ']]]]><![CDATA[>');
+}
 function toRfc822(d) {
     const dt = d ? new Date(d) : new Date();
     return Number.isNaN(dt.getTime()) ? new Date().toUTCString() : dt.toUTCString();
@@ -3748,20 +3756,18 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const items = articles.map(a => {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
-            const plainText = renderedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            const excerpt = plainText.slice(0, 300);
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
             const image = (a.photos && a.photos.length > 0) ? a.photos[0] : '';
             const imageTag = image ? `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>` : '';
             return `  <item>
-    <title><![CDATA[${a.heading || ''}]]></title>
+    <title><![CDATA[${safeCdata(a.heading)}]]></title>
     <link>${escapeXmlFeed(link)}</link>
     <guid isPermaLink="true">${escapeXmlFeed(link)}</guid>
     <pubDate>${toRfc822(a.date)}</pubDate>
-    ${catName ? `<category><![CDATA[${catName}]]></category>` : ''}
-    <dc:creator><![CDATA[${a.author || a.rssSource || brand.nameHi}]]></dc:creator>
-    <description><![CDATA[${imageTag}<p>${excerpt}</p>]]></description>
-    <content:encoded><![CDATA[${imageTag}${renderedHtml}]]></content:encoded>
+    ${catName ? `<category><![CDATA[${safeCdata(catName)}]]></category>` : ''}
+    <dc:creator><![CDATA[${safeCdata(a.author || a.rssSource || brand.nameHi)}]]></dc:creator>
+    <description><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></description>
+    <content:encoded><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></content:encoded>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
   </item>`;
         }).join('\n');
