@@ -113,6 +113,15 @@ async function main() {
 
 main().catch(err => {
     console.error('Backup failed:', err.message);
+    if (/File not found/i.test(err.message || '')) {
+        console.error(
+            'Hint: "File not found" from the Drive API almost always means either ' +
+            'GDRIVE_BACKUP_FOLDER_ID is wrong, or the folder was never actually shared ' +
+            "with the service account's own email (the \"client_email\" field in its JSON " +
+            'key) with at least Editor access — creating a service account does NOT ' +
+            'automatically grant it access to anything in your Drive.'
+        );
+    }
     process.exit(1);
 });
 
