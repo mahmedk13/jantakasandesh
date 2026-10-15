@@ -1,0 +1,48 @@
+name: Daily MongoDB Backup to Google Drive
+
+on:
+  schedule:
+    # 20:00 UTC = 01:30 IST — quiet hours, after PB SHABD's daily window closes
+    - cron: '0 20 * * *'
+  workflow_dispatch:           # manual trigger
+
+concurrency:
+  group: backup-db
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install MongoDB Database Tools
+        run: |
+          curl -fsSL https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-x86_64-100.9.4.tgz -o mongo-tools.tgz
+          tar -xzf mongo-tools.tgz
+          sudo cp mongodb-database-tools-*/bin/* /usr/local/bin/
+          mongodump --version
+
+      - name: Dump database (excludes ephemeral session tokens)
+        run: |
+          mongodump --uri="${{ secrets.MONGODB_URI }}" \
+            --excludeCollection=sessions \
+            --gzip --archive=backup.gz
+
+      - name: Upload to Google Drive
+        env:
+          GDRIVE_SERVICE_ACCOUNT_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_KEY }}
+          GDRIVE_BACKUP_FOLDER_ID:    ${{ secrets.GDRIVE_BACKUP_FOLDER_ID }}
+        run: node backup-to-gdrive.js backup.gz
