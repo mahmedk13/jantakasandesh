@@ -3736,11 +3736,20 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const brand = req.brand;
         const count = Math.min(Math.max(parseInt(req.query.count, 10) || 50, 1), 100);
 
-        // Every published article (original + PB SHABD + RSS/API-imported) belongs in
-        // the public RSS feed — this is a full content feed, not a curated subset —
-        // except thin articles: skip anything under 1200 chars (incl. spaces) of body
-        // text so the feed only carries substantial stories.
-        const query = { slug: { $exists: true, $ne: '' } };
+        // Every ORIGINAL/complete article belongs in the public RSS feed (own-authored
+        // + PB SHABD, which we republish in full) — this is a full content feed, not a
+        // curated subset. Plain RSS/API imports (ABP Live, NewsData, GNews, Currents,
+        // etc.) are deliberately EXCLUDED: those are stored with only a short/partial
+        // body (publishers rarely license full text to free APIs) and the article page
+        // itself sends readers onward via a "पूरी खबर पढ़ें" button to the original
+        // source — serving that same incomplete, not-really-ours content to feed
+        // consumers/bots would be the opposite of the "complete article" goal this feed
+        // exists for. Also skip anything under 1200 chars (incl. spaces) of body text
+        // so the feed only carries substantial stories.
+        const query = {
+            slug: { $exists: true, $ne: '' },
+            $or: [{ rssSource: null }, { rssSource: { $exists: false } }, { rssSource: 'PB SHABD' }]
+        };
         if (categoryFilter) query.category = categoryFilter;
         query.$expr = {
             $gt: [
@@ -3757,7 +3766,12 @@ async function handleFeedRequest(req, res, categoryFilter) {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
-            const image = (a.photos && a.photos.length > 0) ? a.photos[0] : '';
+            // Skip the generic shared "no real photo" placeholder — it's identical across
+            // hundreds of unrelated articles, so it gives none of the real-thumbnail CTR
+            // benefit and can look like templated/spam content when the same image shows
+            // up on many different republished articles.
+            const hasRealPhoto = a.photos && a.photos.length > 0 && a.photos[0] !== DEFAULT_PHOTO_URL;
+            const image = hasRealPhoto ? a.photos[0] : '';
             const imageTag = image ? `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>` : '';
             return `  <item>
     <title><![CDATA[${safeCdata(a.heading)}]]></title>
