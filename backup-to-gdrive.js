@@ -71,15 +71,32 @@ async function main() {
         process.exit(1);
     }
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'db-backup-'));
-    const { archivePath, kind } = buildDump(uri, tmpDir);
-
     const credentials = JSON.parse(keyJson);
     const auth = new google.auth.GoogleAuth({
         credentials,
-        scopes: ['https://www.googleapis.com/auth/drive.file'],
+        // 'drive.file' only sees files the app itself created (or files a user opened
+        // via a picker) — it canNOT see a folder merely shared with the service account
+        // through the normal Share dialog, which is exactly our setup. That mismatch
+        // produces "File not found" even with a perfectly correct folder ID. 'drive'
+        // (full scope) is required for a service account to access shared folders.
+        scopes: ['https://www.googleapis.com/auth/drive'],
     });
     const drive = google.drive({ version: 'v3', auth });
+
+    // Fail fast with an unambiguous message before spending time on the dump itself.
+    try {
+        await drive.files.get({ fileId: folderId, fields: 'id, name, mimeType' });
+    } catch (err) {
+        console.error(
+            `Cannot access Drive folder ${folderId}: ${err.message}. Check that ` +
+            'GDRIVE_BACKUP_FOLDER_ID is the bare folder ID (not the full URL) and that ' +
+            "the folder is shared with the service account's \"client_email\" (Editor access)."
+        );
+        process.exit(1);
+    }
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'db-backup-'));
+    const { archivePath, kind } = buildDump(uri, tmpDir);
 
     const dateStr = new Date().toISOString().slice(0, 10);
     const fileName = `jantakasandesh-backup-${kind}-${dateStr}.gz`;
