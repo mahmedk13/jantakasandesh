@@ -3744,17 +3744,22 @@ async function handleFeedRequest(req, res, categoryFilter) {
         // itself sends readers onward via a "पूरी खबर पढ़ें" button to the original
         // source — serving that same incomplete, not-really-ours content to feed
         // consumers/bots would be the opposite of the "complete article" goal this feed
-        // exists for. Also skip anything under 1000 chars (incl. spaces) of body text
-        // so the feed only carries substantial stories.
+        // exists for. Also excludes articles whose only photo is the shared generic
+        // placeholder (identical across hundreds of unrelated articles — no real-thumbnail
+        // benefit, and risks looking like templated/spam content to aggregators), and skips
+        // anything under 800 chars (incl. spaces) of body text so the feed only carries
+        // substantial stories.
         const query = {
             slug: { $exists: true, $ne: '' },
-            $or: [{ rssSource: null }, { rssSource: { $exists: false } }, { rssSource: 'PB SHABD' }]
+            $or: [{ rssSource: null }, { rssSource: { $exists: false } }, { rssSource: 'PB SHABD' }],
+            photos: { $exists: true, $not: { $size: 0 } },
+            'photos.0': { $ne: DEFAULT_PHOTO_URL }
         };
         if (categoryFilter) query.category = categoryFilter;
         query.$expr = {
             $gt: [
                 { $strLenCP: { $trim: { input: { $ifNull: ['$content', ''] } } } },
-                1000
+                800
             ]
         };
 
