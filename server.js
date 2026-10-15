@@ -3770,8 +3770,6 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const items = articles.map(a => {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
-            const plainText = renderedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-            const excerpt = plainText.length > 400 ? plainText.slice(0, 400).trim() + '…' : plainText;
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
             const image = a.photos[0];
             const imageTag = `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>`;
@@ -3782,8 +3780,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
     <pubDate>${toRfc822(a.date)}</pubDate>
     ${catName ? `<category><![CDATA[${safeCdata(catName)}]]></category>` : ''}
     <dc:creator><![CDATA[${safeCdata(a.author || a.rssSource || brand.nameHi)}]]></dc:creator>
-    <description><![CDATA[${imageTag}<p>${safeCdata(excerpt)}</p>]]></description>
-    <content:encoded><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></content:encoded>
+    <description><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></description>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
   </item>`;
         }).join('\n');
@@ -3791,7 +3788,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const feedSelfUrl = categoryFilter ? `https://${brand.domain}/c/${categoryFilter}/feed` : `https://${brand.domain}/feed`;
         const feedTitle = categoryFilter ? `${brand.nameHi} — ${FEED_CATEGORY_NAMES[categoryFilter] || categoryFilter}` : brand.nameHi;
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
 <channel>
   <title>${escapeXmlFeed(feedTitle)}</title>
   <atom:link href="${escapeXmlFeed(feedSelfUrl)}" rel="self" type="application/rss+xml"/>
