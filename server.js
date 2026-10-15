@@ -44,17 +44,6 @@ function sendBranded(req, res, filePath, contentType) {
     }
 }
 
-// On non-default-brand domains (e.g. jantakasandesh.in), fires an extra GA4
-// page_view for the equivalent default-brand (voiceofkranti.com) URL, so
-// Analytics reports show matching view counts for the same page on both
-// domains. Must be called AFTER applyBrand() so the literal domain here is
-// never caught by its blanket 'voiceofkranti.com' text substitution.
-function injectGaMirror(html, req) {
-    if (!req.brand || req.brand.domain === DEFAULT_BRAND.domain) return html;
-    const mirrorScript = `<script>(function(){try{if(typeof gtag==='function'){gtag('event','page_view',{page_location:${JSON.stringify('https://' + DEFAULT_BRAND.domain)}+location.pathname+location.search,page_title:document.title});}}catch(e){}})();</script>`;
-    return html.replace('</head>', mirrorScript + '</head>');
-}
-
 // ── LLM helpers ───────────────────────────────────────────────────────────────
 // callGemini is used for the three daily long-form features so they do not
 // consume the Groq request budget used by real-time content workflows.
@@ -2910,7 +2899,6 @@ app.get('/news/:slug', async (req, res) => {
         }
 
         html = applyBrand(html, req.brand);
-        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // Edge-cache successfully rendered articles briefly — views are tracked via a
         // separate client-triggered API call (not this SSR render), so a short cache
@@ -3361,7 +3349,6 @@ app.get('/c/:category', async (req, res) => {
             .replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${cat.metaDesc}$2`);
 
         html = applyBrand(html, req.brand);
-        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // Same short edge cache as homepage; skip for state-filtered rajya views since
         // those already bypass the in-memory cache and are cheap/low-traffic anyway.
@@ -3882,7 +3869,6 @@ app.get('/', async (req, res) => {
         // Inject SSR news cards so crawlers see real headlines without running JS
         html = html.replace('<!-- filled instantly by server-injected __INITIAL_NEWS__ -->', renderHomepageSSR(initialNews, null));
         html = applyBrand(html, req.brand);
-        html = injectGaMirror(html, req);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // Short edge cache — offloads repeat homepage hits to Vercel's CDN instead of
         // re-running SSR/brand rewriting per request; client JS still re-fetches /api/news.

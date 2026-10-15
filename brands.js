@@ -26,6 +26,7 @@ const BRANDS = {
         rni: 'MPHIN/26/A5773',
         showSocial: true,
         showRni: true,
+        gaId: 'G-SFXC5EHMPL',
     },
     'jantakasandesh.in': {
         key: 'jks',
@@ -48,6 +49,7 @@ const BRANDS = {
         rni: '',
         showSocial: false,
         showRni: false,
+        gaId: 'G-YY7X73CT0R',
     },
 };
 
@@ -87,6 +89,12 @@ function applyBrand(html, brand) {
     // Asset filenames (before the domain swap so full URLs end up fully rebranded)
     out = out.split('og-banner.svg').join(brand.ogBannerFile);
     out = out.split('logo.svg').join(brand.logoFile);
+
+    // GA4 measurement ID — each brand has its own property so analytics aren't
+    // mixed together (see repo memory for why a shared ID was rejected).
+    if (brand.gaId) {
+        out = out.split('G-SFXC5EHMPL').join(brand.gaId);
+    }
 
     // Email addresses first and exact — brand.domain may carry a 'www.' prefix for
     // display URLs (see brands.js canonicalHost comment), but mail is always sent
