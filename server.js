@@ -3766,13 +3766,8 @@ async function handleFeedRequest(req, res, categoryFilter) {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
-            // Skip the generic shared "no real photo" placeholder — it's identical across
-            // hundreds of unrelated articles, so it gives none of the real-thumbnail CTR
-            // benefit and can look like templated/spam content when the same image shows
-            // up on many different republished articles.
-            const hasRealPhoto = a.photos && a.photos.length > 0 && a.photos[0] !== DEFAULT_PHOTO_URL;
-            const image = hasRealPhoto ? a.photos[0] : '';
-            const imageTag = image ? `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>` : '';
+            const image = a.photos[0];
+            const imageTag = `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>`;
             return `  <item>
     <title><![CDATA[${safeCdata(a.heading)}]]></title>
     <link>${escapeXmlFeed(link)}</link>

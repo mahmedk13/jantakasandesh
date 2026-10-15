@@ -419,9 +419,9 @@ async function main() {
             const content = cleanPbContent(raw, story.title) || cleanPbContent(rawDesc, story.title) || '';
             if (!content) continue;
 
-            // Skip thin stories — same 1000-char (incl. spaces) minimum as the public feed.
+            // Skip thin stories — same 800-char (incl. spaces) minimum as the public feed.
             const plainLen = content.replace(/\s+/g, ' ').trim().length;
-            if (plainLen < 1000) {
+            if (plainLen < 800) {
                 console.log(`  ⏭ Too short (${plainLen} chars): ${story.title.substring(0, 50)}`);
                 dups++; continue;
             }
