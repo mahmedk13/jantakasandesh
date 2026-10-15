@@ -3782,13 +3782,15 @@ async function handleFeedRequest(req, res, categoryFilter) {
     <dc:creator><![CDATA[${safeCdata(a.author || a.rssSource || brand.nameHi)}]]></dc:creator>
     <description><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></description>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
+    ${image ? `<media:content url="${escapeXmlFeed(image)}" type="image/jpeg" medium="image"/>` : ''}
+    ${image ? `<media:thumbnail url="${escapeXmlFeed(image)}"/>` : ''}
   </item>`;
         }).join('\n');
 
         const feedSelfUrl = categoryFilter ? `https://${brand.domain}/c/${categoryFilter}/feed` : `https://${brand.domain}/feed`;
         const feedTitle = categoryFilter ? `${brand.nameHi} — ${FEED_CATEGORY_NAMES[categoryFilter] || categoryFilter}` : brand.nameHi;
         const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
 <channel>
   <title>${escapeXmlFeed(feedTitle)}</title>
   <atom:link href="${escapeXmlFeed(feedSelfUrl)}" rel="self" type="application/rss+xml"/>
