@@ -40,7 +40,9 @@ jobs:
 
       - name: Dump database and upload to Google Drive
         env:
-          MONGODB_URI:                ${{ secrets.MONGODB_URI }}
-          GDRIVE_SERVICE_ACCOUNT_KEY: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_KEY }}
-          GDRIVE_BACKUP_FOLDER_ID:    ${{ secrets.GDRIVE_BACKUP_FOLDER_ID }}
+          MONGODB_URI:          ${{ secrets.MONGODB_URI }}
+          GDRIVE_CLIENT_ID:     ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GDRIVE_BACKUP_FOLDER_ID: ${{ secrets.GDRIVE_BACKUP_FOLDER_ID }}
         run: node backup-to-gdrive.js

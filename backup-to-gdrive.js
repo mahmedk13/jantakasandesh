@@ -1,5 +1,6 @@
-// Runs a MongoDB dump and uploads it to Google Drive via a service account, then
-// prunes backups older than BACKUP_RETENTION_DAYS from that same folder.
+// Runs a MongoDB dump and uploads it to Google Drive (authenticated as a real Google
+// account via OAuth2, NOT a service account — see below for why), then prunes backups
+// older than BACKUP_RETENTION_DAYS from that same folder.
 //
 // Strategy: full dump once a week (keeps a complete, correct baseline — this is
 // the only backup type that can capture article DELETIONS, since a query-filtered
@@ -17,16 +18,26 @@
 // backup overwrites the baseline (at most ~6 days of staleness) — acceptable given
 // restores are a rare/manual operation, but worth knowing before relying on this.
 //
+// Why OAuth2 + refresh token instead of a service account: service accounts have
+// NO storage quota of their own on a regular (non-Workspace) Google account — they
+// can read/share files but cannot own newly uploaded ones ("Service Accounts do not
+// have storage quota" error). Shared Drives / domain delegation fix this but require
+// a paid Google Workspace plan. Authenticating as your own account instead means
+// uploads count against your own real Drive storage.
+//
 // One-time setup required (cannot be done from code — needs your Google Cloud/Drive access):
-//   1. Google Cloud Console → create/select a project → enable the "Google Drive API".
-//   2. IAM & Admin → Service Accounts → create one → "Keys" tab → "Add key" → JSON. Download it.
-//   3. In Google Drive, create (or pick) a backups folder → "Share" it with the service
-//      account's email (the "client_email" field in the downloaded JSON) → give it "Editor" access.
-//   4. Copy the folder's ID from its URL: drive.google.com/drive/folders/<THIS_PART>.
-//   5. Add two GitHub repo secrets:
-//        GDRIVE_SERVICE_ACCOUNT_KEY = the entire contents of the downloaded JSON key file
-//        GDRIVE_BACKUP_FOLDER_ID    = the folder ID from step 4
-//      (MONGODB_URI secret already exists and is reused for the mongodump step.)
+//   1. Google Cloud Console → APIs & Services → enable the "Google Drive API".
+//   2. APIs & Services → Credentials → Create Credentials → OAuth client ID →
+//      Application type "Desktop app" → Create. Note its Client ID and Client Secret.
+//   3. Run locally (one time): node get-gdrive-refresh-token.js <clientId> <clientSecret>
+//      — follow its instructions to authorize with your own Google account.
+//   4. Create (or pick) a backups folder in YOUR OWN Google Drive, copy its ID from
+//      the URL: drive.google.com/drive/folders/<THIS_PART>. No sharing step needed —
+//      it's already your own folder.
+//   5. Add GitHub repo secrets: GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET,
+//      GDRIVE_REFRESH_TOKEN (all three printed by step 3), and GDRIVE_BACKUP_FOLDER_ID
+//      (the folder ID from step 4). Remove the old GDRIVE_SERVICE_ACCOUNT_KEY secret —
+//      it's no longer used. (MONGODB_URI secret already exists and is reused.)
 require('dotenv').config();
 const fs = require('fs');
 const os = require('os');
@@ -65,27 +76,17 @@ function buildDump(uri, tmpDir) {
 async function main() {
     const uri = process.env.MONGODB_URI;
     const folderId = process.env.GDRIVE_BACKUP_FOLDER_ID;
-    const keyJson = process.env.GDRIVE_SERVICE_ACCOUNT_KEY;
-    if (!uri || !folderId || !keyJson) {
-        console.error('MONGODB_URI, GDRIVE_BACKUP_FOLDER_ID and GDRIVE_SERVICE_ACCOUNT_KEY must be set');
+    const clientId = process.env.GDRIVE_CLIENT_ID;
+    const clientSecret = process.env.GDRIVE_CLIENT_SECRET;
+    const refreshToken = process.env.GDRIVE_REFRESH_TOKEN;
+    if (!uri || !folderId || !clientId || !clientSecret || !refreshToken) {
+        console.error('MONGODB_URI, GDRIVE_BACKUP_FOLDER_ID, GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET and GDRIVE_REFRESH_TOKEN must be set');
         process.exit(1);
     }
 
-    const credentials = JSON.parse(keyJson);
-    // Not a secret itself (just an email address extracted from inside the secret
-    // JSON blob), so unlike the folder ID this is NOT masked in Action logs — print
-    // it so the user can directly compare it against who the Drive folder is shared with.
-    console.log(`Using service account: ${credentials.client_email}`);
-    const auth = new google.auth.GoogleAuth({
-        credentials,
-        // 'drive.file' only sees files the app itself created (or files a user opened
-        // via a picker) — it canNOT see a folder merely shared with the service account
-        // through the normal Share dialog, which is exactly our setup. That mismatch
-        // produces "File not found" even with a perfectly correct folder ID. 'drive'
-        // (full scope) is required for a service account to access shared folders.
-        scopes: ['https://www.googleapis.com/auth/drive'],
-    });
-    const drive = google.drive({ version: 'v3', auth });
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2Client.setCredentials({ refresh_token: refreshToken });
+    const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
     // Fail fast with an unambiguous message before spending time on the dump itself.
     try {
@@ -94,28 +95,8 @@ async function main() {
         console.error(
             `Cannot access Drive folder ${folderId}: ${err.message}. Check that ` +
             'GDRIVE_BACKUP_FOLDER_ID is the bare folder ID (not the full URL) and that ' +
-            "the folder is shared with the service account's \"client_email\" (Editor access)."
+            'it belongs to the same Google account the refresh token was issued for.'
         );
-        // Lists whatever this service account CAN see, regardless of the broken
-        // folder ID — folder names/other IDs here are not the registered secret, so
-        // they print unmasked and tell us whether sharing worked at all (empty list
-        // = nothing was ever shared) or just pointed at a different folder than expected.
-        try {
-            const visible = await drive.files.list({
-                q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-                fields: 'files(id, name)',
-                pageSize: 10,
-            });
-            const files = visible.data.files || [];
-            console.error(
-                files.length
-                    ? `This service account currently sees ${files.length} folder(s): ` +
-                      files.map(f => `"${f.name}" (${f.id})`).join(', ')
-                    : 'This service account sees ZERO folders — the Drive folder was never actually shared with it, or sharing has not propagated yet.'
-            );
-        } catch (listErr) {
-            console.error('Could not even list visible folders:', listErr.message);
-        }
         process.exit(1);
     }
 
