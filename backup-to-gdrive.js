@@ -72,6 +72,10 @@ async function main() {
     }
 
     const credentials = JSON.parse(keyJson);
+    // Not a secret itself (just an email address extracted from inside the secret
+    // JSON blob), so unlike the folder ID this is NOT masked in Action logs — print
+    // it so the user can directly compare it against who the Drive folder is shared with.
+    console.log(`Using service account: ${credentials.client_email}`);
     const auth = new google.auth.GoogleAuth({
         credentials,
         // 'drive.file' only sees files the app itself created (or files a user opened
@@ -92,6 +96,26 @@ async function main() {
             'GDRIVE_BACKUP_FOLDER_ID is the bare folder ID (not the full URL) and that ' +
             "the folder is shared with the service account's \"client_email\" (Editor access)."
         );
+        // Lists whatever this service account CAN see, regardless of the broken
+        // folder ID — folder names/other IDs here are not the registered secret, so
+        // they print unmasked and tell us whether sharing worked at all (empty list
+        // = nothing was ever shared) or just pointed at a different folder than expected.
+        try {
+            const visible = await drive.files.list({
+                q: "mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+                fields: 'files(id, name)',
+                pageSize: 10,
+            });
+            const files = visible.data.files || [];
+            console.error(
+                files.length
+                    ? `This service account currently sees ${files.length} folder(s): ` +
+                      files.map(f => `"${f.name}" (${f.id})`).join(', ')
+                    : 'This service account sees ZERO folders — the Drive folder was never actually shared with it, or sharing has not propagated yet.'
+            );
+        } catch (listErr) {
+            console.error('Could not even list visible folders:', listErr.message);
+        }
         process.exit(1);
     }
 
