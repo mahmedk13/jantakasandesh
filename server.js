@@ -3770,6 +3770,8 @@ async function handleFeedRequest(req, res, categoryFilter) {
         const items = articles.map(a => {
             const link = `https://${brand.domain}/news/${a.slug}`;
             const renderedHtml = renderArticleBodyForCrawler(a.content || '');
+            const plainText = renderedHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            const excerpt = plainText.length > 400 ? plainText.slice(0, 400).trim() + '…' : plainText;
             const catName = FEED_CATEGORY_NAMES[a.category] || a.category || '';
             const image = a.photos[0];
             const imageTag = `<img src="${escapeXmlFeed(image)}" alt="${escapeXmlFeed(a.heading || '')}"/>`;
@@ -3780,7 +3782,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
     <pubDate>${toRfc822(a.date)}</pubDate>
     ${catName ? `<category><![CDATA[${safeCdata(catName)}]]></category>` : ''}
     <dc:creator><![CDATA[${safeCdata(a.author || a.rssSource || brand.nameHi)}]]></dc:creator>
-    <description><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></description>
+    <description><![CDATA[${imageTag}<p>${safeCdata(excerpt)}</p>]]></description>
     <content:encoded><![CDATA[${imageTag}${safeCdata(renderedHtml)}]]></content:encoded>
     ${image ? `<enclosure url="${escapeXmlFeed(image)}" type="image/jpeg"/>` : ''}
   </item>`;
