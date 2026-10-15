@@ -3744,7 +3744,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
         // itself sends readers onward via a "पूरी खबर पढ़ें" button to the original
         // source — serving that same incomplete, not-really-ours content to feed
         // consumers/bots would be the opposite of the "complete article" goal this feed
-        // exists for. Also skip anything under 1200 chars (incl. spaces) of body text
+        // exists for. Also skip anything under 1000 chars (incl. spaces) of body text
         // so the feed only carries substantial stories.
         const query = {
             slug: { $exists: true, $ne: '' },
@@ -3754,7 +3754,7 @@ async function handleFeedRequest(req, res, categoryFilter) {
         query.$expr = {
             $gt: [
                 { $strLenCP: { $trim: { input: { $ifNull: ['$content', ''] } } } },
-                1200
+                1000
             ]
         };
 
