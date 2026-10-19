@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned — ubuntu-latest migrates to Ubuntu 26 starting 2026-10-19
     # Generous margin for the weekly full-dump day — Atlas M0's shared-tier query
     # throttling (see repo memory) can make a full 20k+ doc collection scan slow;
     # incremental days finish in well under this.
