@@ -1,9 +1,22 @@
 {
   "version": 2,
   "builds": [
-    { "src": "server.js", "use": "@vercel/node" }
+    { "src": "server.js", "use": "@vercel/node" },
+    { "src": "public/**", "use": "@vercel/static" },
+    { "src": "uploads/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "src": "^/robots\\.txt$", "dest": "/server.js" },
+    {
+      "src": "^/(styles\\.css|ads\\.txt|default-news-photo\\.jpg|logo-jks\\.svg|logo\\.svg|myphoto\\.jpg|og-banner-jks\\.svg|og-banner\\.svg)$",
+      "dest": "/public/$1",
+      "headers": { "cache-control": "public, max-age=604800, s-maxage=604800" }
+    },
+    {
+      "src": "^/uploads/(.*)$",
+      "dest": "/uploads/$1",
+      "headers": { "cache-control": "public, max-age=604800, s-maxage=604800" }
+    },
     { "src": "/(.*)", "dest": "/server.js" }
   ],
   "regions": ["bom1"],
