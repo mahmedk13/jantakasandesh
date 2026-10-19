@@ -3685,11 +3685,11 @@ ${urls}
 });
 
 // ── Real-time RSS feed (WordPress-style /feed/) ──────────────────────────────
-// Short edge cache (same stale-while-revalidate pattern used elsewhere in this file) —
-// a brand-new article being up to 5 minutes late to the feed is an acceptable tradeoff
-// for not paying full DB-query + full-article-HTML origin cost on every single bot/
-// aggregator poll (feed polling is frequent and the response now carries full article
-// bodies, not a short teaser).
+// Edge-cached 1h fresh / up to 24h stale-while-revalidate — matches the sitemaps'
+// precedent. A brand-new article being up to ~1h late to the feed is an acceptable
+// tradeoff for not paying full DB-query + full-article-HTML origin cost on every
+// single bot/aggregator poll (feed polling is frequent and the response now carries
+// full article bodies, not a short teaser).
 const FEED_CATEGORY_NAMES = { desh: 'देश', videsh: 'विदेश', rajya: 'राज्य', bhopal: 'भोपाल', crime: 'अपराध', khel: 'खेल', rajniti: 'राजनीति', manoranjan: 'मनोरंजन', vyapar: 'व्यापार', itihas: 'इतिहास' };
 function escapeXmlFeed(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -3802,7 +3802,7 @@ ${items}
 </rss>`;
 
         res.set('Content-Type', 'application/rss+xml; charset=utf-8');
-        res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=1800');
+        res.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=82800');
         res.send(xml);
     } catch (err) {
         console.error('Feed route error:', err.message);
