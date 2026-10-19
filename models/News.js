@@ -243,19 +243,156 @@ const SLUG_STOP_WORDS = new Set([
 // mechanical "janate") — kept as a small exception list rather than a general
 // schwa-deletion algorithm, which is a much harder problem and risks mistransliterating
 // words that already work correctly.
+// Dictionary of common Hindi words (place names, government/political terms, police/
+// crime/legal vocabulary, general news vocabulary, education, health, weather/agriculture/
+// economy, and English-origin loanwords) whose mechanical consonant-by-consonant
+// transliteration produces an unnatural/wrong spelling — e.g. 'नोटिस' → 'notis' instead
+// of the familiar English word 'notice'. Expand this list over time as new cases surface.
 const SLUG_WORD_OVERRIDES = {
     'जानते': 'jante',
     'यूपी': 'up',
+    // Cities, states and places
+    'दिल्ली': 'delhi', 'भोपाल': 'bhopal', 'इंदौर': 'indore', 'जबलपुर': 'jabalpur',
+    'ग्वालियर': 'gwalior', 'उज्जैन': 'ujjain', 'रीवा': 'rewa', 'सतना': 'satna',
+    'सागर': 'sagar', 'खंडवा': 'khandwa', 'खरगोन': 'khargone', 'महाराष्ट्र': 'maharashtra',
+    'राजस्थान': 'rajasthan', 'बिहार': 'bihar', 'छत्तीसगढ़': 'chhattisgarh',
+    'उत्तराखंड': 'uttarakhand', 'हरियाणा': 'haryana', 'झारखंड': 'jharkhand',
+    'प्रयागराज': 'prayagraj', 'वाराणसी': 'varanasi', 'लखनऊ': 'lucknow', 'कानपुर': 'kanpur',
+    'मुंबई': 'mumbai', 'कोलकाता': 'kolkata', 'चेन्नई': 'chennai', 'बेंगलुरु': 'bengaluru',
+    'हैदराबाद': 'hyderabad', 'नोएडा': 'noida', 'गुरुग्राम': 'gurugram', 'अयोध्या': 'ayodhya',
+    // Government and politics
+    'मुख्यमंत्री': 'mukhyamantri', 'प्रधानमंत्री': 'pradhanmantri',
+    'उपमुख्यमंत्री': 'upmukhyamantri', 'मंत्री': 'mantri', 'राज्यपाल': 'rajyapal',
+    'राष्ट्रपति': 'rashtrapati', 'उपराष्ट्रपति': 'uparashtrapati', 'सरकार': 'sarkar',
+    'शासन': 'shasan', 'प्रशासन': 'prashasan', 'विधानसभा': 'vidhan-sabha',
+    'लोकसभा': 'lok-sabha', 'राज्यसभा': 'rajya-sabha', 'चुनाव': 'chunav',
+    'निर्वाचन': 'nirvachan', 'प्रत्याशी': 'pratyashi', 'उम्मीदवार': 'ummeedvar',
+    'विधायक': 'vidhayak', 'सांसद': 'sansad', 'महापौर': 'mahapaur', 'पार्षद': 'parshad',
+    'विपक्ष': 'vipaksh', 'कैबिनेट': 'cabinet', 'मंत्रालय': 'mantralaya', 'विभाग': 'vibhag',
+    'आदेश': 'aadesh', 'योजना': 'yojana', 'घोषणा': 'ghoshna', 'बैठक': 'baithak',
+    'दौरा': 'daura', 'शुभारंभ': 'shubharambh', 'लोकार्पण': 'lokarpan',
+    'भूमिपूजन': 'bhoomipujan',
+    // Police, crime and legal
+    'पुलिस': 'police', 'थाना': 'thana', 'थानेदार': 'thanedar', 'अधिकारी': 'adhikari',
+    'गिरफ्तार': 'giraftar', 'गिरफ्तारी': 'giraftari', 'आरोपी': 'aaropi', 'आरोप': 'aarop',
+    'मामला': 'mamla', 'मुकदमा': 'mukadma', 'शिकायत': 'shikayat', 'एफआईआर': 'fir',
+    'प्राथमिकी': 'prathmiki', 'जांच': 'jaanch', 'जांचकर्ता': 'jaanchkarta',
+    'अदालत': 'adalat', 'न्यायालय': 'nyayalaya', 'न्यायाधीश': 'nyayadhish', 'वकील': 'vakil',
+    'फैसला': 'faisla', 'सजा': 'saja', 'जमानत': 'jamanat', 'जेल': 'jail',
+    'नोटिस': 'notice', 'समन': 'summons', 'वारंट': 'warrant', 'कार्रवाई': 'karwai',
+    'छापेमारी': 'chhapemari', 'बरामद': 'baramad', 'जब्त': 'jabt', 'तस्करी': 'taskari',
+    'धोखाधड़ी': 'dhokhadhadi', 'ठगी': 'thagi', 'चोरी': 'chori', 'लूट': 'loot',
+    'हादसा': 'hadsa', 'दुर्घटना': 'durghatna',
+    // Common news vocabulary
+    'खबर': 'khabar', 'समाचार': 'samachar', 'अपडेट': 'update', 'रिपोर्ट': 'report',
+    'वायरल': 'viral', 'वीडियो': 'video', 'तस्वीर': 'tasveer', 'फोटो': 'photo',
+    'बयान': 'bayan', 'जानकारी': 'jankari', 'खुलासा': 'khulasa', 'दावा': 'dawa',
+    'विवाद': 'vivad', 'विरोध': 'virodh', 'प्रदर्शन': 'pradarshan', 'आंदोलन': 'andolan',
+    'हड़ताल': 'hadtal', 'समर्थन': 'samarthan', 'आलोचना': 'alochana', 'उपलब्धि': 'uplabdhi',
+    'सफलता': 'safalta', 'विफलता': 'vifalta', 'महत्वपूर्ण': 'mahatvapurn', 'विशेष': 'vishesh',
+    'अचानक': 'achanak', 'आखिरकार': 'aakhirkar',
+    // Education and employment
+    'शिक्षा': 'shiksha', 'स्कूल': 'school', 'विद्यालय': 'vidyalaya', 'कॉलेज': 'college',
+    'विश्वविद्यालय': 'vishwavidyalaya', 'परीक्षा': 'pariksha', 'परिणाम': 'parinam',
+    'रिजल्ट': 'result', 'प्रवेश': 'pravesh', 'एडमिशन': 'admission', 'छात्र': 'chhatra',
+    'छात्रा': 'chhatra', 'शिक्षक': 'shikshak', 'भर्ती': 'bharti', 'नौकरी': 'naukri',
+    'रोजगार': 'rojgar', 'बेरोजगारी': 'berojgari', 'नियुक्ति': 'niyukti',
+    'पदोन्नति': 'padonnati', 'वेतन': 'vetan', 'कर्मचारी': 'karmchari', 'आवेदन': 'aavedan',
+    'पाठ्यक्रम': 'pathyakram', 'छात्रवृत्ति': 'chhatravritti',
+    // Health and public services
+    'स्वास्थ्य': 'swasthya', 'अस्पताल': 'aspatal', 'डॉक्टर': 'doctor',
+    'चिकित्सक': 'chikitsak', 'मरीज': 'mareez', 'रोगी': 'rogi', 'इलाज': 'ilaaj',
+    'उपचार': 'upchar', 'बीमारी': 'bimari', 'दवा': 'dawa', 'टीकाकरण': 'tikakaran',
+    'एंबुलेंस': 'ambulance', 'शिविर': 'shivir', 'ऑपरेशन': 'operation', 'चिकित्सा': 'chikitsa',
+    'जनस्वास्थ्य': 'janswasthya',
+    // Weather, agriculture and economy
+    'मौसम': 'mausam', 'बारिश': 'barish', 'वर्षा': 'varsha', 'तूफान': 'toofan',
+    'आंधी': 'aandhi', 'बाढ़': 'baadh', 'सूखा': 'sookha', 'गर्मी': 'garmi', 'ठंड': 'thand',
+    'तापमान': 'taapman', 'किसान': 'kisan', 'खेती': 'kheti', 'कृषि': 'krishi',
+    'फसल': 'fasal', 'गेहूं': 'gehun', 'धान': 'dhan', 'खाद': 'khad', 'बिजली': 'bijli',
+    'पानी': 'pani', 'महंगाई': 'mehngai', 'बाजार': 'bazaar', 'कीमत': 'keemat',
+    'पेट्रोल': 'petrol', 'डीजल': 'diesel', 'सोना': 'sona', 'चांदी': 'chandi',
+    'कारोबार': 'karobar', 'व्यापार': 'vyapar', 'निवेश': 'nivesh', 'बजट': 'budget',
+    // English-origin loanwords (phonetic transliteration badly mangles these)
+    'ऑफिस': 'office', 'कमेटी': 'committee', 'कमिश्नर': 'commissioner',
+    'कलेक्टर': 'collector', 'डायरेक्टर': 'director', 'एक्शन': 'action',
+    'सस्पेंड': 'suspend', 'ट्रांसफर': 'transfer', 'प्रमोशन': 'promotion',
+    'रजिस्ट्रेशन': 'registration', 'परमिशन': 'permission', 'एप्लीकेशन': 'application',
+    'ऑनलाइन': 'online', 'ऑफलाइन': 'offline', 'वेबसाइट': 'website', 'मोबाइल': 'mobile',
+    'इंटरनेट': 'internet', 'कंप्लेंट': 'complaint',
 };
 
+// Multiword Hindi phrases that must be slugged as ONE fixed unit rather than
+// word-by-word (e.g. 'मध्य प्रदेश' → 'madhya-pradesh', not 'madhya'+'pradesh' run
+// separately through transliterate()). Matched greedily (longest phrase first)
+// against the raw word list, before stop-word filtering/per-word overrides.
+const SLUG_PHRASE_OVERRIDES = {
+    'मध्य प्रदेश': 'madhya-pradesh',
+    'उत्तर प्रदेश': 'uttar-pradesh',
+    'बड़ी खबर': 'badi-khabar',
+    'ताजा खबर': 'taza-khabar',
+    'ब्रेकिंग न्यूज': 'breaking-news',
+    'सोशल मीडिया': 'social-media',
+    'बड़ी कार्रवाई': 'badi-karwai',
+    'नया आदेश': 'naya-aadesh',
+    'पहली बार': 'pehli-baar',
+    'फिर से': 'phir-se',
+    'एडमिट कार्ड': 'admit-card',
+    'जांच रिपोर्ट': 'jaanch-report',
+    'स्वास्थ्य विभाग': 'swasthya-vibhag',
+    'स्वास्थ्य मंत्री': 'swasthya-mantri',
+    'शिक्षक भर्ती': 'shikshak-bharti',
+    'प्रवेश पत्र': 'pravesh-patra',
+    'परीक्षा केंद्र': 'pariksha-kendra',
+    'बीमारी का प्रकोप': 'bimari-ka-prakop',
+};
+// Longest phrase above (in words) — used to bound the greedy match window below.
+const SLUG_PHRASE_MAX_WORDS = Math.max(...Object.keys(SLUG_PHRASE_OVERRIDES).map(p => p.split(' ').length));
+// Marks a token as an already-resolved slug fragment (phrase match), so later steps
+// never re-transliterate or stop-word-filter it (no legitimate Hindi word starts with \0).
+const PHRASE_TOKEN_PREFIX = '\u0000';
+
+// Scan a raw word list left-to-right and collapse any recognized multiword phrase
+// (longest match wins) into a single pre-resolved token.
+function mergePhraseOverrides(words) {
+    const merged = [];
+    for (let i = 0; i < words.length;) {
+        let matchedLen = 0;
+        for (let len = SLUG_PHRASE_MAX_WORDS; len >= 2; len--) {
+            if (i + len > words.length) continue;
+            const candidate = words.slice(i, i + len).join(' ');
+            if (SLUG_PHRASE_OVERRIDES[candidate]) {
+                merged.push(PHRASE_TOKEN_PREFIX + SLUG_PHRASE_OVERRIDES[candidate]);
+                matchedLen = len;
+                break;
+            }
+        }
+        i += matchedLen || 1;
+        if (!matchedLen) merged.push(words[i - 1]);
+    }
+    return merged;
+}
+
+// Visarga (ः) is often used colloquially as a colon after a word (e.g. 'यूपीः' meaning
+// 'UP:') rather than as part of the word's actual spelling — strip it before the
+// override-dictionary lookup so 'यूपीः' still matches the 'यूपी' entry (transliterate()
+// already silently drops ः mid-word, so this doesn't change the no-override fallback output).
+function lookupWordOverride(w) {
+    return SLUG_WORD_OVERRIDES[w] || SLUG_WORD_OVERRIDES[w.replace(/ः+$/, '')] || null;
+}
+
 function generateSlug(heading) {
-    // 1. Split into words; filter stop words; take first 6 significant words
-    const words = heading.split(/[\s,।\-:!?;]+/).filter(w => w.length >= 2);
-    const significant = words.filter(w => !SLUG_STOP_WORDS.has(w)).slice(0, 6);
+    // 1. Split into words, merge recognized multiword phrases, filter stop words,
+    // take first 6 significant words
+    const rawWords = heading.split(/[\s,।\-:!?;]+/).filter(w => w.length >= 2);
+    const words = mergePhraseOverrides(rawWords);
+    const isPhraseToken = w => w.startsWith(PHRASE_TOKEN_PREFIX);
+    const significant = words.filter(w => isPhraseToken(w) || !SLUG_STOP_WORDS.has(w)).slice(0, 6);
     const toSlugify = significant.length >= 2 ? significant : words.slice(0, 6);
     // 2. Transliterate (per word, with overrides for common mid-word schwa-deletion
-    // cases the mechanical algorithm gets wrong), collapse hyphens, trim, cap at 50 chars
-    const base = toSlugify.map(w => SLUG_WORD_OVERRIDES[w] || transliterate(w)).join('-')
+    // cases and familiar Hindi/loanword spellings the mechanical algorithm gets wrong),
+    // collapse hyphens, trim, cap at 50 chars
+    const base = toSlugify.map(w => isPhraseToken(w) ? w.slice(1) : (lookupWordOverride(w) || transliterate(w))).join('-')
         .replace(/-+/g, '-')
         .replace(/^-|-$/g, '')
         .slice(0, 50);

@@ -103,6 +103,9 @@ function callGroq(prompt, maxTokens = 400, model = 'openai/gpt-oss-20b', tempera
 // Maps old garbled slug → destination URL.  Checked first in /news/:slug handler.
 const LEGACY_REDIRECTS = {
     'bhri-baithk-mem-bhi-ge-kamgresi-8-vrishth-netaom-ne-de-die-istife-empi-mem-jbrds': '/',
+    // Slug dictionary corrections (2026-10-16): old mistransliterated slug → corrected slug's own URL
+    'indaur-mahalakshmi-nagar-sab-steshan-50': '/news/indore-mahalakshmi-nagar-sab-steshan-50',
+    'yupi-mlc-snatak-shikshak-chunav-lie': '/news/up-mlc-snatak-shikshak-chunav-lie',
     // Add more old garbled slugs here as needed:
     // 'old-broken-slug': '/',
 };
