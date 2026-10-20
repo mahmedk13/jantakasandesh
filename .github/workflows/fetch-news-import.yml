@@ -1,9 +1,10 @@
-name: Fetch RSS + NewsData.io News
+name: Fetch RSS + NewsData.io + GNews + Currents News
 
 on:
   schedule:
-    # Matches the schedule this replaces in vercel.json's "crons" (30 12 * * * UTC)
-    - cron: '30 12 * * *'
+    # Every 4 hours during the same active window as sync-pbshabd.yml (IST ~05:30-21:30,
+    # i.e. UTC hours 0-17); cron is UTC, minute :30 to avoid the top-of-hour GH Actions queue.
+    - cron: '30 0-17/4 * * *'
   workflow_dispatch:           # manual trigger
 
 concurrency:
@@ -28,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run RSS + NewsData.io import
+      - name: Run RSS + NewsData.io + GNews + Currents import
         run: node fetch-news-import.js
         env:
           MONGODB_URI:            ${{ secrets.MONGODB_URI }}
@@ -36,3 +37,6 @@ jobs:
           IMAGEKIT_PRIVATE_KEY:   ${{ secrets.IMAGEKIT_PRIVATE_KEY }}
           IMAGEKIT_URL_ENDPOINT:  ${{ secrets.IMAGEKIT_URL_ENDPOINT }}
           NEWSDATA_API_KEY:       ${{ secrets.NEWSDATA_API_KEY }}
+          GNEWS_API_KEY:          ${{ secrets.GNEWS_API_KEY }}
+          CURRENTS_API_KEY:       ${{ secrets.CURRENTS_API_KEY }}
+          RESEND_API_KEY:         ${{ secrets.RESEND_API_KEY }}

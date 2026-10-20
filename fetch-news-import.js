@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// Standalone RSS + NewsData.io import script — runs via GitHub Actions instead of
-// Vercel's cron, so the CPU-heavy image download+compress work (sharp) happens on
-// GitHub's runners instead of counting against Vercel's Fluid Active CPU quota.
-// Moves ONLY the automated daily fetchAllNews() path (RSS_SOURCES + NewsData.io) —
-// the admin-triggered manual GNews/Currents/fetch-rss buttons stay in server.js
-// untouched, they're low-frequency human-initiated actions, not a recurring cost.
+// Standalone RSS + NewsData.io + GNews + Currents import script — runs via GitHub
+// Actions instead of Vercel's cron, so the CPU-heavy image download+compress work
+// (sharp) happens on GitHub's runners instead of counting against Vercel's Fluid
+// Active CPU quota. GNews/Currents are additionally still exposed as manual admin
+// buttons in server.js for on-demand use — those are unaffected by this script.
 // Usage: node fetch-news-import.js
 require('dotenv').config();
 const dns = require('dns');
@@ -20,6 +19,8 @@ const rssParser = new RSSParser({
     customFields: { item: ['media:content', 'media:thumbnail', 'enclosure', 'source'] },
     timeout: 10000
 });
+
+const SITE_URL = (process.env.SITE_URL || 'https://www.jantakasandesh.in').replace(/\/$/, '');
 
 const imagekit = (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_URL_ENDPOINT)
     ? new ImageKit({
@@ -383,7 +384,7 @@ async function fetchAndImportRSS() {
         }
     }
 
-    if (!candidates.length) { console.log('=== RSS import done: 0 candidates ==='); return 0; }
+    if (!candidates.length) { console.log('=== RSS import done: 0 candidates ==='); return { count: 0, stories: [] }; }
 
     const seenNorms = new Set(), seenLinks = new Set();
     const dedupedCandidates = candidates.filter(c => {
@@ -403,7 +404,7 @@ async function fetchAndImportRSS() {
     const existingNorms = new Set(existing.map(e => e.headingNorm).filter(Boolean));
 
     const newDocs = dedupedCandidates.filter(c => !existingLinks.has(c.rssLink) && !existingNorms.has(c.headingNorm));
-    if (!newDocs.length) { console.log('=== RSS import done: 0 new (all duplicates) ==='); return 0; }
+    if (!newDocs.length) { console.log('=== RSS import done: 0 new (all duplicates) ==='); return { count: 0, stories: [] }; }
 
     await Promise.allSettled(
         newDocs
@@ -428,8 +429,176 @@ async function fetchAndImportRSS() {
         if (err.code !== 11000) console.error('insertMany error:', err.message);
     });
 
+    const stories = newDocs.map(d => ({ title: d.heading, slug: d.slug, source: d.rssSource }));
     console.log(`=== RSS import done: ${newDocs.length} new articles ===`);
-    return newDocs.length;
+    return { count: newDocs.length, stories };
+}
+
+// ── GNews API (same logic as server.js's fetchFromGNewsAPI) ──────────────────
+// Free: 100 requests/day, 10 results per request, full article content provided
+async function fetchFromGNewsAPI() {
+    const apiKey = process.env.GNEWS_API_KEY;
+    if (!apiKey) {
+        console.log('⚠️ GNEWS_API_KEY not set, skipping GNews fetch');
+        return { count: 0, stories: [] };
+    }
+
+    console.log('=== Fetching from GNews API ===');
+    let totalImported = 0;
+    const stories = [];
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const requests = [
+        { url: `https://gnews.io/api/v4/top-headlines?lang=hi&country=in&max=10&apikey=${apiKey}`, label: 'top-headlines' },
+        { url: `https://gnews.io/api/v4/top-headlines?lang=hi&country=in&topic=politics&max=10&apikey=${apiKey}`, label: 'politics' },
+        { url: `https://gnews.io/api/v4/top-headlines?lang=hi&country=in&topic=sports&max=10&apikey=${apiKey}`, label: 'sports' },
+    ];
+
+    for (const req of requests) {
+        try {
+            const response = await fetch(req.url);
+            if (!response.ok) {
+                console.error(`✗ GNews ${req.label}: HTTP ${response.status}`);
+                continue;
+            }
+            const data = await response.json();
+            if (!data.articles) {
+                console.error(`✗ GNews ${req.label}: no articles field`);
+                continue;
+            }
+
+            for (const item of data.articles) {
+                if (!item.title || !item.url) continue;
+                if (isBlockedDomain(item.url)) continue;
+
+                const normHead = normalizeHeading(item.title);
+                const exists = await News.findOne({
+                    $or: [{ rssLink: item.url }, { headingNorm: normHead }]
+                }).lean();
+                if (exists) continue;
+
+                const photo = (item.image && item.image.startsWith('http')) ? item.image : null;
+                const itemPublished = item.publishedAt ? new Date(item.publishedAt) : new Date();
+                if (itemPublished < threeDaysAgo) continue;
+                const pubDate = itemPublished;
+                const rawContent = item.content || item.description || '';
+                const content = paragraphizeLegacyImportedText(rawContent);
+                if (plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
+                const full = isFullArticleContent(content);
+
+                const category = mapRssCategory([], item.title, req.label === 'politics' ? 'rajniti' :
+                    req.label === 'sports' ? 'khel' : req.label === 'entertainment' ? 'manoranjan' :
+                    req.label === 'business' ? 'vyapar' : req.label === 'world' ? 'videsh' : 'desh', content);
+
+                const newsData = {
+                    heading:       item.title.trim(),
+                    headingNorm:   normHead,
+                    content,
+                    full,
+                    category,
+                    state:         category === 'rajya' ? detectState(item.title, content) : null,
+                    author:        'JKS News Desk',
+                    photos:        photo ? [photo] : [],
+                    date:          pubDate,
+                    views:         0,
+                    rssLink:       item.url,
+                    rssSource:     'GNews',
+                    formattedDate: pubDate.toLocaleDateString('hi-IN', { year: 'numeric', month: 'long', day: 'numeric' })
+                };
+
+                const saved = await new News(newsData).save();
+                totalImported++;
+                stories.push({ title: saved.heading, slug: saved.slug, source: 'GNews' });
+            }
+            console.log(`✓ GNews ${req.label}: processed`);
+        } catch (err) {
+            console.error(`✗ GNews ${req.label} failed:`, err.message);
+        }
+    }
+
+    console.log(`=== GNews import done: ${totalImported} new articles ===`);
+    return { count: totalImported, stories };
+}
+
+// ── Currents API (same logic as server.js's fetchFromCurrentsAPI) ────────────
+// Free: 600 requests/day, full article content, good Hindi India coverage
+async function fetchFromCurrentsAPI() {
+    const apiKey = process.env.CURRENTS_API_KEY;
+    if (!apiKey) {
+        console.log('⚠️ CURRENTS_API_KEY not set, skipping Currents fetch');
+        return { count: 0, stories: [] };
+    }
+
+    console.log('=== Fetching from Currents API ===');
+    let totalImported = 0;
+    const stories = [];
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+
+    const requests = [
+        { url: `https://api.currentsapi.services/v1/latest-news?language=hi&country=IN&apiKey=${apiKey}`, label: 'latest-hi' },
+    ];
+
+    for (const req of requests) {
+        try {
+            const response = await fetch(req.url);
+            if (!response.ok) {
+                console.error(`✗ Currents ${req.label}: HTTP ${response.status}`);
+                continue;
+            }
+            const data = await response.json();
+            if (data.status !== 'ok' || !data.news) {
+                console.error(`✗ Currents ${req.label}: ${data.message || 'unknown error'}`);
+                continue;
+            }
+
+            for (const item of data.news) {
+                if (!item.title || !item.url) continue;
+                if (isBlockedDomain(item.url)) continue;
+
+                const normHead = normalizeHeading(item.title);
+                const exists = await News.findOne({
+                    $or: [{ rssLink: item.url }, { headingNorm: normHead }]
+                }).lean();
+                if (exists) continue;
+
+                const photo = (item.image && item.image.startsWith('http') && item.image !== 'None') ? item.image : null;
+                const itemPub = item.published ? new Date(item.published) : new Date();
+                if (itemPub < threeDaysAgo) continue;
+                const pubDate = itemPub;
+                const content = paragraphizeLegacyImportedText(item.description || '');
+                if (plainBodyCharCount(content) < MIN_IMPORTED_BODY_CHARS) continue;
+                const full = isFullArticleContent(content);
+
+                const category = mapRssCategory(item.category || [], item.title, 'desh', content);
+
+                const newsData = {
+                    heading:       item.title.trim(),
+                    headingNorm:   normHead,
+                    content,
+                    full,
+                    category,
+                    state:         category === 'rajya' ? detectState(item.title, content) : null,
+                    author:        'JKS News Desk',
+                    photos:        photo ? [photo] : [],
+                    date:          pubDate,
+                    views:         0,
+                    rssLink:       item.url,
+                    rssSource:     'Currents',
+                    formattedDate: pubDate.toLocaleDateString('hi-IN', { year: 'numeric', month: 'long', day: 'numeric' })
+                };
+
+                const saved = await new News(newsData).save();
+                totalImported++;
+                stories.push({ title: saved.heading, slug: saved.slug, source: 'Currents' });
+            }
+            console.log(`✓ Currents ${req.label}: processed`);
+        } catch (err) {
+            console.error(`✗ Currents ${req.label} failed:`, err.message);
+        }
+    }
+
+    console.log(`=== Currents import done: ${totalImported} new articles ===`);
+    return { count: totalImported, stories };
 }
 
 // ── NewsData.io import (same logic as server.js's fetchFromNewsDataAPI) ──────
@@ -437,11 +606,12 @@ async function fetchFromNewsDataAPI() {
     const apiKey = process.env.NEWSDATA_API_KEY;
     if (!apiKey) {
         console.log('⚠️ NEWSDATA_API_KEY not set, skipping NewsData.io fetch');
-        return 0;
+        return { count: 0, stories: [] };
     }
 
     console.log('=== Fetching from NewsData.io API ===');
     let totalImported = 0;
+    const stories = [];
 
     const requests = [
         { url: `https://newsdata.io/api/1/news?apikey=${apiKey}&language=hi&country=in&category=top,politics,crime`, label: 'top/politics/crime' },
@@ -504,8 +674,9 @@ async function fetchFromNewsDataAPI() {
                     formattedDate: pubDate.toLocaleDateString('hi-IN', { year: 'numeric', month: 'long', day: 'numeric' })
                 };
 
-                await new News(newsData).save();
+                const saved = await new News(newsData).save();
                 totalImported++;
+                stories.push({ title: saved.heading, slug: saved.slug, source: 'NewsData.io' });
             }
             console.log(`✓ NewsData.io ${req.label}: processed`);
         } catch (err) {
@@ -514,7 +685,57 @@ async function fetchFromNewsDataAPI() {
     }
 
     console.log(`=== NewsData.io import done: ${totalImported} new articles ===`);
-    return totalImported;
+    return { count: totalImported, stories };
+}
+
+// ── Email report (same Resend-based pattern as sync-pbshabd.js's sendReport) ─
+async function sendReport({ imported, breakdown, stories, error }) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return;
+
+    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+    const ok  = !error;
+    const subject = `RSS/API Fetch | ${now}`;
+
+    const rows = stories.map((s, i) => `
+    <tr>
+      <td style="padding:6px 12px;color:#6b7280">${i + 1}</td>
+      <td style="padding:6px 12px">${s.title}</td>
+      <td style="padding:6px 12px;color:#6b7280">${s.source}</td>
+      <td style="padding:6px 12px"><a href="${SITE_URL}/news/${s.slug}" style="color:#1d4ed8">${SITE_URL}/news/${s.slug}</a></td>
+    </tr>`).join('');
+
+    const breakdownLine = breakdown
+        ? `${breakdown.rss || 0} RSS + ${breakdown.newsdata || 0} NewsData.io + ${breakdown.gnews || 0} GNews + ${breakdown.currents || 0} Currents`
+        : '';
+
+    const html = `
+<div style="font-family:sans-serif;max-width:860px;color:#111">
+  <h2 style="color:#1d4ed8;margin-bottom:4px">RSS + API News Fetch</h2>
+  <p style="color:#6b7280;margin-top:0">${now}</p>
+  <p><strong>Status:</strong> ${ok ? '✅ Success' : '❌ Failed — ' + error.message}</p>
+  <p><strong>Imported:</strong> ${imported} stories ${breakdownLine ? `(${breakdownLine})` : ''}</p>
+  ${stories.length ? `
+  <h3 style="border-bottom:1px solid #e5e7eb;padding-bottom:6px">Imported Stories</h3>
+  <table border="1" cellspacing="0" style="border-collapse:collapse;font-size:13px;width:100%;border-color:#e5e7eb">
+    <thead><tr style="background:#f8fafc">
+      <th style="padding:6px 12px;text-align:left">#</th>
+      <th style="padding:6px 12px;text-align:left">Title</th>
+      <th style="padding:6px 12px;text-align:left">Source</th>
+      <th style="padding:6px 12px;text-align:left">URL</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>` : '<p>No new stories imported.</p>'}
+</div>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: 'RSS Fetch <onboarding@resend.dev>', to: ['mahmedk13@gmail.com'], subject, html }),
+        signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) console.log('📧 Report sent to mahmedk13@gmail.com');
+    else console.warn('⚠️ Email failed:', await res.text());
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -524,15 +745,28 @@ async function main() {
     await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
     console.log('✅ MongoDB connected');
 
-    const rssCount = await fetchAndImportRSS();
-    const apiCount = await fetchFromNewsDataAPI();
+    const rss      = await fetchAndImportRSS();
+    const api      = await fetchFromNewsDataAPI();
+    const gnews    = await fetchFromGNewsAPI();
+    const currents = await fetchFromCurrentsAPI();
 
-    console.log(`=== Done: ${rssCount + apiCount} total new articles (${rssCount} RSS + ${apiCount} NewsData.io) ===`);
+    const total = rss.count + api.count + gnews.count + currents.count;
+    const allStories = [...rss.stories, ...api.stories, ...gnews.stories, ...currents.stories];
+    console.log(`=== Done: ${total} total new articles (${rss.count} RSS + ${api.count} NewsData.io + ${gnews.count} GNews + ${currents.count} Currents) ===`);
+
+    await sendReport({
+        imported: total,
+        breakdown: { rss: rss.count, newsdata: api.count, gnews: gnews.count, currents: currents.count },
+        stories: allStories,
+        error: null,
+    });
+
     await mongoose.disconnect();
     process.exit(0);
 }
 
-main().catch(err => {
+main().catch(async err => {
     console.error('❌ Fatal error:', err);
+    await sendReport({ imported: 0, breakdown: null, stories: [], error: err }).catch(() => {});
     process.exit(1);
 });
