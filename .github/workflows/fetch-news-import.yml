@@ -4,7 +4,9 @@ on:
   schedule:
     # Every 4 hours during the same active window as sync-pbshabd.yml (IST ~05:30-21:30,
     # i.e. UTC hours 0-17); cron is UTC, minute :30 to avoid the top-of-hour GH Actions queue.
-    - cron: '30 0-17/4 * * *'
+    # Explicit comma list (not a range/step like 0-17/4) — sync-pbshabd.yml's plain range
+    # (`0-17`, no step) is the only pattern proven to actually fire on this repo so far.
+    - cron: '30 0,4,8,12,16 * * *'
   workflow_dispatch:           # manual trigger
 
 concurrency:
