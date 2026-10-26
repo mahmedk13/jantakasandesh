@@ -385,7 +385,16 @@ async function main() {
 
     for (const { page, state, pbCatId, search, label } of fetchPlan) {
         console.log(`📄 Fetching [${label}]…`);
-        const json = await fetchPage(cookies, page, state, pbCatId, search);
+        // A single flaky PB SHABD/ImageKit/DB request must never kill the whole run (it used
+        // to — one timed-out page fetch anywhere in the ~28-pass plan threw uncaught and
+        // aborted every remaining pass, which is what "sync keeps timing out" actually was).
+        let json;
+        try {
+            json = await fetchPage(cookies, page, state, pbCatId, search);
+        } catch (e) {
+            console.warn(`  ⚠️ Skipping [${label}] — fetch failed: ${e.message}`);
+            continue;
+        }
         const stories = json.data || [];
         if (!stories.length) { console.log(`  No stories for [${label}]`); continue; }
         // This pass's own category signal — used only when no keyword in the story matches
@@ -394,6 +403,7 @@ async function main() {
 
         let importable = 0, dups = 0;
         for (const story of stories) {
+          try {
             if (seenStoryIds.has(story.story_id)) continue;
             const hasImage = (story.media || []).some(m =>
                 m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
@@ -431,7 +441,9 @@ async function main() {
                 const imgMediaList = (story.media || []).filter(m =>
                     m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
                 for (const imgMedia of imgMediaList) {
-                    const s3Url = await getImageUrl(cookies, imgMedia.media_id, imgMedia.extention);
+                    // getImageUrl has no internal timeout-safety net — guard it here too, same
+                    // reasoning as the fetchPage try/catch above.
+                    const s3Url = await getImageUrl(cookies, imgMedia.media_id, imgMedia.extention).catch(() => null);
                     const uploaded = s3Url ? await uploadToImageKit(s3Url) : null;
                     if (uploaded) photoUrls.push(uploaded);
                 }
@@ -466,6 +478,9 @@ async function main() {
             totalImported++;
             importedStories.push({ title: story.title, slug });
             console.log(`  ✔ [${story.news_type}] ${story.title.substring(0, 60)}`);
+          } catch (e) {
+            console.warn(`  ⚠️ Skipping story (${(story.title || '').substring(0, 50)}): ${e.message}`);
+          }
         }
         totalSkipped += dups;
         if (importable > 0 && dups === importable) console.log(`  All importable stories already in DB for [${label}]`);

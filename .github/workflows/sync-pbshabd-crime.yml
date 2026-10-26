@@ -1,0 +1,45 @@
+name: Sync PB SHABD Crime News (Bhopal/MP)
+
+on:
+  schedule:
+    # Hourly, offset 30 min from the main sync-pbshabd job to avoid overlap.
+    # Same active window: UTC 0-17 = IST 05:30-22:30.
+    - cron: '0 0-17 * * *'
+  workflow_dispatch:           # manual trigger
+
+concurrency:
+  group: sync-pbshabd-crime
+  cancel-in-progress: false   # let a running sync finish; skip queued duplicates
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04   # pinned — ubuntu-latest migrates to Ubuntu 26 starting 2026-10-19
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run PB SHABD crime sync (Bhopal/MP)
+        run: node sync-pbshabd-crime.js
+        env:
+          PBSHABD_EMAIL:          ${{ secrets.PBSHABD_EMAIL }}
+          PBSHABD_PASSWORD:       ${{ secrets.PBSHABD_PASSWORD }}
+          MONGODB_URI:            ${{ secrets.MONGODB_URI }}
+          CLOUDINARY_CLOUD_NAME:  ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY:     ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET:  ${{ secrets.CLOUDINARY_API_SECRET }}
+          IMAGEKIT_PUBLIC_KEY:    ${{ secrets.IMAGEKIT_PUBLIC_KEY }}
+          IMAGEKIT_PRIVATE_KEY:   ${{ secrets.IMAGEKIT_PRIVATE_KEY }}
+          IMAGEKIT_URL_ENDPOINT:  ${{ secrets.IMAGEKIT_URL_ENDPOINT }}
+          RESEND_API_KEY:         ${{ secrets.RESEND_API_KEY }}
+          SITE_URL:               https://voiceofkranti.com

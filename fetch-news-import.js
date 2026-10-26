@@ -17,10 +17,17 @@ const { News, generateSlug } = require('./models/News');
 
 const rssParser = new RSSParser({
     customFields: { item: ['media:content', 'media:thumbnail', 'enclosure', 'source'] },
-    timeout: 10000
+    timeout: 10000,
+    // Several publishers (News18, Dainik Bhaskar) 403 the default 'rss-parser' User-Agent —
+    // a real browser UA gets through.
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+    },
 });
 
-const SITE_URL = (process.env.SITE_URL || 'https://www.jantakasandesh.in').replace(/\/$/, '');
+// Used only for the email report's article links — not read anywhere else in this file.
+const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
 
 const imagekit = (process.env.IMAGEKIT_PUBLIC_KEY && process.env.IMAGEKIT_PRIVATE_KEY && process.env.IMAGEKIT_URL_ENDPOINT)
     ? new ImageKit({

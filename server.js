@@ -130,7 +130,13 @@ async function getCityFromIP(ip) {
 // ── RSS Configuration ─────────────────────────────────────────────────────────
 const rssParser = new RSSParser({
     customFields: { item: ['media:content', 'media:thumbnail', 'enclosure', 'source'] },
-    timeout: 10000
+    timeout: 10000,
+    // Several publishers (News18, Dainik Bhaskar) 403 the default 'rss-parser' User-Agent —
+    // a real browser UA gets through.
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+    },
 });
 
 // ── HTML cleaner — strips tags AND decodes HTML entities ────────────────────────

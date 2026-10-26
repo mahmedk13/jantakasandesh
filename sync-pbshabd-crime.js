@@ -1,0 +1,416 @@
+#!/usr/bin/env node
+// Standalone PB SHABD CRIME sync — Bhopal/MP only, runs independently of sync-pbshabd.js.
+// Our portal is based out of Bhopal but the main hourly sync's single "MP Crime" pass
+// (PB's own category+state filter) and 2-page Bhopal search barely surface any crime
+// stories, while UP crime comes through fine via the all-India crime pool. This job
+// goes deeper (more pages) and adds direct Hindi crime-keyword searches scoped to
+// Madhya Pradesh, since PB's own category tagging is known to be unreliable/sparse
+// for state-specific crime (see sync-pbshabd.js's categorize() comments).
+// Usage: node sync-pbshabd-crime.js [--skip-images]
+require('dotenv').config();
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
+const mongoose   = require('mongoose');
+const ImageKit   = require('imagekit');
+const sharp      = require('sharp');
+const { News, generateSlug } = require('./models/News');
+
+const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
+const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.jpg`;
+
+const args       = process.argv.slice(2);
+const skipImages = args.includes('--skip-images');
+
+const PBSHABD_BASE     = 'https://shabd.prasarbharati.org';
+const IMPORT_TYPES     = new Set(['RUSH', 'PRI', 'URG']);
+const VALID_IMAGE_EXTS = new Set(['.JPG', '.JPEG', '.PNG', '.WEBP', '.GIF']);
+const CRIME_CATEGORY_ID = '19';
+
+// Same category map as sync-pbshabd.js (kept in sync manually — this job is narrow
+// enough in scope that duplicating beats adding a shared-module dependency risk to
+// the already-stable main sync).
+const CATEGORY_MAP = {
+    'अपराध': 'crime', 'हत्या': 'crime', 'गिरफ्तार': 'crime', 'दुर्घटना': 'crime',
+    'बलात्कार': 'crime', 'लूट': 'crime', 'डकैती': 'crime', 'तस्करी': 'crime',
+    'फरार': 'crime', 'जेल': 'crime', 'पुलिस': 'crime', 'एफआईआर': 'crime',
+    'आरोपी': 'crime', 'अभियुक्त': 'crime', 'शव': 'crime',
+    'crime': 'crime', 'murder': 'crime', 'arrested': 'crime', 'accident': 'crime',
+    'rape': 'crime', 'robbery': 'crime', 'theft': 'crime', 'police': 'crime', 'fir': 'crime',
+    'खेल': 'khel', 'क्रिकेट': 'khel', 'cricket': 'khel', 'football': 'khel', 'ipl': 'khel',
+    'hockey': 'khel', 'tennis': 'khel', 'wrestling': 'khel', 'badminton': 'khel', 'sports': 'khel',
+    'मनोरंजन': 'manoranjan', 'बॉलीवुड': 'manoranjan', 'फिल्म': 'manoranjan',
+    'bollywood': 'manoranjan', 'cinema': 'manoranjan', 'film': 'manoranjan',
+    'व्यापार': 'vyapar', 'बाजार': 'vyapar', 'शेयर': 'vyapar', 'अर्थव्यवस्था': 'vyapar',
+    'business': 'vyapar', 'economy': 'vyapar', 'market': 'vyapar', 'budget': 'vyapar',
+    'राजनीति': 'rajniti', 'चुनाव': 'rajniti', 'संसद': 'rajniti', 'भाजपा': 'rajniti', 'कांग्रेस': 'rajniti',
+    'politics': 'rajniti', 'election': 'rajniti', 'parliament': 'rajniti', 'bjp': 'rajniti', 'modi': 'rajniti',
+    'विदेश': 'videsh', 'अमेरिका': 'videsh', 'चीन': 'videsh', 'पाकिस्तान': 'videsh',
+    'world': 'videsh', 'international': 'videsh', 'china': 'videsh', 'pakistan': 'videsh',
+    'भोपाल': 'bhopal', 'bhopal': 'bhopal',
+    'प्रधानमंत्री': 'desh', 'पीएम मोदी': 'desh', 'केंद्र सरकार': 'desh', 'केंद्रीय मंत्रिमंडल': 'desh',
+    'केंद्रीय कैबिनेट': 'desh', 'राष्ट्रपति': 'desh', 'सुप्रीम कोर्ट': 'desh', 'सर्वोच्च न्यायालय': 'desh',
+    'केंद्रीय बजट': 'desh', 'आम बजट': 'desh', 'नीति आयोग': 'desh', 'गृह मंत्रालय': 'desh',
+    'रक्षा मंत्रालय': 'desh', 'विदेश मंत्रालय': 'desh', 'वित्त मंत्रालय': 'desh',
+    'prime minister': 'desh', 'pm modi': 'desh', 'union cabinet': 'desh', 'central government': 'desh',
+    'supreme court': 'desh', 'union budget': 'desh', 'niti aayog': 'desh',
+};
+
+function categorize(title, stateHint, desc, sourceHint) {
+    const checks = [title.toLowerCase(), stateHint.toLowerCase(), (desc || '').toLowerCase()];
+    for (const text of checks) {
+        for (const [key, val] of Object.entries(CATEGORY_MAP)) {
+            if (text.includes(key)) return val;
+        }
+    }
+    return sourceHint === 'bhopal' ? sourceHint : 'rajya';
+}
+
+function detectState(title, stateHint, desc) {
+    const checks = [(stateHint || '').toLowerCase(), (title || '').toLowerCase(), (desc || '').toLowerCase()];
+    const MP_WORDS = ['madhya pradesh', 'मध्य प्रदेश', 'मध्यप्रदेश', 'indore', 'इंदौर', 'gwalior', 'ग्वालियर',
+        'jabalpur', 'जबलपुर', 'ujjain', 'उज्जैन', 'bhopal', 'भोपाल'];
+    for (const text of checks) {
+        if (MP_WORDS.some(w => text.includes(w))) return 'mp';
+    }
+    return 'other';
+}
+
+// ── Cookie helpers ───────────────────────────────────────────────────────────
+function extractCookies(headers) {
+    const out = {};
+    for (const c of (headers.getSetCookie?.() || [])) {
+        const [nv] = c.split(';');
+        const eq = nv.indexOf('=');
+        if (eq > 0) out[nv.slice(0, eq).trim()] = nv.slice(eq + 1).trim();
+    }
+    return out;
+}
+function cookieHeader(obj) {
+    return Object.entries(obj).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+// ── PB SHABD helpers ─────────────────────────────────────────────────────────
+async function login() {
+    const r = await fetch(`${PBSHABD_BASE}/login`, { signal: AbortSignal.timeout(15000) });
+    const html = await r.text();
+    const m = html.match(/name="_token"\s+value="([^"]+)"/);
+    if (!m) throw new Error('CSRF token not found');
+    let cookies = extractCookies(r.headers);
+
+    const auth = await fetch(`${PBSHABD_BASE}/authenticate`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookieHeader(cookies),
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        body: new URLSearchParams({ _token: m[1], email: process.env.PBSHABD_EMAIL, password: process.env.PBSHABD_PASSWORD }).toString(),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(15000),
+    });
+    cookies = { ...cookies, ...extractCookies(auth.headers) };
+    const firstLoc = auth.headers.get('location') || '';
+    if (firstLoc.includes('/login') || (auth.status !== 302 && auth.status !== 200))
+        throw new Error('Login failed — check PBSHABD_EMAIL / PBSHABD_PASSWORD');
+
+    let loc = firstLoc;
+    while (loc) {
+        const redir = await fetch(loc, {
+            headers: { 'Cookie': cookieHeader(cookies) },
+            redirect: 'manual',
+            signal: AbortSignal.timeout(15000),
+        });
+        cookies = { ...cookies, ...extractCookies(redir.headers) };
+        loc = redir.status === 302 ? redir.headers.get('location') : null;
+    }
+    return cookies;
+}
+
+async function fetchPage(cookies, page, state = '', category = '', search = '') {
+    const params = new URLSearchParams({ page: String(page), length: '50', filter: 'ALL', language: 'हिन्दी', state, search, category });
+    const r = await fetch(`${PBSHABD_BASE}/api/data?${params}`, {
+        headers: {
+            'Cookie': cookieHeader(cookies),
+            'Accept': 'application/json',
+            'Authorization': 'Bearer',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': `${PBSHABD_BASE}/stories`,
+        },
+        signal: AbortSignal.timeout(20000),
+    });
+    if (!r.ok) throw new Error(`API ${r.status}`);
+    return r.json();
+}
+
+async function getImageUrl(cookies, mediaId, ext, type = 'IMAGE') {
+    const params = new URLSearchParams({ id: mediaId, st: 'pb-s3', ext, type });
+    const r = await fetch(`${PBSHABD_BASE}/getS3Urls?${params}`, {
+        headers: { 'Cookie': cookieHeader(cookies), 'X-Requested-With': 'XMLHttpRequest' },
+        signal: AbortSignal.timeout(10000),
+    });
+    return r.ok ? (await r.text()).trim() : null;
+}
+
+async function uploadToImageKit(imageUrl) {
+    if (!imageUrl) return null;
+    if (!process.env.IMAGEKIT_PRIVATE_KEY) {
+        console.warn('⚠️ IMAGEKIT_PRIVATE_KEY not set — skipping photo (PB SHABD S3 URLs expire in ~1h, not safe to store directly)');
+        return null;
+    }
+    try {
+        const res = await fetch(imageUrl, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok || !res.headers.get('content-type')?.startsWith('image')) return null;
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const compressed = await sharp(buffer)
+            .rotate()
+            .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toBuffer()
+            .catch(() => buffer);
+        const imagekit = new ImageKit({
+            publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+            privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+        });
+        const result = await imagekit.upload({ file: compressed, fileName: `pbshabd-crime-${Date.now()}.jpg`, folder: 'news', useUniqueFileName: true });
+        return result.url;
+    } catch { return null; }
+}
+
+function stripHtml(html) {
+    return (html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n')
+        .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function parsePbDate(str) {
+    if (!str) return null;
+    const d = new Date(str);
+    if (isNaN(d.getTime())) return null;
+    if (!/[Zz]|[+-]\d{2}:?\d{2}/.test(String(str))) {
+        return new Date(d.getTime() - 19800000);
+    }
+    return d;
+}
+
+function cleanPbContent(text, title) {
+    const norm = s => (s || '').trim().replace(/\s+/g, ' ');
+    let t = text.trim();
+    let synopsis = '';
+    const folderIdx = t.search(/इस\s*स्टोरी\s*फोल्डर\s*में/);
+    if (folderIdx !== -1) t = t.slice(0, folderIdx).trim();
+    t = t.split('\n')
+        .filter(line => {
+            const trimmed = line.trim();
+            const m = trimmed.match(/^Synopsis\s*:\s*(.*)$/i);
+            if (m) { synopsis = m[1].trim(); return false; }
+            if (/^(Relevance|Slug|Title|Category|Deadline|Priority|Marking)\s*:/i.test(trimmed)) return false;
+            if (/^(बाइट|byte|caption|ptc|anchor)\s*:/i.test(trimmed)) return false;
+            return true;
+        })
+        .join('\n').replace(/^\n+/, '').trim();
+    const titlePrefix = norm(title).substring(0, 30);
+    if (titlePrefix && norm(t).startsWith(titlePrefix)) {
+        const end = t.indexOf('\n');
+        t = end >= 0 ? t.slice(end) : t;
+    }
+    t = t.replace(/^\n+/, '').trim();
+
+    if (t && titlePrefix) {
+        const lines = t.split('\n');
+        let lastIdx = lines.length - 1;
+        while (lastIdx >= 0 && !lines[lastIdx].trim()) lastIdx--;
+        if (lastIdx >= 0) {
+            const lastLine = lines[lastIdx].trim();
+            if (norm(lastLine).startsWith(titlePrefix) && !lastLine.startsWith('**')) {
+                lines[lastIdx] = `**${lastLine}**`;
+                t = lines.join('\n');
+            }
+        }
+    }
+
+    return synopsis ? (t ? `## ${synopsis}\n\n${t}` : `## ${synopsis}`) : t;
+}
+
+// ── Email report ────────────────────────────────────────────────────────────
+async function sendReport({ imported, skipped, stories, error }) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) return;
+
+    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+    const ok  = !error;
+    const subject = `PB SHABD Crime Sync (Bhopal/MP) | ${now}`;
+
+    const rows = stories.map((s, i) => `
+    <tr>
+      <td style="padding:6px 12px;color:#6b7280">${i + 1}</td>
+      <td style="padding:6px 12px">${s.title}</td>
+      <td style="padding:6px 12px"><a href="${SITE_URL}/news/${s.slug}" style="color:#1d4ed8">${SITE_URL}/news/${s.slug}</a></td>
+    </tr>`).join('');
+
+    const html = `
+<div style="font-family:sans-serif;max-width:860px;color:#111">
+  <h2 style="color:#1d4ed8;margin-bottom:4px">PB SHABD Crime Sync (Bhopal/MP)</h2>
+  <p style="color:#6b7280;margin-top:0">${now}</p>
+  <p><strong>Status:</strong> ${ok ? '✅ Success' : '❌ Failed — ' + error.message}</p>
+  <p><strong>Imported:</strong> ${imported} stories &nbsp;|&nbsp; <strong>Already existed:</strong> ${skipped}</p>
+  ${stories.length ? `
+  <h3 style="border-bottom:1px solid #e5e7eb;padding-bottom:6px">Imported Stories</h3>
+  <table border="1" cellspacing="0" style="border-collapse:collapse;font-size:13px;width:100%;border-color:#e5e7eb">
+    <thead><tr style="background:#f8fafc">
+      <th style="padding:6px 12px;text-align:left">#</th>
+      <th style="padding:6px 12px;text-align:left">Title</th>
+      <th style="padding:6px 12px;text-align:left">URL</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>` : '<p>No new stories imported.</p>'}
+</div>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: 'PB SHABD Sync <onboarding@resend.dev>', to: ['mahmedk13@gmail.com'], subject, html }),
+        signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) console.log('📧 Report sent to mahmedk13@gmail.com');
+    else console.warn('⚠️ Email failed:', await res.text());
+}
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
+    if (!process.env.PBSHABD_EMAIL || !process.env.PBSHABD_PASSWORD)
+        throw new Error('PBSHABD_EMAIL / PBSHABD_PASSWORD not set');
+    if (!process.env.MONGODB_URI)
+        throw new Error('MONGODB_URI not set');
+
+    await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+    console.log('✅ MongoDB connected');
+
+    console.log('🔐 Logging into PB SHABD…');
+    const cookies = await login();
+    console.log('✅ Logged in');
+
+    let totalImported = 0, totalSkipped = 0;
+    const seenStoryIds = new Set();
+    const importedStories = [];
+
+    // Direct Hindi crime-keyword full-text searches, each scoped to Madhya Pradesh —
+    // catches crime stories PB never tagged with its own "crime" category (common for
+    // local/stringer-filed MP reports), unlike relying on the category+state combo alone.
+    const CRIME_KEYWORDS = ['हत्या', 'गिरफ्तार', 'पुलिस', 'अपराध', 'लूट', 'डकैती', 'दुष्कर्म', 'चोरी', 'फरार'];
+
+    const fetchPlan = [
+        // PB's own category tag, scoped to MP — deeper pagination than the main sync's 1 page
+        { page: 1, state: 'MADHYA PRADESH', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'MP Crime pg1' },
+        { page: 2, state: 'MADHYA PRADESH', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'MP Crime pg2' },
+        { page: 3, state: 'MADHYA PRADESH', pbCatId: CRIME_CATEGORY_ID, search: '', label: 'MP Crime pg3' },
+        // Bhopal free-text search — deeper pagination than the main sync's 2 pages
+        { page: 1, state: '', pbCatId: '', search: 'भोपाल', label: 'Bhopal pg1' },
+        { page: 2, state: '', pbCatId: '', search: 'भोपाल', label: 'Bhopal pg2' },
+        { page: 3, state: '', pbCatId: '', search: 'भोपाल', label: 'Bhopal pg3' },
+        { page: 4, state: '', pbCatId: '', search: 'भोपाल', label: 'Bhopal pg4' },
+        // Crime-keyword searches scoped to MP state
+        ...CRIME_KEYWORDS.map(kw => ({ page: 1, state: 'MADHYA PRADESH', pbCatId: '', search: kw, label: `MP "${kw}"` })),
+        // Same keywords as a plain full-text search (no state filter) — PB's own state
+        // field is often blank/wrong for local stringer reports, free-text is the fallback
+        ...CRIME_KEYWORDS.map(kw => ({ page: 1, state: '', pbCatId: '', search: `भोपाल ${kw}`, label: `Bhopal "${kw}"` })),
+    ];
+
+    for (const { page, state, pbCatId, search, label } of fetchPlan) {
+        console.log(`📄 Fetching [${label}]…`);
+        let json;
+        try {
+            json = await fetchPage(cookies, page, state, pbCatId, search);
+        } catch (e) {
+            console.warn(`  ⚠️ Skipping [${label}] — fetch failed: ${e.message}`);
+            continue;
+        }
+        const stories = json.data || [];
+        if (!stories.length) { console.log(`  No stories for [${label}]`); continue; }
+        const sourceHint = pbCatId === CRIME_CATEGORY_ID ? 'crime' : 'bhopal';
+
+        let importable = 0, dups = 0;
+        for (const story of stories) {
+          try {
+            if (seenStoryIds.has(story.story_id)) continue;
+            const hasImage = (story.media || []).some(m =>
+                m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
+            if (!IMPORT_TYPES.has(story.news_type) && !hasImage) continue;
+            seenStoryIds.add(story.story_id);
+            importable++;
+
+            const rssLink = `${PBSHABD_BASE}/download?story_id=${story.story_id}`;
+            if (await News.findOne({ rssLink }).lean()) { dups++; continue; }
+
+            // Skip articles older than 24 hours — old stories should have been picked up in earlier syncs
+            const storyDate = parsePbDate(story.created_at_src) || parsePbDate(story.created_at);
+            if (storyDate && Date.now() - storyDate.getTime() > 24 * 60 * 60 * 1000) {
+                console.log(`  ⏭ Old (${storyDate.toISOString().slice(0,10)}): ${story.title.substring(0, 50)}`);
+                dups++; continue;
+            }
+
+            const raw = stripHtml(story.story_intro_line);
+            const rawDesc = stripHtml(story.description || '');
+            const content = cleanPbContent(raw, story.title) || cleanPbContent(rawDesc, story.title) || '';
+            if (!content) continue;
+
+            const plainLen = content.replace(/\s+/g, ' ').trim().length;
+            if (plainLen < 800) {
+                console.log(`  ⏭ Too short (${plainLen} chars): ${story.title.substring(0, 50)}`);
+                dups++; continue;
+            }
+
+            let photoUrls = [];
+            if (!skipImages) {
+                const imgMediaList = (story.media || []).filter(m =>
+                    m.type === 'IMAGE' && VALID_IMAGE_EXTS.has((m.extention || '').toUpperCase()));
+                for (const imgMedia of imgMediaList) {
+                    const s3Url = await getImageUrl(cookies, imgMedia.media_id, imgMedia.extention).catch(() => null);
+                    const uploaded = s3Url ? await uploadToImageKit(s3Url) : null;
+                    if (uploaded) photoUrls.push(uploaded);
+                }
+            }
+            if (!photoUrls.length) photoUrls = [DEFAULT_PHOTO_URL];
+
+            const category = categorize(story.title, story.state || '', content, sourceHint);
+            const base = generateSlug(story.title);
+            let slug = base, ctr = 1;
+            while (await News.findOne({ slug }).lean()) { ctr++; slug = `${base}-${ctr}`; }
+
+            await new News({
+                heading:    story.title,
+                content,
+                category,
+                state:      category === 'rajya' ? detectState(story.title, story.state || '', content) : null,
+                author:     'Maroof Ahmed Khan',
+                photos:     photoUrls,
+                rssSource:  'PB SHABD',
+                rssLink,
+                isOriginal: false,
+                headingNorm:(story.title || '').toLowerCase().replace(/\s+/g, ' ').trim(),
+                date:       parsePbDate(story.created_at_src) || parsePbDate(story.created_at) || new Date(),
+                slug,
+            }).save();
+
+            totalImported++;
+            importedStories.push({ title: story.title, slug });
+            console.log(`  ✔ [${story.news_type}] ${story.title.substring(0, 60)}`);
+          } catch (e) {
+            console.warn(`  ⚠️ Skipping story (${(story.title || '').substring(0, 50)}): ${e.message}`);
+          }
+        }
+        totalSkipped += dups;
+        if (importable > 0 && dups === importable) console.log(`  All importable stories already in DB for [${label}]`);
+    }
+
+    console.log(`\n✅ Done: ${totalImported} imported, ${totalSkipped} already existed.`);
+    await sendReport({ imported: totalImported, skipped: totalSkipped, stories: importedStories, error: null });
+    await mongoose.disconnect();
+}
+
+main().catch(async err => {
+    console.error('❌', err.message);
+    await sendReport({ imported: 0, skipped: 0, stories: [], error: err }).catch(() => {});
+    process.exit(1);
+});
