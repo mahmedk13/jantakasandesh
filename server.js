@@ -4203,8 +4203,11 @@ app.get('/api/news', async (req, res) => {
     }
 });
 
-// Search API: searches heading, content, category, author
-app.get('/api/news/search', async (req, res) => {
+// Search API: searches heading, content, category, author — admin panel only
+// (its one caller is admin.html's search box). Was previously unauthenticated with
+// zero rate limiting, returning full article content for up to 1000 docs per request
+// — a trivial way for a bot to generate large, free origin transfer by hammering it.
+app.get('/api/news/search', requireAuth, async (req, res) => {
     const q = (req.query.q || '').trim();
     if (!q || q.length < 2) return res.json([]);
     // Escape regex special chars to prevent ReDoS
