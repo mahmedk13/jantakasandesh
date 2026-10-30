@@ -260,7 +260,45 @@ const SLUG_WORD_OVERRIDES = {
     'प्रयागराज': 'prayagraj', 'वाराणसी': 'varanasi', 'लखनऊ': 'lucknow', 'कानपुर': 'kanpur',
     'मुंबई': 'mumbai', 'कोलकाता': 'kolkata', 'चेन्नई': 'chennai', 'बेंगलुरु': 'bengaluru',
     'हैदराबाद': 'hyderabad', 'नोएडा': 'noida', 'गुरुग्राम': 'gurugram', 'अयोध्या': 'ayodhya',
+    'आजमगढ़': 'azamgarh', 'सुल्तानपुर': 'sultanpur', 'बरेली': 'bareilly', 'अमरोहा': 'amroha',
+    'पटना': 'patna', 'जयपुर': 'jaipur', 'चंडीगढ़': 'chandigarh', 'अमृतसर': 'amritsar',
+    'सूरत': 'surat', 'अहमदाबाद': 'ahmedabad', 'पुणे': 'pune', 'नागपुर': 'nagpur',
+    'भुवनेश्वर': 'bhubaneswar', 'रांची': 'ranchi', 'देहरादून': 'dehradun', 'शिमला': 'shimla',
+    'जम्मू': 'jammu', 'श्रीनगर': 'srinagar', 'गाजियाबाद': 'ghaziabad', 'मेरठ': 'meerut',
+    'आगरा': 'agra', 'मथुरा': 'mathura', 'गोरखपुर': 'gorakhpur', 'मुरादाबाद': 'moradabad',
+    'अलीगढ़': 'aligarh', 'फिरोजाबाद': 'firozabad', 'झांसी': 'jhansi', 'उन्नाव': 'unnao',
+    'जौनपुर': 'jaunpur', 'गाजीपुर': 'ghazipur', 'मिर्जापुर': 'mirzapur', 'फैजाबाद': 'faizabad',
+    'पंजाब': 'punjab', 'तमिलनाडु': 'tamil-nadu', 'कर्नाटक': 'karnataka', 'केरल': 'kerala',
+    'गुजरात': 'gujarat', 'असम': 'assam', 'ओडिशा': 'odisha', 'तेलंगाना': 'telangana',
+    'हिमाचल': 'himachal', 'सिक्किम': 'sikkim', 'मणिपुर': 'manipur', 'मेघालय': 'meghalaya',
+    'त्रिपुरा': 'tripura', 'नागालैंड': 'nagaland', 'मिजोरम': 'mizoram', 'अरुणाचल': 'arunachal',
+    'गोवा': 'goa',
+    // Madhya Pradesh districts (site is MP-focused — mechanical transliteration adds
+    // spurious vowels to most of these, e.g. पटना-style mid-word schwa issues)
+    'विदिशा': 'vidisha', 'नर्मदापुरम': 'narmadapuram', 'छिंदवाड़ा': 'chhindwara',
+    'बैतूल': 'betul', 'शहडोल': 'shahdol', 'मंडला': 'mandla', 'डिंडोरी': 'dindori',
+    'अनूपपुर': 'anuppur', 'सिंगरौली': 'singrauli', 'शिवपुरी': 'shivpuri', 'गुना': 'guna',
+    'अशोकनगर': 'ashoknagar', 'दतिया': 'datia', 'टीकमगढ़': 'tikamgarh', 'छतरपुर': 'chhatarpur',
+    'पन्ना': 'panna', 'दमोह': 'damoh', 'कटनी': 'katni', 'उमरिया': 'umaria',
+    'मुरैना': 'morena', 'भिंड': 'bhind', 'श्योपुर': 'sheopur', 'बुरहानपुर': 'burhanpur',
+    'धार': 'dhar', 'झाबुआ': 'jhabua', 'अलीराजपुर': 'alirajpur', 'बड़वानी': 'barwani',
+    'रायसेन': 'raisen', 'सीहोर': 'sehore', 'राजगढ़': 'rajgarh', 'आगरमालवा': 'agar-malwa',
+    'देवास': 'dewas', 'शाजापुर': 'shajapur', 'नीमच': 'neemuch', 'मंदसौर': 'mandsaur',
+    'रतलाम': 'ratlam',
+    // Days of the week (phonetic transliteration adds a spurious 'av', e.g. सोमवार → 'somavar')
+    'सोमवार': 'monday', 'मंगलवार': 'tuesday', 'बुधवार': 'wednesday', 'गुरुवार': 'thursday',
+    'शुक्रवार': 'friday', 'शनिवार': 'saturday', 'रविवार': 'sunday',
+    // Political parties (abbreviation/short-form as commonly used in Hindi headlines)
+    'कांग्रेस': 'congress', 'सपा': 'sp', 'बसपा': 'bsp', 'शिवसेना': 'shiv-sena',
+    'राजद': 'rjd', 'जदयू': 'jdu', 'एनसीपी': 'ncp', 'तृणमूल': 'trinamool',
+    'टीएमसी': 'tmc', 'एआईएमआईएम': 'aimim', 'माकपा': 'cpm', 'भाकपा': 'cpi',
+    // Political leaders (common names that mechanical transliteration mangles into
+    // non-standard spellings — kept matching the familiar English-media spelling)
+    'नरेंद्र': 'narendra', 'केजरीवाल': 'kejriwal', 'सिंधिया': 'scindia', 'ज्योतिरादित्य': 'jyotiraditya',
+    'बनर्जी': 'banerjee', 'शिवराज': 'shivraj', 'कमलनाथ': 'kamalnath', 'नायडू': 'naidu',
+    'ठाकरे': 'thackeray', 'मायावती': 'mayawati', 'पवार': 'pawar', 'सिंह': 'singh',
     // Government and politics
+    'भाजपा': 'bjp', 'बीजेपी': 'bjp',
     'मुख्यमंत्री': 'mukhyamantri', 'प्रधानमंत्री': 'pradhanmantri',
     'उपमुख्यमंत्री': 'upmukhyamantri', 'मंत्री': 'mantri', 'राज्यपाल': 'rajyapal',
     'राष्ट्रपति': 'rashtrapati', 'उपराष्ट्रपति': 'uparashtrapati', 'सरकार': 'sarkar',
@@ -319,7 +357,15 @@ const SLUG_WORD_OVERRIDES = {
     'सस्पेंड': 'suspend', 'ट्रांसफर': 'transfer', 'प्रमोशन': 'promotion',
     'रजिस्ट्रेशन': 'registration', 'परमिशन': 'permission', 'एप्लीकेशन': 'application',
     'ऑनलाइन': 'online', 'ऑफलाइन': 'offline', 'वेबसाइट': 'website', 'मोबाइल': 'mobile',
-    'इंटरनेट': 'internet', 'कंप्लेंट': 'complaint',
+    'इंटरनेट': 'internet', 'कंप्लेंट': 'complaint', 'मैसेज': 'message', 'अंडरपास': 'underpass',
+    'ब्रिज': 'bridge', 'ओवरब्रिज': 'overbridge', 'फ्लाईओवर': 'flyover', 'हाईवे': 'highway',
+    'एक्सप्रेसवे': 'expressway', 'कॉरिडोर': 'corridor', 'बायपास': 'bypass', 'ट्रैफिक': 'traffic',
+    'वाईफाई': 'wifi', 'लैपटॉप': 'laptop', 'कंप्यूटर': 'computer', 'सॉफ्टवेयर': 'software',
+    'ऐप': 'app', 'सीसीटीवी': 'cctv', 'ड्रोन': 'drone',
+    // Months (phonetic transliteration mangles these, e.g. नवंबर → 'navanbar')
+    'जनवरी': 'january', 'फरवरी': 'february', 'मार्च': 'march', 'अप्रैल': 'april',
+    'मई': 'may', 'जून': 'june', 'जुलाई': 'july', 'अगस्त': 'august',
+    'सितंबर': 'september', 'अक्टूबर': 'october', 'नवंबर': 'november', 'दिसंबर': 'december',
 };
 
 // Multiword Hindi phrases that must be slugged as ONE fixed unit rather than
@@ -329,6 +375,17 @@ const SLUG_WORD_OVERRIDES = {
 const SLUG_PHRASE_OVERRIDES = {
     'मध्य प्रदेश': 'madhya-pradesh',
     'उत्तर प्रदेश': 'uttar-pradesh',
+    'पश्चिम बंगाल': 'west-bengal',
+    'आंध्र प्रदेश': 'andhra-pradesh',
+    'हिमाचल प्रदेश': 'himachal-pradesh',
+    'अरुणाचल प्रदेश': 'arunachal-pradesh',
+    'जम्मू कश्मीर': 'jammu-kashmir',
+    'जम्मू और कश्मीर': 'jammu-and-kashmir',
+    'आम आदमी पार्टी': 'aam-aadmi-party',
+    'समाजवादी पार्टी': 'samajwadi-party',
+    'बहुजन समाज पार्टी': 'bahujan-samaj-party',
+    'तृणमूल कांग्रेस': 'trinamool-congress',
+    'शिव सेना': 'shiv-sena',
     'बड़ी खबर': 'badi-khabar',
     'ताजा खबर': 'taza-khabar',
     'ब्रेकिंग न्यूज': 'breaking-news',
@@ -346,6 +403,19 @@ const SLUG_PHRASE_OVERRIDES = {
     'परीक्षा केंद्र': 'pariksha-kendra',
     'बीमारी का प्रकोप': 'bimari-ka-prakop',
 };
+// Normalize dictionary keys to Unicode NFC once at load time, and normalize every
+// lookup string the same way — some nukta/conjunct characters (e.g. ढ़ vs the
+// precomposed ढ़) can be typed/encoded as either a single codepoint or a base
+// consonant + combining mark; both render identically but compare unequal as raw
+// strings, which silently broke overrides depending on which form an entry happened
+// to be typed in. NFC-normalizing both sides makes lookups immune to this.
+function buildNfcMap(obj) {
+    const out = {};
+    for (const k of Object.keys(obj)) out[k.normalize('NFC')] = obj[k];
+    return out;
+}
+const SLUG_WORD_OVERRIDES_NFC = buildNfcMap(SLUG_WORD_OVERRIDES);
+const SLUG_PHRASE_OVERRIDES_NFC = buildNfcMap(SLUG_PHRASE_OVERRIDES);
 // Longest phrase above (in words) — used to bound the greedy match window below.
 const SLUG_PHRASE_MAX_WORDS = Math.max(...Object.keys(SLUG_PHRASE_OVERRIDES).map(p => p.split(' ').length));
 // Marks a token as an already-resolved slug fragment (phrase match), so later steps
@@ -360,9 +430,9 @@ function mergePhraseOverrides(words) {
         let matchedLen = 0;
         for (let len = SLUG_PHRASE_MAX_WORDS; len >= 2; len--) {
             if (i + len > words.length) continue;
-            const candidate = words.slice(i, i + len).join(' ');
-            if (SLUG_PHRASE_OVERRIDES[candidate]) {
-                merged.push(PHRASE_TOKEN_PREFIX + SLUG_PHRASE_OVERRIDES[candidate]);
+            const candidate = words.slice(i, i + len).join(' ').normalize('NFC');
+            if (SLUG_PHRASE_OVERRIDES_NFC[candidate]) {
+                merged.push(PHRASE_TOKEN_PREFIX + SLUG_PHRASE_OVERRIDES_NFC[candidate]);
                 matchedLen = len;
                 break;
             }
@@ -378,10 +448,14 @@ function mergePhraseOverrides(words) {
 // override-dictionary lookup so 'यूपीः' still matches the 'यूपी' entry (transliterate()
 // already silently drops ः mid-word, so this doesn't change the no-override fallback output).
 function lookupWordOverride(w) {
-    return SLUG_WORD_OVERRIDES[w] || SLUG_WORD_OVERRIDES[w.replace(/ः+$/, '')] || null;
+    const nw = w.normalize('NFC');
+    return SLUG_WORD_OVERRIDES_NFC[nw] || SLUG_WORD_OVERRIDES_NFC[nw.replace(/ः+$/, '')] || null;
 }
 
 function generateSlug(heading) {
+    // Normalize once so word-splitting/transliteration/overrides all see the same
+    // canonical encoding regardless of how the source text was originally composed.
+    heading = (heading || '').normalize('NFC');
     // 1. Split into words, merge recognized multiword phrases, filter stop words,
     // take first 6 significant words
     const rawWords = heading.split(/[\s,।\-:!?;]+/).filter(w => w.length >= 2);

@@ -2791,7 +2791,7 @@ app.get('/news/:slug', async (req, res) => {
                         ${(authorLabel ? `<span class="news-detail-author">लेखक: ${authorMarkup}</span>` : '')}
                         <time class="news-detail-date" datetime="${esc(isoPublished)}">प्रकाशित: ${esc(dateLabel)}</time>
                         <span class="news-detail-date">अंतिम अपडेट: ${esc(modifiedLabel)}</span>
-                        ${article.views ? `<span class="news-detail-views">👁️ ${Number(article.views).toLocaleString('hi-IN')} बार पढ़ा गया</span>` : ''}
+
                     </div>
                     <div class="news-detail-meta" style="margin-top:0.5rem;">
                         <span class="news-detail-author">प्रकाशक: <strong>वॉयस ऑफ क्रांति</strong></span>
@@ -3827,9 +3827,11 @@ ${items}
 
 // Configure multer for ImageKit uploads — files buffered in memory, then uploaded
 // to ImageKit manually per-request (see uploadBufferToImageKit call sites below).
+// 15MB limit: raw phone-camera photos easily exceed the old 5MB cap; compressImageBuffer()
+// re-encodes/resizes every upload afterward, so a generous raw-upload limit is safe.
 const upload = multer({ 
     storage: multer.memoryStorage(),
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 15 * 1024 * 1024 },
     fileFilter: function (req, file, cb) {
         const allowedTypes = /jpeg|jpg|png|gif|webp/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
@@ -3842,6 +3844,21 @@ const upload = multer({
         }
     }
 });
+
+// Wraps upload.array() so multer errors (oversized/invalid file) return a clear JSON
+// error instead of falling through to Express's default HTML error page — without
+// this, admin.html's response.json() throws on the HTML body and shows a generic
+// failure message, silently dropping the ENTIRE request (heading/content edits too,
+// since multer parses the whole multipart body before the route handler ever runs).
+function uploadPhotos(req, res, next) {
+    upload.array('photos', 5)(req, res, function (err) {
+        if (!err) return next();
+        if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({ error: 'फोटो का साइज़ बहुत बड़ा है (अधिकतम 15MB अनुमत है)।' });
+        }
+        return res.status(400).json({ error: err.message || 'फोटो अपलोड में त्रुटि हुई।' });
+    });
+}
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -4097,7 +4114,10 @@ app.get('/api/news', async (req, res) => {
         const hours = parseFloat(req.query.hours) || null;
         const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
         const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
-        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours && !state;
+        // Authenticated admin requests always bypass the cache — they need to see their
+        // own just-published/edited article immediately, not a stale pre-edit snapshot.
+        const isAdminRequest = !!(req.session && req.session.isAuthenticated);
+        const cacheAllowed = !source && !fullOnly && !req.query.limit && !req.query.skip && !hours && !state && !isAdminRequest;
         const cacheKey = source === 'pb' ? 'pb' : (fullOnly ? 'full' : (writtenOnly ? 'written' : (category || 'all')));
 
         // Use JSON file in development if MongoDB is not connected
@@ -4235,7 +4255,7 @@ app.get('/api/news/search', requireAuth, async (req, res) => {
 });
 
 // API to add news (admin only)
-app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) => {
+app.post('/api/news', requireAuth, uploadPhotos, async (req, res) => {
     try {
         const { heading, content, category, author } = req.body;
         
@@ -4328,7 +4348,7 @@ app.post('/api/news', requireAuth, upload.array('photos', 5), async (req, res) =
 });
 
 // API to update news (admin only)
-app.put('/api/news/:id', requireAuth, upload.array('photos', 5), async (req, res) => {
+app.put('/api/news/:id', requireAuth, uploadPhotos, async (req, res) => {
     try {
         const { heading, content, category, author, keepExistingPhotos } = req.body;
         
