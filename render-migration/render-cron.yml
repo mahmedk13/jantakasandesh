@@ -1,0 +1,53 @@
+# NOT ACTIVE — staged for review only.
+# This file has zero effect sitting here under render-migration/. It only starts
+# running once you move/copy it into .github/workflows/ AND commit+push it.
+#
+# Replaces Vercel's 3 built-in cron entries (vercel.json "crons" array) with the
+# same schedule, calling the new Render app's URL instead. Same pattern already
+# used by sync-pbshabd.yml and backup-db.yml in this repo.
+#
+# BEFORE activating:
+#   1. Replace RENDER_APP_URL below with your real Render URL
+#      (either the temporary https://<service-name>.onrender.com one for testing,
+#      or your real custom domain once DNS is cut over).
+#   2. Add a GitHub repo secret CRON_SECRET with the SAME value you set in
+#      Render's environment variables for this service.
+name: Render Cron Jobs
+
+on:
+  schedule:
+    - cron: '30 12 * * *'   # fetch-rss        — matches vercel.json's existing schedule
+    - cron: '0 6 * * *'     # generate-daily-article
+    - cron: '30 6 * * *'    # generate-aaj-ka-itihas
+  workflow_dispatch:         # manual trigger for testing
+
+env:
+  RENDER_APP_URL: https://REPLACE-ME.onrender.com   # <-- fill in before activating
+
+jobs:
+  cron:
+    runs-on: ubuntu-24.04   # pinned — ubuntu-latest migrates to Ubuntu 26 starting 2026-10-19
+    timeout-minutes: 5
+    steps:
+      - name: Determine which job this run is for
+        id: which
+        run: |
+          # GitHub doesn't tell a workflow_run which cron entry fired, so fall back
+          # to calling all 3 on manual dispatch, or match by current UTC hour:minute
+          # on a schedule-triggered run.
+          echo "trigger=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+
+      - name: Call fetch-rss (12:30 UTC schedule or manual)
+        if: github.event.schedule == '30 12 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${RENDER_APP_URL}/api/cron/fetch-rss"
+
+      - name: Call generate-daily-article (06:00 UTC schedule or manual)
+        if: github.event.schedule == '0 6 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${RENDER_APP_URL}/api/cron/generate-daily-article"
+
+      - name: Call generate-aaj-ka-itihas (06:30 UTC schedule or manual)
+        if: github.event.schedule == '30 6 * * *' || github.event_name == 'workflow_dispatch'
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${RENDER_APP_URL}/api/cron/generate-aaj-ka-itihas"

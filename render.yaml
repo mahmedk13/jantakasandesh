@@ -1,0 +1,54 @@
+# Render Blueprint (Infrastructure-as-Code) for this app.
+# To use: in Render, choose "New +" -> "Blueprint" and point it at this repo —
+# Render reads this file and pre-fills the service settings. You still have to
+# fill in the actual secret values in the dashboard ("sync: false" vars are never
+# read from this file, only their names are declared here). Has zero effect on
+# Vercel — this only does anything once you create a Render Blueprint service.
+services:
+  - type: web
+    name: janta-ka-sandesh
+    runtime: node
+    plan: starter          # $7/month flat, always-on (no spin-down) — change to "free" only for throwaway testing
+    region: singapore      # closest available Render region to India as of writing; check Render's region list and pick the nearest
+    buildCommand: npm ci
+    startCommand: node server.js
+    healthCheckPath: /robots.txt   # cheap, always-200, no DB dependency — good liveness check
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: NEWSDATA_API_KEY
+        sync: false
+      - key: GNEWS_API_KEY
+        sync: false
+      - key: CURRENTS_API_KEY
+        sync: false
+      - key: PBSHABD_EMAIL
+        sync: false
+      - key: PBSHABD_PASSWORD
+        sync: false
