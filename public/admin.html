@@ -1090,17 +1090,52 @@
 
         loadAuthorsForAdmin();
 
+        // Resize+re-encode an image file in-browser before upload (max 1600px on the
+        // longer side, JPEG q=0.85) — cuts a typical 5-20MB phone photo down to a few
+        // hundred KB, conserving ImageKit's storage cap and keeping uploads fast.
+        // Falls back to the original file untouched if compression fails for any reason
+        // (e.g. unsupported format) — never blocks a publish over this.
+        async function compressImageFile(file, maxDim = 1600, quality = 0.85) {
+            try {
+                const bitmap = await createImageBitmap(file);
+                const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+                const w = Math.round(bitmap.width * scale);
+                const h = Math.round(bitmap.height * scale);
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+                return (blob && blob.size < file.size) ? blob : file;
+            } catch (err) {
+                console.warn('Client-side image compression skipped:', err.message);
+                return file;
+            }
+        }
+
         // Submit form
         newsForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const formData = new FormData(newsForm);
             const newsId = editingNewsId.value;
-            
+
             submitText.style.display = 'none';
             loadingText.style.display = 'inline';
-            
+
             try {
+                // Compress selected photos in the browser before upload — keeps raw
+                // phone-camera photos (often 5-20MB) well under both ImageKit's storage
+                // budget and the server's upload limit, instead of storing them full-size.
+                const selectedFiles = photosInput.files;
+                if (selectedFiles && selectedFiles.length > 0) {
+                    formData.delete('photos');
+                    for (const file of selectedFiles) {
+                        const compressed = await compressImageFile(file);
+                        formData.append('photos', compressed, file.name);
+                    }
+                }
+
                 const url = newsId ? `/api/news/${newsId}` : '/api/news';
                 const method = newsId ? 'PUT' : 'POST';
                 
