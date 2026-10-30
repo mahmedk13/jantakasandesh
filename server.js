@@ -2918,7 +2918,7 @@ app.get('/news/:slug', async (req, res) => {
         // window doesn't lose view counts, and an edit lands within ~2 min. Keep
         // dbError/degraded fallback renders uncached so they're never stuck stale.
         if (article && !dbError) {
-            res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1800');
+            res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
         } else {
             res.setHeader('Cache-Control', 'no-store');
         }
@@ -3366,7 +3366,7 @@ app.get('/c/:category', async (req, res) => {
         // Same short edge cache as homepage; skip for state-filtered rajya views since
         // those already bypass the in-memory cache and are cheap/low-traffic anyway.
         if (!state) {
-            res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+            res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1800');
         }
         res.send(html);
     } catch (err) {
@@ -3400,9 +3400,18 @@ const BRANDABLE_STATIC_PAGES = [
     'latest.html', 'epaper.html'
 ];
 BRANDABLE_STATIC_PAGES.forEach(name => {
-    app.get('/' + name, (req, res) => sendBranded(req, res, path.join(__dirname, 'public', name), 'text/html; charset=utf-8'));
+    app.get('/' + name, (req, res) => {
+        // These pages are near-static (only brand name/logo varies by hostname) but had
+        // NO Cache-Control at all — every hit, including repeat SEO-bot crawls, was a
+        // full uncached origin transfer. Safe to cache hard since content rarely changes.
+        res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+        sendBranded(req, res, path.join(__dirname, 'public', name), 'text/html; charset=utf-8');
+    });
 });
-app.get('/robots.txt', (req, res) => sendBranded(req, res, path.join(__dirname, 'public', 'robots.txt'), 'text/plain'));
+app.get('/robots.txt', (req, res) => {
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+    sendBranded(req, res, path.join(__dirname, 'public', 'robots.txt'), 'text/plain');
+});
 // Avoid indexing '/index.html' as a duplicate of '/' (which carries SSR + brand + curated meta)
 app.get('/index.html', (req, res) => res.redirect(301, '/'));
 
@@ -3886,9 +3895,9 @@ app.get('/', async (req, res) => {
         html = html.replace('<!-- filled instantly by server-injected __INITIAL_NEWS__ -->', renderHomepageSSR(initialNews, null));
         html = applyBrand(html, req.brand);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        // Short edge cache — offloads repeat homepage hits to Vercel's CDN instead of
+        // Edge cache — offloads repeat homepage hits to Vercel's CDN instead of
         // re-running SSR/brand rewriting per request; client JS still re-fetches /api/news.
-        res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+        res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1800');
         res.send(html);
     } catch (err) {
         // Fall back to static file if SSR fails
@@ -4161,7 +4170,7 @@ app.get('/api/news', async (req, res) => {
         if (cacheAllowed) {
             // Public, cacheable query shape — let Vercel's edge serve repeat hits
             // directly without invoking the function at all (cuts invocations + CPU).
-            res.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+            res.set('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=1800');
             const cached = newsCache.get(cacheKey);
             if (cached) {
                 if (cached.expires > Date.now()) {
