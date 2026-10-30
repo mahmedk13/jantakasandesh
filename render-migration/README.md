@@ -38,10 +38,11 @@ not use Blueprint.
    - **Runtime**: Node
    - **Build Command**: `npm ci`
    - **Start Command**: `node server.js`
-   - **Instance Type**: **Free** — explicit user decision: spins down after 15 min idle, cold-starts
-     (~1min) on the next request. Accepted tradeoff since frequent crawler traffic likely keeps it
-     warm most of the time, and sub-1s latency for real visitors isn't a priority here. Switch to
-     **Starter ($7/month, always-on)** later if this proves too flaky in practice.
+   - **Instance Type**: **Starter ($7/month)** — always-on, no spin-down. The $7 compute cost itself
+     cannot exceed $7/month (billed prorated to the second, never up). The only open-ended cost is
+     bandwidth overage beyond the workspace's 5GB/month included allowance, at $0.15/GB — Render has
+     no native spend-limit feature to hard-cap this, so keep an eye on the Billing page, or see the
+     optional usage-alert workflow mentioned in the repo's memory notes.
 4. Don't click "Create Web Service" yet — add environment variables first (next step), or add them right after and let it redeploy once.
 
 ## Step 2 — Environment variables

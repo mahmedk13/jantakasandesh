@@ -8,11 +8,11 @@ services:
   - type: web
     name: janta-ka-sandesh
     runtime: node
-    plan: free             # $0/month — spins down after 15min idle, cold-starts on next request (~1min).
-                           # Accepted tradeoff: frequent crawler traffic (Googlebot etc.) likely keeps it
-                           # warm most of the time anyway, and human-visitor latency under ~1s is fine here.
-                           # Switch to "starter" ($7/month, always-on, no spin-down) if this ever proves
-                           # too flaky in practice.
+    plan: starter          # $7/month flat, always-on (no spin-down). Compute itself cannot exceed $7/mo
+                           # (prorated down only) — the only open-ended cost is bandwidth overage past the
+                           # workspace's 5GB/month included allowance, billed at $0.15/GB. Render has NO
+                           # native spend-limit/cap feature (verified against their docs) — see the repo
+                           # memory note on this and the optional custom usage-alert workflow.
     region: singapore      # closest available Render region to India as of writing; check Render's region list and pick the nearest
     buildCommand: npm ci
     startCommand: node server.js
