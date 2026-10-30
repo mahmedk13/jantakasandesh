@@ -38,7 +38,10 @@ not use Blueprint.
    - **Runtime**: Node
    - **Build Command**: `npm ci`
    - **Start Command**: `node server.js`
-   - **Instance Type**: **Starter ($7/month)** — NOT Free. Free spins down after 15 min idle, unacceptable for a live news site.
+   - **Instance Type**: **Free** — explicit user decision: spins down after 15 min idle, cold-starts
+     (~1min) on the next request. Accepted tradeoff since frequent crawler traffic likely keeps it
+     warm most of the time, and sub-1s latency for real visitors isn't a priority here. Switch to
+     **Starter ($7/month, always-on)** later if this proves too flaky in practice.
 4. Don't click "Create Web Service" yet — add environment variables first (next step), or add them right after and let it redeploy once.
 
 ## Step 2 — Environment variables

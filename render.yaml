@@ -8,7 +8,11 @@ services:
   - type: web
     name: janta-ka-sandesh
     runtime: node
-    plan: starter          # $7/month flat, always-on (no spin-down) — change to "free" only for throwaway testing
+    plan: free             # $0/month — spins down after 15min idle, cold-starts on next request (~1min).
+                           # Accepted tradeoff: frequent crawler traffic (Googlebot etc.) likely keeps it
+                           # warm most of the time anyway, and human-visitor latency under ~1s is fine here.
+                           # Switch to "starter" ($7/month, always-on, no spin-down) if this ever proves
+                           # too flaky in practice.
     region: singapore      # closest available Render region to India as of writing; check Render's region list and pick the nearest
     buildCommand: npm ci
     startCommand: node server.js
