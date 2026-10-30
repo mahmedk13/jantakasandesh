@@ -9,12 +9,15 @@ const BRANDS = {
     'voiceofkranti.com': {
         key: 'vok',
         isDefault: true,
-        domain: 'voiceofkranti.com',
+        // Vercel has www.voiceofkranti.com set as Production (apex 308s to www) —
+        // domain/canonicalHost must include www to match, otherwise our own
+        // www-normalization fights Vercel's and loops forever (ERR_TOO_MANY_REDIRECTS).
+        domain: 'www.voiceofkranti.com',
         // canonicalHost = the exact host that should ultimately be served (matches
         // whichever of apex/www is set as "Production" in Vercel's domain settings);
         // altHost = the other variant, which gets 301-redirected to canonicalHost.
-        canonicalHost: 'voiceofkranti.com',
-        altHost: 'www.voiceofkranti.com',
+        canonicalHost: 'www.voiceofkranti.com',
+        altHost: 'voiceofkranti.com',
         slug: 'voiceofkranti',
         nameHi: 'वॉयस ऑफ क्रांति',
         nameEn: 'Voice of Kranti',
