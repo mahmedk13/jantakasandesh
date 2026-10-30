@@ -2915,10 +2915,10 @@ app.get('/news/:slug', async (req, res) => {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         // Edge-cache successfully rendered articles briefly — views are tracked via a
         // separate client-triggered API call (not this SSR render), so a short cache
-        // window doesn't lose view counts, and an edit lands within ~2 min. Keep
+        // window doesn't lose view counts, and an edit lands within ~1 min. Keep
         // dbError/degraded fallback renders uncached so they're never stuck stale.
         if (article && !dbError) {
-            res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=3600');
+            res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=1800');
         } else {
             res.setHeader('Cache-Control', 'no-store');
         }
@@ -4254,6 +4254,37 @@ app.get('/api/news/search', requireAuth, async (req, res) => {
     }
 });
 
+// Admin API: generate ImageKit auth params so the browser can upload article photos
+// directly to ImageKit (bypasses Vercel's 4.5 MB serverless function body limit —
+// this is the same fix already used for ePaper PDFs, see /api/admin/epaper/sign).
+app.get('/api/admin/news-photo/sign', requireAuth, (req, res) => {
+    try {
+        if (!imagekit) return res.status(500).json({ error: 'ImageKit is not configured in this environment.' });
+        const authParams = imagekit.getAuthenticationParameters();
+        res.json({
+            ...authParams,
+            publicKey:   process.env.IMAGEKIT_PUBLIC_KEY,
+            urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+            folder:      'janta-ka-sandesh',
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Parses `photoUrls` (JSON array string) sent after the browser already uploaded
+// photos directly to ImageKit. Only trusts URLs on our own ImageKit endpoint —
+// never accept arbitrary attacker-supplied URLs here (no re-hosting/fetch is done
+// for this path, so an untrusted domain would otherwise be stored and served as-is).
+function parseTrustedPhotoUrls(req) {
+    if (!req.body.photoUrls) return [];
+    let parsed;
+    try { parsed = JSON.parse(req.body.photoUrls); } catch (_) { return []; }
+    if (!Array.isArray(parsed)) return [];
+    const endpoint = process.env.IMAGEKIT_URL_ENDPOINT || '';
+    return parsed.filter(u => typeof u === 'string' && endpoint && u.startsWith(endpoint)).slice(0, 5);
+}
+
 // API to add news (admin only)
 app.post('/api/news', requireAuth, uploadPhotos, async (req, res) => {
     try {
@@ -4269,11 +4300,17 @@ app.post('/api/news', requireAuth, uploadPhotos, async (req, res) => {
             ? rawSlug.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
             : '';
 
-        // Support external image URL (from scraper) when no file is uploaded.
-        // Upload to ImageKit so og:image always works for WhatsApp/X sharing.
-        let photos = req.files && req.files.length
-            ? (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean)
-            : [];
+        // Photos already uploaded directly to ImageKit by the browser take priority
+        // (this is the normal path from admin.html now — avoids routing large photo
+        // bytes through this serverless function at all). Falls back to the older
+        // paths (raw multipart file / external photoUrl / inline content image) for
+        // any other caller that still posts files the old way.
+        let photos = parseTrustedPhotoUrls(req);
+        if (photos.length === 0) {
+            photos = req.files && req.files.length
+                ? (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean)
+                : [];
+        }
         if (photos.length === 0 && req.body.photoUrl) {
             const externalUrl = req.body.photoUrl;
             if (externalUrl.includes('res.cloudinary.com') || externalUrl.includes('ik.imagekit.io')) {
@@ -4426,17 +4463,20 @@ app.put('/api/news/:id', requireAuth, uploadPhotos, async (req, res) => {
             news.slug = cleanSlugEdit;
         }
 
-        let updatedPhotos = [];
-        if (req.files && req.files.length > 0) {
-            updatedPhotos = (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean);
-        } else if (req.body.photoUrl) {
-            updatedPhotos = [req.body.photoUrl];
-        } else {
-            updatedPhotos = extractInlineArticlePhotoUrls(content);
+        let updatedPhotos = parseTrustedPhotoUrls(req);
+        let photosFromDirectUpload = updatedPhotos.length > 0;
+        if (!photosFromDirectUpload) {
+            if (req.files && req.files.length > 0) {
+                updatedPhotos = (await Promise.all(req.files.map(file => uploadBufferToImageKit(file.buffer, file.originalname, 'janta-ka-sandesh')))).filter(Boolean);
+            } else if (req.body.photoUrl) {
+                updatedPhotos = [req.body.photoUrl];
+            } else {
+                updatedPhotos = extractInlineArticlePhotoUrls(content);
+            }
         }
 
         if (updatedPhotos.length > 0) {
-            if (req.files && req.files.length > 0 && !keepExistingPhotos) {
+            if ((photosFromDirectUpload || (req.files && req.files.length > 0)) && !keepExistingPhotos) {
                 await deletePhotos(news.photos);
             }
             news.photos = updatedPhotos;
