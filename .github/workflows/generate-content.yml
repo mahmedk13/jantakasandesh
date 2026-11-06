@@ -1,8 +1,10 @@
 name: Generate AI Content (Explainers, Shorts, Ka Mat)
 
+# Schedule removed 2026-11-06 — these now run via Vercel's own native cron
+# (vercel.json `crons`), which auto-signs requests with the project's own
+# CRON_SECRET so it can't drift out of sync with a GitHub Actions secret.
+# Kept as workflow_dispatch only, for manual/on-demand runs or debugging.
 on:
-  schedule:
-    - cron: '0 */4 * * *'   # every 4 hours
   workflow_dispatch:
 
 concurrency:
@@ -17,18 +19,21 @@ jobs:
     steps:
       - name: Generate Explainers
         run: |
-          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-explainers" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            && echo "✅ Explainers done" || echo "⚠️ Explainers failed"
+          STATUS=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X GET "${{ vars.SITE_URL }}/api/cron/generate-explainers" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP status: $STATUS"; cat /tmp/resp.txt; echo
+          if [ "$STATUS" = "200" ]; then echo "✅ Explainers done"; else echo "⚠️ Explainers failed"; fi
 
       - name: Generate Shorts
         run: |
-          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-shorts" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            && echo "✅ Shorts done" || echo "⚠️ Shorts failed"
+          STATUS=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X GET "${{ vars.SITE_URL }}/api/cron/generate-shorts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP status: $STATUS"; cat /tmp/resp.txt; echo
+          if [ "$STATUS" = "200" ]; then echo "✅ Shorts done"; else echo "⚠️ Shorts failed"; fi
 
       - name: Generate Ka Mat (Voice of Kranti opinion)
         run: |
-          curl -sf -X GET "${{ vars.SITE_URL }}/api/cron/generate-ka-mat" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            && echo "✅ Ka Mat done" || echo "⚠️ Ka Mat failed"
+          STATUS=$(curl -s -o /tmp/resp.txt -w "%{http_code}" -X GET "${{ vars.SITE_URL }}/api/cron/generate-ka-mat" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}")
+          echo "HTTP status: $STATUS"; cat /tmp/resp.txt; echo
+          if [ "$STATUS" = "200" ]; then echo "✅ Ka Mat done"; else echo "⚠️ Ka Mat failed"; fi
