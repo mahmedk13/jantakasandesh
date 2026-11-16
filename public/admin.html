@@ -182,6 +182,24 @@
                         <option value="karnataka">कर्नाटक</option>
                         <option value="west_bengal">पश्चिम बंगाल</option>
                         <option value="delhi">दिल्ली</option>
+                        <option value="assam">असम</option>
+                        <option value="odisha">ओडिशा</option>
+                        <option value="tamil_nadu">तमिलनाडु</option>
+                        <option value="goa">गोवा</option>
+                        <option value="arunachal_pradesh">अरुणाचल प्रदेश</option>
+                        <option value="manipur">मणिपुर</option>
+                        <option value="meghalaya">मेघालय</option>
+                        <option value="mizoram">मिजोरम</option>
+                        <option value="nagaland">नागालैंड</option>
+                        <option value="sikkim">सिक्किम</option>
+                        <option value="tripura">त्रिपुरा</option>
+                        <option value="jammu_kashmir">जम्मू-कश्मीर</option>
+                        <option value="ladakh">लद्दाख</option>
+                        <option value="chandigarh">चंडीगढ़</option>
+                        <option value="puducherry">पुडुचेरी</option>
+                        <option value="andaman_nicobar">अंडमान-निकोबार</option>
+                        <option value="lakshadweep">लक्षद्वीप</option>
+                        <option value="dadra_nagar_haveli">दादरा-नगर हवेली</option>
                         <option value="other">अन्य राज्य</option>
                     </select>
                 </div>
@@ -413,6 +431,15 @@
                     <button id="stripOldVideosBtn" onclick="stripOldVideos()" class="btn btn-primary btn-small" style="background:#4a5568;">
                         🎥 पुराने वीडियो हटाएं (स्टोरेज फुल होने पर, लेख सुरक्षित)
                     </button>
+                    <button id="gaZeroViewBtn" onclick="findZeroGaViewArticles('all')" class="btn btn-primary btn-small" style="background:#b91c1c;">
+                        📊 GA 0-व्यूज़ खबरें खोजें
+                    </button>
+                    <button id="gaZeroViewApiBtn" onclick="findZeroGaViewArticles('api-imports')" class="btn btn-primary btn-small" style="background:#7c2d12;" title="सिर्फ RSS/NewsData/GNews/Currents — PB SHABD और मैन्युअल खबरें कभी नहीं हटेंगी">
+                        📦 RSS/API आयातित (GA 0-व्यूज़) हटाएं
+                    </button>
+                    <button id="defaultPhotoBtn" onclick="findDefaultPhotoArticles()" class="btn btn-primary btn-small" style="background:#92400e;" title="सिर्फ PB SHABD — कभी असली फोटो नहीं मिली थी वाली खबरें (फोटो बाद में हटाई गई पुरानी खबरें शामिल नहीं)">
+                        🖼️ डिफ़ॉल्ट फोटो वाली PB SHABD खबरें हटाएं
+                    </button>
                     <button id="cleanDupsBtn" onclick="cleanDuplicates()" class="btn btn-primary btn-small" style="background:#2d3748;border:1px solid #fc8181;">
                         🧹 डुप्लीकेट हटाएं
                     </button>
@@ -429,6 +456,28 @@
                 </div>
                 <!-- Run-All progress log -->
                 <ul id="runAllLog" style="display:none;list-style:none;margin:0.75rem 0 0;padding:0.75rem 1rem;background:#1a202c;border-radius:8px;font-size:0.85rem;color:#e2e8f0;line-height:1.9;max-height:260px;overflow-y:auto;"></ul>
+
+                <!-- GA 0-view cleanup preview — hidden until "GA 0-व्यूज़ खबरें खोजें" runs -->
+                <div id="gaZeroViewPanel" style="display:none;margin-top:0.75rem;border:1px solid #fecaca;border-radius:8px;overflow:hidden;">
+                    <div style="padding:0.6rem 0.9rem;background:#fef2f2;font-size:0.85rem;color:#991b1b;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                        <span id="gaZeroViewSummary"></span>
+                        <button id="gaZeroViewConfirmBtn" onclick="confirmDeleteZeroGaViewArticles()" class="btn btn-primary btn-small" style="background:#b91c1c;">
+                            ⚠️ चयनित खबरें स्थायी रूप से हटाएं
+                        </button>
+                    </div>
+                    <ul id="gaZeroViewList" style="list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto;"></ul>
+                </div>
+
+                <!-- Default-photo PB SHABD cleanup preview — hidden until the button runs -->
+                <div id="defaultPhotoPanel" style="display:none;margin-top:0.75rem;border:1px solid #fde68a;border-radius:8px;overflow:hidden;">
+                    <div style="padding:0.6rem 0.9rem;background:#fffbeb;font-size:0.85rem;color:#92400e;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                        <span id="defaultPhotoSummary"></span>
+                        <button id="defaultPhotoConfirmBtn" onclick="confirmDeleteDefaultPhotoArticles()" class="btn btn-primary btn-small" style="background:#92400e;">
+                            ⚠️ चयनित खबरें स्थायी रूप से हटाएं
+                        </button>
+                    </div>
+                    <ul id="defaultPhotoList" style="list-style:none;margin:0;padding:0;max-height:300px;overflow-y:auto;"></ul>
+                </div>
             </div>
 
             <!-- Filter Bar -->
@@ -1931,6 +1980,162 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = '🎥 पुराने वीडियो हटाएं (स्टोरेज फुल होने पर, लेख सुरक्षित)';
+            }
+        }
+
+        // ── GA4-based zero-view cleanup ──────────────────────────────────────
+        // List-then-confirm flow: this only READS from GA4 + MongoDB, deletes nothing.
+        // scope 'all' = any article; 'api-imports' = plain RSS/NewsData/GNews/Currents
+        // imports only — NEVER touches PB SHABD or manually/AI-written articles.
+        let _gaZeroViewArticles = [];
+        let _gaZeroViewScope = 'all';
+        const GA_ZERO_VIEW_LABELS = {
+            all: { btn: 'gaZeroViewBtn', text: '📊 GA 0-व्यूज़ खबरें खोजें', loading: '⏳ GA डेटा जाँचा जा रहा है...', summary: (n, t) => `${n} / ${t} खबरों (30+ दिन पुरानी) में GA पर 0 व्यूज़ मिले` },
+            'api-imports': { btn: 'gaZeroViewApiBtn', text: '📦 RSS/API आयातित (GA 0-व्यूज़) हटाएं', loading: '⏳ GA डेटा जाँचा जा रहा है...', summary: (n, t) => `${n} / ${t} RSS/API आयातित खबरों (30+ दिन पुरानी, PB SHABD/मैन्युअल छोड़कर) में GA पर 0 व्यूज़ मिले` }
+        };
+        async function findZeroGaViewArticles(scope) {
+            _gaZeroViewScope = scope;
+            const labels = GA_ZERO_VIEW_LABELS[scope];
+            const btn = document.getElementById(labels.btn);
+            const status = document.getElementById('rssStatus');
+            const panel = document.getElementById('gaZeroViewPanel');
+            btn.disabled = true;
+            btn.textContent = labels.loading;
+            status.textContent = '';
+            panel.style.display = 'none';
+            try {
+                const response = await fetch(`/api/admin/zero-ga-view-articles?scope=${scope}`, { credentials: 'same-origin' });
+                const data = await response.json();
+                if (response.ok) {
+                    _gaZeroViewArticles = data.articles;
+                    document.getElementById('gaZeroViewSummary').textContent = labels.summary(data.zeroViewCount, data.checked);
+                    document.getElementById('gaZeroViewList').innerHTML = data.articles.map(a => `
+                        <li style="padding:0.5rem 0.9rem;border-top:1px solid #fee2e2;font-size:0.85rem;display:flex;justify-content:space-between;gap:0.5rem;">
+                            <a href="/news/${a.slug}" target="_blank" rel="noopener noreferrer" style="color:#1e293b;text-decoration:none;flex:1;">${a.heading}</a>
+                            <span style="color:#94a3b8;white-space:nowrap;">${new Date(a.date).toLocaleDateString('hi-IN')}</span>
+                        </li>`).join('') || '<li style="padding:0.6rem 0.9rem;color:#718096;">कोई 0-व्यूज़ खबर नहीं मिली</li>';
+                    panel.style.display = data.articles.length ? 'block' : 'none';
+                    if (!data.articles.length) status.textContent = '✅ कोई 0-व्यूज़ खबर नहीं मिली';
+                    status.style.color = '#38a169';
+                } else {
+                    status.textContent = data.error || 'त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = labels.text;
+            }
+        }
+
+        async function confirmDeleteZeroGaViewArticles() {
+            if (!_gaZeroViewArticles.length) return;
+            const scopeNote = _gaZeroViewScope === 'api-imports' ? ' (सिर्फ RSS/API आयातित, PB SHABD/मैन्युअल सुरक्षित)' : '';
+            if (!confirm(`${_gaZeroViewArticles.length} खबरें स्थायी रूप से हटा दी जाएंगी (GA पर 0 व्यूज़, 30+ दिन पुरानी)${scopeNote}। यह वापस नहीं हो सकता। क्या आप सुनिश्चित हैं?`)) return;
+            const btn = document.getElementById('gaZeroViewConfirmBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ हटाया जा रहा है...';
+            try {
+                const response = await fetch('/api/admin/delete-zero-ga-view-articles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ ids: _gaZeroViewArticles.map(a => a.id), scope: _gaZeroViewScope })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.deleted} खबरें हटाई गईं`;
+                    status.style.color = '#38a169';
+                    _gaZeroViewArticles = [];
+                    document.getElementById('gaZeroViewPanel').style.display = 'none';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'हटाने में त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚠️ चयनित खबरें स्थायी रूप से हटाएं';
+            }
+        }
+
+        // ── Default-photo PB SHABD cleanup ───────────────────────────────────
+        // Scoped to rssSource:'PB SHABD' only — never catches articles whose photo was
+        // later stripped by stripOldImages() (that's a deliberately non-destructive lever).
+        let _defaultPhotoArticles = [];
+        async function findDefaultPhotoArticles() {
+            const btn = document.getElementById('defaultPhotoBtn');
+            const status = document.getElementById('rssStatus');
+            const panel = document.getElementById('defaultPhotoPanel');
+            btn.disabled = true;
+            btn.textContent = '⏳ जाँचा जा रहा है...';
+            status.textContent = '';
+            panel.style.display = 'none';
+            try {
+                const response = await fetch('/api/admin/default-photo-articles', { credentials: 'same-origin' });
+                const data = await response.json();
+                if (response.ok) {
+                    _defaultPhotoArticles = data.articles;
+                    document.getElementById('defaultPhotoSummary').textContent =
+                        `${data.count} PB SHABD खबरों में कभी असली फोटो नहीं मिली`;
+                    document.getElementById('defaultPhotoList').innerHTML = data.articles.map(a => `
+                        <li style="padding:0.5rem 0.9rem;border-top:1px solid #fef3c7;font-size:0.85rem;display:flex;justify-content:space-between;gap:0.5rem;">
+                            <a href="/news/${a.slug}" target="_blank" rel="noopener noreferrer" style="color:#1e293b;text-decoration:none;flex:1;">${a.heading}</a>
+                            <span style="color:#94a3b8;white-space:nowrap;">${new Date(a.date).toLocaleDateString('hi-IN')}</span>
+                        </li>`).join('') || '<li style="padding:0.6rem 0.9rem;color:#718096;">कोई डिफ़ॉल्ट फोटो वाली खबर नहीं मिली</li>';
+                    panel.style.display = data.articles.length ? 'block' : 'none';
+                    if (!data.articles.length) status.textContent = '✅ कोई डिफ़ॉल्ट फोटो वाली खबर नहीं मिली';
+                    status.style.color = '#38a169';
+                } else {
+                    status.textContent = data.error || 'त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🖼️ डिफ़ॉल्ट फोटो वाली PB SHABD खबरें हटाएं';
+            }
+        }
+
+        async function confirmDeleteDefaultPhotoArticles() {
+            if (!_defaultPhotoArticles.length) return;
+            if (!confirm(`${_defaultPhotoArticles.length} PB SHABD खबरें स्थायी रूप से हटा दी जाएंगी (कभी असली फोटो नहीं मिली)। यह वापस नहीं हो सकता। क्या आप सुनिश्चित हैं?`)) return;
+            const btn = document.getElementById('defaultPhotoConfirmBtn');
+            const status = document.getElementById('rssStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ हटाया जा रहा है...';
+            try {
+                const response = await fetch('/api/admin/delete-default-photo-articles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ ids: _defaultPhotoArticles.map(a => a.id) })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    status.textContent = `✅ ${data.deleted} खबरें हटाई गईं`;
+                    status.style.color = '#38a169';
+                    _defaultPhotoArticles = [];
+                    document.getElementById('defaultPhotoPanel').style.display = 'none';
+                    loadNews();
+                } else {
+                    status.textContent = data.error || 'हटाने में त्रुटि';
+                    status.style.color = '#e53e3e';
+                }
+            } catch (error) {
+                status.textContent = 'नेटवर्क त्रुटि';
+                status.style.color = '#e53e3e';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '⚠️ चयनित खबरें स्थायी रूप से हटाएं';
             }
         }
 

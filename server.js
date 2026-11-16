@@ -30,6 +30,7 @@ const RSSParser = require('rss-parser');
 const Groq = require('groq-sdk');
 const mammoth = require('mammoth');
 const AdmZip = require('adm-zip');
+const { google } = require('googleapis');
 const { getBrand, applyBrand, DEFAULT_BRAND } = require('./brands');
 
 // Reads an HTML/text file from public/ and rewrites it for the requesting domain's brand.
@@ -1020,6 +1021,24 @@ const STATE_MAP = {
     'karnataka': 'karnataka', 'कर्नाटक': 'karnataka',
     'west bengal': 'west_bengal', 'पश्चिम बंगाल': 'west_bengal',
     'delhi': 'delhi', 'दिल्ली': 'delhi', 'new delhi': 'delhi', 'नई दिल्ली': 'delhi',
+    'assam': 'assam', 'असम': 'assam',
+    'odisha': 'odisha', 'ओडिशा': 'odisha', 'उड़ीसा': 'odisha',
+    'tamil nadu': 'tamil_nadu', 'तमिलनाडु': 'tamil_nadu', 'तमिल नाडु': 'tamil_nadu',
+    'goa': 'goa', 'गोवा': 'goa',
+    'arunachal pradesh': 'arunachal_pradesh', 'अरुणाचल प्रदेश': 'arunachal_pradesh',
+    'manipur': 'manipur', 'मणिपुर': 'manipur',
+    'meghalaya': 'meghalaya', 'मेघालय': 'meghalaya',
+    'mizoram': 'mizoram', 'मिजोरम': 'mizoram',
+    'nagaland': 'nagaland', 'नागालैंड': 'nagaland',
+    'sikkim': 'sikkim', 'सिक्किम': 'sikkim',
+    'tripura': 'tripura', 'त्रिपुरा': 'tripura',
+    'jammu and kashmir': 'jammu_kashmir', 'जम्मू और कश्मीर': 'jammu_kashmir', 'जम्मू-कश्मीर': 'jammu_kashmir',
+    'ladakh': 'ladakh', 'लद्दाख': 'ladakh',
+    'chandigarh': 'chandigarh', 'चंडीगढ़': 'chandigarh',
+    'puducherry': 'puducherry', 'पुडुचेरी': 'puducherry', 'पांडिचेरी': 'puducherry',
+    'andaman': 'andaman_nicobar', 'अंडमान': 'andaman_nicobar',
+    'lakshadweep': 'lakshadweep', 'लक्षद्वीप': 'lakshadweep',
+    'dadra': 'dadra_nagar_haveli', 'दादरा': 'dadra_nagar_haveli', 'दमन और दीव': 'dadra_nagar_haveli',
 };
 
 function detectState(title, content) {
@@ -5057,6 +5076,168 @@ app.post('/api/admin/strip-old-videos', requireAuth, async (req, res) => {
         invalidateNewsCache();
         console.log(`🎥 Admin stripped videos from ${toStrip.length} articles older than ${days} days (cutoff: ${cutoff.toISOString()})`);
         res.json({ success: true, stripped: toStrip.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── GA4-based zero-view cleanup ────────────────────────────────────────────
+// Our own `News.views` counter is unreliable (client-side fetch, no retry, can
+// silently drop writes under Atlas M0 throttling — see repo notes), so this
+// checks real traffic via the GA4 Data API instead. Requires GA_SERVICE_ACCOUNT_KEY
+// (full service-account JSON, granted "Viewer" access under GA4 Admin → Property
+// Access Management on the target property) and GA_PROPERTY_ID_JKS (numeric GA4
+// property ID, from GA4 Admin → Property Settings) in .env.
+let gaAuthClientPromise = null;
+function getGaAuthClient() {
+    if (!process.env.GA_SERVICE_ACCOUNT_KEY) return null;
+    if (!gaAuthClientPromise) {
+        const credentials = JSON.parse(process.env.GA_SERVICE_ACCOUNT_KEY);
+        const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/analytics.readonly'] });
+        gaAuthClientPromise = auth.getClient();
+    }
+    return gaAuthClientPromise;
+}
+
+// Returns a Map of pagePath ("/news/<slug>") -> total GA4 pageviews, in ONE report
+// call (far cheaper than querying per-article against the Data API's daily quota).
+async function fetchGaNewsPageViews() {
+    const authClient = await getGaAuthClient();
+    if (!authClient || !process.env.GA_PROPERTY_ID_JKS) return null;
+    const analyticsdata = google.analyticsdata({ version: 'v1beta', auth: authClient });
+    const resp = await analyticsdata.properties.runReport({
+        property: `properties/${process.env.GA_PROPERTY_ID_JKS}`,
+        requestBody: {
+            dateRanges: [{ startDate: '2020-01-01', endDate: 'today' }],
+            dimensions: [{ name: 'pagePath' }],
+            metrics: [{ name: 'screenPageViews' }],
+            dimensionFilter: { filter: { fieldName: 'pagePath', stringFilter: { matchType: 'CONTAINS', value: '/news/' } } },
+            limit: 100000
+        }
+    });
+    const viewsByPath = new Map();
+    for (const row of (resp.data.rows || [])) {
+        const cleanPath = row.dimensionValues[0].value.split('?')[0];
+        const views = parseInt(row.metricValues[0].value, 10) || 0;
+        viewsByPath.set(cleanPath, (viewsByPath.get(cleanPath) || 0) + views);
+    }
+    return viewsByPath;
+}
+
+const GA_ZERO_VIEW_MIN_AGE_DAYS = 30; // grace period — new articles naturally have 0 views so far
+// 'api-imports' scope = plain RSS/NewsData/GNews/Currents imports only — excludes PB SHABD
+// (rssSource:'PB SHABD') and manually/AI-written articles (rssSource: null), per user request
+// to have an emergency "free up storage" lever that never touches those two.
+const API_IMPORT_FILTER = { rssSource: { $exists: true, $nin: [null, '', 'PB SHABD'] } };
+function gaZeroViewScopeFilter(scope) {
+    return scope === 'api-imports' ? API_IMPORT_FILTER : {};
+}
+
+// Admin: DRY RUN — lists articles (≥30 days old, not isPermanent) with ZERO GA4
+// pageviews. Deletes NOTHING — pair with the confirm-delete endpoint below.
+// ?scope=api-imports narrows to plain RSS/API-imported articles only (see above).
+app.get('/api/admin/zero-ga-view-articles', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        if (!process.env.GA_SERVICE_ACCOUNT_KEY || !process.env.GA_PROPERTY_ID_JKS)
+            return res.status(400).json({ error: 'GA_SERVICE_ACCOUNT_KEY और GA_PROPERTY_ID_JKS .env में set करें' });
+
+        const viewsByPath = await fetchGaNewsPageViews();
+        if (!viewsByPath) return res.status(500).json({ error: 'GA डेटा नहीं मिल सका' });
+
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - GA_ZERO_VIEW_MIN_AGE_DAYS);
+
+        const candidates = await News.find(
+            { date: { $lt: cutoff }, isPermanent: { $ne: true }, slug: { $exists: true, $ne: '' }, ...gaZeroViewScopeFilter(req.query.scope) },
+            { heading: 1, slug: 1, date: 1 }
+        ).sort({ date: 1 }).lean();
+
+        const zeroView = candidates.filter(a => !(viewsByPath.get(`/news/${a.slug}`) > 0));
+
+        res.json({
+            success: true,
+            checked: candidates.length,
+            zeroViewCount: zeroView.length,
+            articles: zeroView.map(a => ({ id: a._id, heading: a.heading, slug: a.slug, date: a.date }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: ACTUAL delete — only for ids the admin explicitly confirmed from the list
+// above. Re-validates age/isPermanent/scope server-side before deleting anything.
+app.post('/api/admin/delete-zero-ga-view-articles', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ error: 'ids अनिवार्य है' });
+
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - GA_ZERO_VIEW_MIN_AGE_DAYS);
+
+        const toDelete = await News.find(
+            { _id: { $in: ids }, date: { $lt: cutoff }, isPermanent: { $ne: true }, ...gaZeroViewScopeFilter(req.body?.scope) },
+            { _id: 1, photos: 1 }
+        ).lean();
+
+        for (const article of toDelete) {
+            await deletePhotos(article.photos);
+        }
+        const result = await News.deleteMany({ _id: { $in: toDelete.map(a => a._id) } });
+        invalidateNewsCache();
+        console.log(`🗑️ Admin deleted ${result.deletedCount} articles with 0 GA4 views`);
+        res.json({ success: true, deleted: result.deletedCount });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: DRY RUN — lists PB SHABD articles whose photo is ONLY the shared default
+// placeholder (never had a real photo), not isPermanent. Scoped to rssSource:'PB SHABD'
+// specifically — NOT any article with the default photo — because /api/admin/strip-old-images
+// ALSO sets photos to this same placeholder for any 30+ day old article of ANY source as a
+// deliberately non-destructive storage lever; this button must never defeat that by deleting
+// articles that originally had a real photo and only lost it later via stripping.
+app.get('/api/admin/default-photo-articles', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        const candidates = await News.find(
+            { rssSource: 'PB SHABD', photos: [DEFAULT_PHOTO_URL], isPermanent: { $ne: true } },
+            { heading: 1, slug: 1, date: 1 }
+        ).sort({ date: 1 }).lean();
+
+        res.json({
+            success: true,
+            count: candidates.length,
+            articles: candidates.map(a => ({ id: a._id, heading: a.heading, slug: a.slug, date: a.date }))
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Admin: ACTUAL delete — only for ids the admin explicitly confirmed from the list above.
+// Re-validates rssSource/photos/isPermanent server-side before deleting anything.
+app.post('/api/admin/delete-default-photo-articles', requireAuth, async (req, res) => {
+    try {
+        if (!isMongoDBConnected) return res.status(503).json({ error: 'MongoDB not connected' });
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+        if (!ids.length) return res.status(400).json({ error: 'ids अनिवार्य है' });
+
+        const toDelete = await News.find(
+            { _id: { $in: ids }, rssSource: 'PB SHABD', photos: [DEFAULT_PHOTO_URL], isPermanent: { $ne: true } },
+            { _id: 1, photos: 1 }
+        ).lean();
+
+        for (const article of toDelete) {
+            await deletePhotos(article.photos);
+        }
+        const result = await News.deleteMany({ _id: { $in: toDelete.map(a => a._id) } });
+        invalidateNewsCache();
+        console.log(`🗑️ Admin deleted ${result.deletedCount} default-photo PB SHABD articles`);
+        res.json({ success: true, deleted: result.deletedCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

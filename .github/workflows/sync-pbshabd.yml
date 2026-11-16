@@ -2,10 +2,10 @@ name: Sync PB SHABD News
 
 on:
   schedule:
-    # Every hour, but skip 12am-6am IST (no new PB SHABD stories overnight).
-    # Cron is UTC; IST = UTC+5:30, so running at minute :30 lines runs up exactly
-    # on IST hour marks. Hours 0-17 UTC = IST 06:00-23:00; 18-23 UTC (IST 00:00-05:00) skipped.
-    - cron: '30 0-17 * * *'
+    # Every 3 hours, but skip 12am-9am IST (no new PB SHABD stories overnight).
+    # Cron is UTC; IST = UTC+5:30, so minute :30 lines up exactly on IST hour marks.
+    # UTC 3,6,9,12,15 (+:30) = IST 09:00,12:00,15:00,18:00,21:00; 16-27(=0-2) UTC (IST 00:00-08:30) skipped.
+    - cron: '30 3,6,9,12,15 * * *'
   workflow_dispatch:           # manual trigger
 
 concurrency:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-24.04   # pinned — ubuntu-latest migrates to Ubuntu 26 starting 2026-10-19
-    timeout-minutes: 15
+    timeout-minutes: 25     # bumped from 15 — TARGET_STATES grew from 18 to 36 (full all-India coverage)
 
     steps:
       - name: Checkout repo

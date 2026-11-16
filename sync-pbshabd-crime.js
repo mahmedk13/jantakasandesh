@@ -17,7 +17,6 @@ const sharp      = require('sharp');
 const { News, generateSlug } = require('./models/News');
 
 const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
-const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.jpg`;
 
 const args       = process.argv.slice(2);
 const skipImages = args.includes('--skip-images');
@@ -371,7 +370,12 @@ async function main() {
                     if (uploaded) photoUrls.push(uploaded);
                 }
             }
-            if (!photoUrls.length) photoUrls = [DEFAULT_PHOTO_URL];
+            // No real photo found — skip rather than fall back to the generic placeholder,
+            // now that PB SHABD volume is healthy enough to raise the quality bar.
+            if (!photoUrls.length) {
+                console.log(`  ⏭ No photo: ${story.title.substring(0, 50)}`);
+                dups++; continue;
+            }
 
             const category = categorize(story.title, story.state || '', content, sourceHint);
             const base = generateSlug(story.title);

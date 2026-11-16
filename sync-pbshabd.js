@@ -11,12 +11,7 @@ const sharp      = require('sharp');
 const { News, generateSlug } = require('./models/News');
 
 const SITE_URL = (process.env.SITE_URL || 'https://voiceofkranti.com').replace(/\/$/, '');
-// Single shared placeholder ("NEWS" graphic, matches the site's CSS placeholder design) —
-// used for video-only stories and any story with no usable photo, instead of re-hosting
-// media to ImageKit for every article. Never uploaded per-article, just referenced by URL.
-// Must be a raster format (jpg/png) — Facebook/WhatsApp/Twitter link-preview crawlers do
-// not render SVG for og:image, so an .svg here would silently break social share previews.
-const DEFAULT_PHOTO_URL = `${SITE_URL}/default-news-photo.jpg`;
+
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args      = process.argv.slice(2);
@@ -29,13 +24,23 @@ const IMPORT_TYPES       = new Set(['RUSH', 'PRI', 'URG']);
 const VALID_IMAGE_EXTS   = new Set(['.JPG', '.JPEG', '.PNG', '.WEBP', '.GIF']);
 
 const CRIME_CATEGORY_ID = '19';
-// Every major Hindi-belt state plus the other states we show a rajya filter for.
+// Every Indian state + union territory — full national coverage, not just the Hindi belt.
+// Names/casing are PB SHABD's own `state` filter values; best-effort guess for the states
+// added after the original Hindi-belt-only list (sync-pbshabd-crime.js does NOT need this
+// list, it's deliberately MP/Bhopal-only) — if a pass returns 0 stories every run, PB SHABD
+// may use a slightly different exact string for that state and it's worth rechecking.
 const TARGET_STATES = [
     'UTTAR PRADESH', 'MADHYA PRADESH', 'RAJASTHAN', 'CHHATTISGARH',
     'HARYANA', 'PUNJAB', 'TELANGANA', 'ANDHRA PRADESH',
     'KARNATAKA', 'KERALA', 'BIHAR', 'WEST BENGAL',
     'GUJARAT', 'MAHARASHTRA', 'JHARKHAND', 'UTTARAKHAND',
     'HIMACHAL PRADESH', 'DELHI',
+    // Remaining states/UTs — added for full all-India coverage
+    'ASSAM', 'ODISHA', 'TAMIL NADU', 'GOA', 'ARUNACHAL PRADESH',
+    'MANIPUR', 'MEGHALAYA', 'MIZORAM', 'NAGALAND', 'SIKKIM', 'TRIPURA',
+    'JAMMU AND KASHMIR', 'LADAKH', 'CHANDIGARH', 'PUDUCHERRY',
+    'ANDAMAN AND NICOBAR ISLANDS', 'LAKSHADWEEP',
+    'DADRA AND NAGAR HAVELI AND DAMAN AND DIU',
 ];
 
 // Priority-ordered: crime is checked first so a story naming a place/topic alongside
@@ -109,6 +114,24 @@ const STATE_MAP = {
     'karnataka': 'karnataka',
     'west bengal': 'west_bengal',
     'delhi': 'delhi', 'दिल्ली': 'delhi', 'new delhi': 'delhi', 'नई दिल्ली': 'delhi',
+    'assam': 'assam', 'असम': 'assam',
+    'odisha': 'odisha', 'ओडिशा': 'odisha', 'उड़ीसा': 'odisha',
+    'tamil nadu': 'tamil_nadu', 'तमिलनाडु': 'tamil_nadu', 'तमिल नाडु': 'tamil_nadu',
+    'goa': 'goa', 'गोवा': 'goa',
+    'arunachal pradesh': 'arunachal_pradesh', 'अरुणाचल प्रदेश': 'arunachal_pradesh',
+    'manipur': 'manipur', 'मणिपुर': 'manipur',
+    'meghalaya': 'meghalaya', 'मेघालय': 'meghalaya',
+    'mizoram': 'mizoram', 'मिजोरम': 'mizoram',
+    'nagaland': 'nagaland', 'नागालैंड': 'nagaland',
+    'sikkim': 'sikkim', 'सिक्किम': 'sikkim',
+    'tripura': 'tripura', 'त्रिपुरा': 'tripura',
+    'jammu and kashmir': 'jammu_kashmir', 'जम्मू और कश्मीर': 'jammu_kashmir', 'जम्मू-कश्मीर': 'jammu_kashmir',
+    'ladakh': 'ladakh', 'लद्दाख': 'ladakh',
+    'chandigarh': 'chandigarh', 'चंडीगढ़': 'chandigarh',
+    'puducherry': 'puducherry', 'पुडुचेरी': 'puducherry', 'पांडिचेरी': 'puducherry',
+    'andaman': 'andaman_nicobar', 'अंडमान': 'andaman_nicobar',
+    'lakshadweep': 'lakshadweep', 'लक्षद्वीप': 'lakshadweep',
+    'dadra': 'dadra_nagar_haveli', 'दादरा': 'dadra_nagar_haveli', 'दमन और दीव': 'dadra_nagar_haveli',
 };
 
 function detectState(title, stateHint, desc) {
@@ -449,11 +472,12 @@ async function main() {
                 }
             }
 
-            // Video/audio-carrying stories are still imported for their text, but the video
-            // itself is never re-hosted (ImageKit's video processing quota is far too easy
-            // to exhaust — PB SHABD attaches many duplicate renditions per story). Shared
-            // "NEWS" placeholder photo used instead whenever a story has no real photo.
-            if (!photoUrls.length) photoUrls = [DEFAULT_PHOTO_URL];
+            // No real photo found — skip rather than fall back to the generic placeholder,
+            // now that PB SHABD volume is healthy enough to raise the quality bar.
+            if (!photoUrls.length) {
+                console.log(`  ⏭ No photo: ${story.title.substring(0, 50)}`);
+                dups++; continue;
+            }
 
             const category = categorize(story.title, story.state || '', content, sourceHint);
             const base = generateSlug(story.title);
